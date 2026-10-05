@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>MeoPeo widget</title>
+<!-- Widget Android de MeoPeo : page affichée par une app de widget « page web » (lien créé dans l'app, ⚙ → Home-screen widget).
+     La clé de widget est dans le lien après # (jamais envoyée au serveur de la page). Grand = mois, moyen = semaine, petit = aujourd'hui ;
+     on peut forcer avec &view=month|week|today. Indépendante de l'app : pas de service worker, pas de bibliothèque. -->
+<style>
+  :root { --bg1: #0e1230; --bg2: #232a63; --gold: #ffe8a3; --text: #eceeff; --muted: #aab1da; --dim: #5f6699; --late: #ff8fa3; --line: rgba(170, 177, 218, 0.22); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: linear-gradient(160deg, var(--bg1), var(--bg2)); color: var(--text); font: 13px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+  #w { height: 100%; display: flex; flex-direction: column; padding: 8px 10px; gap: 4px; }
+  .head { display: flex; align-items: baseline; gap: 8px; }
+  .head a { color: var(--gold); font-weight: 700; font-size: 1.15em; text-decoration: none; }
+  .head .sp { flex: 1; }
+  .legend, .note { color: var(--muted); font-size: 0.8em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .late { color: var(--late); }
+  .foot { color: var(--text); font-size: 0.82em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Mois */
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+  .dow { text-align: center; color: var(--muted); font-size: 0.72em; font-weight: 700; }
+  .cell { min-width: 0; overflow: hidden; border-radius: 6px; padding: 1px 2px; }
+  .cell .n { height: 14px; line-height: 14px; font-size: 10px; color: var(--text); }
+  .cell.out .n { color: var(--dim); }
+  .cell.today { outline: 1.5px solid var(--gold); outline-offset: -1px; }
+  .cell.today .n { color: var(--gold); font-weight: 700; }
+  .chip { height: 12px; font-size: 8.5px; line-height: 12px; padding: 0 3px; margin-top: 1px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+  .cell.out .chip { opacity: 0.45; }
+  .more { float: right; color: var(--gold); font-size: 0.68em; font-weight: 700; }
+  /* Semaine / aujourd'hui */
+  .rows { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 3px; }
+  .row { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+  .row .d { width: 48px; flex: none; color: var(--muted); font-weight: 700; font-size: 0.8em; }
+  .row.now .d { color: var(--gold); }
+  .row .t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 6px; border-left: 3px solid var(--muted); }
+  .hour { font-size: 0.85em; padding: 0 4px; border-radius: 6px; border: 1px solid var(--line); }
+  .msg { margin: auto; text-align: center; color: var(--text); padding: 8px; }
+  .msg b { color: var(--gold); }
+</style>
+</head>
+<body>
+<div id="w"><div class="msg">Loading…</div></div>
+<script>
+"use strict";
+const SUPABASE_URL = "https://llwbzhlbaygolzuwlbkf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_rMCGFrjzDmhsZ6eJ163B6g_MTA4dQSd"; // clé publique de l'app
+const APP_URL = "./";
+const REFRESH_MS = 15 * 60 * 1000;
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const pad = (n) => String(n).padStart(2, "0");
+const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+const fromIso = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const dowIdx = (d) => (d.getDay() + 6) % 7; // 0 = lundi
+const onDay = (t, k) => t.date === k || (!!t.end && t.date <= k && k <= t.end);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const color = (c) => (/^#[0-9a-f]{6}$/i.test(c ?? "") ? c : "#aab1da");
+
+// Paramètres : #k=CLÉ[&view=month|week|today] (?k= accepté si l'app de widget enlève la partie après #)
+const params = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
+const KEY = params.get("k");
+const VIEW = params.get("view");
+const box = document.getElementById("w");
+const CACHE = "meopeo.widget.feed." + String(KEY).slice(0, 8); // un cache par widget
+const mem = {
+  get() { try { return JSON.parse(localStorage.getItem(CACHE)); } catch { return null; } },
+  set(v) { try { localStorage.setItem(CACHE, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
+};
+
+let now, today, first, gridStart, weeks, result = null, lastLoad = 0;
+function dates() {
+  now = new Date(); today = iso(now);
+  first = new Date(now.getFullYear(), now.getMonth(), 1);
+  gridStart = addDays(first, -dowIdx(first));
+  weeks = Math.ceil((dowIdx(first) + new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) / 7);
+}
+
+async function load() {
+  dates();
+  lastLoad = Date.now();
+  const gridEnd = addDays(gridStart, weeks * 7 - 1), weekEnd = addDays(now, 7);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/widget_feed`, {
+      method: "POST", cache: "no-store",
+      headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_token: KEY, p_from: iso(gridStart), p_to: iso(gridEnd > weekEnd ? gridEnd : weekEnd), p_today: today }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json || !Array.isArray(json.tasks)) throw new Error((json && json.message) || `HTTP ${res.status}`);
+    mem.set({ at: Date.now(), feed: json });
+    result = { feed: json };
+  } catch (e) {
+    if (/unknown widget key/.test(e.message)) { mem.set(null); result = { error: "This widget was removed in MeoPeo. Create a new one: <b>MeoPeo → ⚙ → Home-screen widget</b>." }; }
+    else { const c = mem.get(); result = c?.feed ? { feed: c.feed, staleAt: c.at } : { error: "No connection — the calendar will appear once the phone is online." }; }
+  }
+  render();
+}
+
+const markOf = (f, t) => esc((t.who === "me" ? f.me : f.partner)?.mark ?? "•");
+const textOf = (f, t, k) => `${markOf(f, t)} ${t.time && (!k || t.date === k) ? `<span class="hour">${t.time}</span> ` : ""}${esc(t.label)}`;
+const staleNote = () => (result.staleAt ? `offline · ${pad(new Date(result.staleAt).getHours())}:${pad(new Date(result.staleAt).getMinutes())}` : "");
+const lateNote = (f) => (f.late ? `<span class="late">⚠️ ${f.late} late</span>` : "");
+const view = () => VIEW || (innerHeight >= 260 && innerWidth >= 250 ? "month" : innerHeight >= 110 && innerWidth >= 220 ? "week" : "today");
+
+function render() {
+  if (!result) return;
+  dates();
+  if (result.error) { box.innerHTML = `<div class="msg"><b>MeoPeo</b><br>${result.error}</div>`; return; }
+  const f = result.feed, v = view();
+  if (v === "month") month(f); else if (v === "week") week(f); else todayView(f);
+}
+
+function month(f) {
+  const legend = [f.me && `${esc(f.me.mark)} ${esc(f.me.label)}`, f.partner && `${esc(f.partner.mark)} ${esc(f.partner.label)}`].filter(Boolean).join(" · ");
+  box.innerHTML = `<div class="head"><a href="${APP_URL}" target="_blank" rel="noopener">${MONTHS[now.getMonth()]} ${now.getFullYear()}</a><span class="sp"></span><span class="legend">${legend}</span></div>
+    <div class="grid">${["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => `<div class="dow">${d}</div>`).join("")}</div><div class="foot"></div>`;
+  const grid = box.querySelector(".grid");
+  grid.style.gridTemplateRows = `auto repeat(${weeks}, minmax(0, 1fr))`;
+  for (let i = 0; i < weeks * 7; i++) {
+    const day = addDays(gridStart, i), k = iso(day);
+    const cell = document.createElement("div");
+    cell.className = `cell${k === today ? " today" : ""}${day.getMonth() !== now.getMonth() ? " out" : ""}`;
+    cell.innerHTML = `<div class="n">${day.getDate()}</div>`;
+    grid.append(cell);
+    cell.dataset.k = k;
+  }
+  // Autant de pastilles que la case peut en montrer (le reste : « +N »)
+  const cellH = grid.querySelector(".cell")?.clientHeight ?? 0;
+  const room = Math.max(0, Math.floor((cellH - 16) / 13)); // case : numéro 14 px + pastilles de 12 px (+1 d'écart)
+  grid.querySelectorAll(".cell").forEach((cell) => {
+    const k = cell.dataset.k, list = f.tasks.filter((t) => onDay(t, k));
+    if (list.length > room) cell.querySelector(".n").insertAdjacentHTML("beforeend", `<span class="more">+${list.length - room}</span>`);
+    cell.insertAdjacentHTML("beforeend", list.slice(0, room).map((t) =>
+      `<div class="chip" style="background:${color(t.color)}8c">${t.time && t.date === k ? t.time + " " : ""}${esc(t.label)}</div>`).join(""));
+  });
+  const hm = `${pad(now.getHours())}:${pad(now.getMinutes())}`; // « Next » : pas une tâche d'aujourd'hui dont l'heure est passée
+  const next = f.tasks.filter((t) => (t.end ?? t.date) >= today && !(t.date === today && !t.end && t.time && t.time < hm))
+    .sort((a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? "")))[0];
+  const nd = next && fromIso(next.date < today ? today : next.date);
+  box.querySelector(".foot").innerHTML = [next ? `Next: ${DAYS[dowIdx(nd)]} ${nd.getDate()} · ${textOf(f, next)}` : "Nothing planned 🎉", lateNote(f), staleNote()].filter(Boolean).join(" &nbsp; ");
+}
+
+function week(f) {
+  const rows = [];
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(now, i), k = iso(d), list = f.tasks.filter((t) => onDay(t, k));
+    if (!list.length && i > 0) continue;
+    rows.push(`<div class="row${i === 0 ? " now" : ""}"><span class="d">${DAYS[dowIdx(d)]} ${d.getDate()}</span><span class="t">${list.length ? list.map((t) => textOf(f, t, k)).join(" · ") : `<span class="note">nothing today</span>`}</span></div>`);
+  }
+  if (rows.length === 1 && !f.tasks.some((t) => onDay(t, today))) rows.push(`<div class="note">Nothing planned this week 🎉</div>`);
+  box.innerHTML = `<div class="head"><a href="${APP_URL}" target="_blank" rel="noopener">This week</a><span class="sp"></span><span class="legend">${[lateNote(f), staleNote()].filter(Boolean).join(" · ")}</span></div><div class="rows">${rows.join("")}</div>`;
+}
+
+function todayView(f) {
+  const list = f.tasks.filter((t) => onDay(t, today));
+  const tmr = iso(addDays(now, 1)), next = f.tasks.find((t) => onDay(t, tmr));
+  box.innerHTML = `<div class="head"><a href="${APP_URL}" target="_blank" rel="noopener">${DAYS[dowIdx(now)]} ${now.getDate()}</a><span class="sp"></span><span class="legend">${lateNote(f)}</span></div>
+    <div class="rows">${list.length ? list.map((t) => `<div class="item" style="border-left-color:${color(t.color)}">${textOf(f, t, today)}</div>`).join("") : `<div class="note">Nothing today 🎉</div>`}
+    ${next ? `<div class="note">Tomorrow · ${textOf(f, next, tmr)}</div>` : ""}${staleNote() ? `<div class="note">${staleNote()}</div>` : ""}</div>`;
+}
+
+if (!KEY) {
+  box.innerHTML = `<div class="msg"><b>MeoPeo widget</b><br>This link has no widget key. Create one in <b>MeoPeo → ⚙ → Home-screen widget → ＋ Android widget</b> and paste that link.</div>`;
+} else {
+  load();
+  setInterval(load, REFRESH_MS);
+  addEventListener("resize", render);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - lastLoad > 60000) load(); });
+}
+</script>
+</body>
+</html>

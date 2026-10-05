@@ -559,6 +559,90 @@ async function fillNotif(box) {
   });
 }
 
+// ---------- Widgets d'écran d'accueil (⚙) ----------
+// La clé est tirée au hasard ICI ; seule son empreinte SHA-256 part dans la base. Elle n'est montrée qu'une fois.
+const WIDGET_CODE_URL = new URL("widget/scriptable.js", location.href).href;
+const WIDGET_PAGE_URL = new URL("widget.html", location.href).href;
+async function newWidgetKey() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)));
+  return { token, sha: [...hash].map((b) => b.toString(16).padStart(2, "0")).join("") };
+}
+// Petit script à coller dans Scriptable : il télécharge le vrai widget (widget/scriptable.js) et garde une copie hors connexion
+const scriptableLoader = (token) => `// MeoPeo widget for Scriptable — paste ALL of this into a new script named "MeoPeo".
+// KEY = your personal widget key: don't share it. Lost phone? Remove this widget in MeoPeo (⚙ → Home-screen widget).
+const KEY = "${token}";
+const CODE_URL = "${WIDGET_CODE_URL}";
+const fm = FileManager.local();
+const file = fm.joinPath(fm.documentsDirectory(), "meopeo-widget-code.js");
+let code = null;
+try {
+  const req = new Request(CODE_URL);
+  req.timeoutInterval = 15;
+  code = await req.loadString();
+  if (!code.includes("MEOPEO_WIDGET")) throw new Error("bad download");
+  fm.writeString(file, code);
+} catch (e) {
+  code = fm.fileExists(file) ? fm.readString(file) : null;
+}
+if (!code) throw new Error("MeoPeo: no connection — try again once the phone is online");
+await new Function("KEY", "return (async () => {\\n" + code + "\\n})()")(KEY);
+`;
+async function copyText(text, area) {
+  try { await navigator.clipboard.writeText(text); toast("Copied ✓"); }
+  catch { area?.select(); toast("Select all and copy it by hand"); }
+}
+const shortDate = (isoStr) => { const d = new Date(isoStr); return `${d.getDate()}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
+
+async function fillWidgets(box) {
+  let keys;
+  try { keys = await db.listWidgetKeys(); }
+  catch (err) {
+    box.innerHTML = /widget_tokens|schema cache|does not exist/i.test(err.message)
+      ? `Widgets aren't set up yet — Tony needs to run <code>supabase/05_widgets.sql</code> in Supabase.`
+      : `Couldn't load your widgets (${esc(err.message)}). Check the connection and open this menu again.`;
+    return;
+  }
+  box.innerHTML = `<div class="pl-legend">Your calendar on the home screen: month (large widget), week (medium) or today (small). Your 🔒 tasks show as “🔒 Private”, without their text; ${esc(S.partner?.label ?? "the other")}'s private tasks never show.</div>
+    ${keys.map((k) => `<div class="mp-wkey"><span>📱 <b>${esc(k.label)}</b> <span class="pl-legend">added ${shortDate(k.created_at)} · ${k.last_used_at ? "last update " + when(k.last_used_at) : "not used yet"}</span></span><button type="button" data-revoke="${k.id}">Remove</button></div>`).join("")}
+    <span class="mp-row"><button type="button" data-new="iPhone">＋ iPhone widget</button><button type="button" data-new="Android">＋ Android widget</button></span>`;
+  box.querySelectorAll("[data-revoke]").forEach((b) => b.addEventListener("click", async () => {
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Sure? It stops working"; return; } // 2e appui pour confirmer
+    if (await guard(() => db.revokeWidgetKey(b.dataset.revoke), "Couldn't remove the widget")) { toast("Widget removed — it will show an error until you delete it from the home screen"); fillWidgets(box); }
+  }));
+  box.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", async () => {
+    const label = b.dataset.new;
+    b.disabled = true;
+    const { token, sha } = await newWidgetKey();
+    if (!(await guard(() => db.registerWidgetKey(sha, label), "Couldn't create the widget"))) { b.disabled = false; return; }
+    await fillWidgets(box);
+    showWidgetSetup(box, label, token);
+  }));
+}
+
+// Mode d'emploi + code, montrés une seule fois juste après la création de la clé
+function showWidgetSetup(box, label, token) {
+  const ios = label === "iPhone";
+  const text = ios ? scriptableLoader(token) : `${WIDGET_PAGE_URL}#k=${token}`;
+  const steps = ios
+    ? `<ol><li>Install <b>Scriptable</b> (free, App Store).</li><li>Tap <b>Copy</b> below. In Scriptable: <b>＋</b>, paste, name the script <b>MeoPeo</b> (tap the title at the top), <b>Done</b>.</li>
+       <li>Tap the script once: you'll see a preview of the large widget.</li><li>Home screen: hold an empty spot → <b>Edit</b> → <b>Add Widget</b> → <b>Scriptable</b> → pick a size → <b>Add Widget</b>. Then hold the new widget → <b>Edit Widget</b> → Script: <b>MeoPeo</b>.</li></ol>`
+    : `<ol><li>Install a widget app that shows a web page (e.g. <b>WebsiteWidget</b> on the Play Store).</li><li>Tap <b>Copy</b> below.</li>
+       <li>Home screen: hold an empty spot → <b>Widgets</b> → the widget app → drag it to the screen, paste the link when it asks for a URL. Resize it: large = month, medium = week, small = today.</li>
+       <li>Wrong layout for the size? Add <code>&view=month</code>, <code>&view=week</code> or <code>&view=today</code> at the end of the link.</li></ol>`;
+  const div = document.createElement("div");
+  div.className = "mp-wsetup";
+  div.innerHTML = `<b>${ios ? "📱 iPhone widget" : "🤖 Android widget"} — set it up now</b>${steps}
+    <textarea readonly rows="${ios ? 6 : 3}" spellcheck="false">${esc(text)}</textarea>
+    <span class="mp-row"><button type="button" class="mp-cta" data-act="copy">Copy</button></span>
+    <div class="pl-legend">⚠️ This is shown only once. It contains your widget key: anyone who has it can see your calendar (without private tasks' text). Lost it? Make a new widget and remove this one.</div>`;
+  box.append(div);
+  const area = div.querySelector("textarea");
+  div.querySelector("[data-act=copy]").addEventListener("click", () => copyText(text, area));
+  div.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 function openMenu() {
   const P = S.partner;
   const ov = overlay(`<form class="pl-editor-card"><h4>${esc(S.me.mark)} ${esc(S.me.label)}</h4>
@@ -566,6 +650,8 @@ function openMenu() {
     <h4>🔔 Notifications</h4>
     <div class="mp-notif">Checking…</div>
     ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}
+    <h4>📱 Home-screen widget</h4>
+    <div class="mp-widgets">Checking…</div>
     <h4>🔑 Password</h4>
     <label>New password<input type="password" name="pw" autocomplete="new-password" minlength="6"></label>
     <label>Repeat it<input type="password" name="pw2" autocomplete="new-password" minlength="6"></label>
@@ -579,6 +665,7 @@ function openMenu() {
   });
   f.querySelector("[data-act=logout]").addEventListener("click", async () => { ov.remove(); await logout(); });
   fillNotif(f.querySelector(".mp-notif"));
+  fillWidgets(f.querySelector(".mp-widgets"));
   f.notify?.addEventListener("change", async (ev) => {
     const on = ev.target.checked;
     if (await guard(() => db.updateMyProfile({ notify_partner: on }))) { S.me.notify_partner = on; toast(on ? `You'll be told when ${P.label} adds a task` : `No more notifications for ${P.label}'s new tasks`); }

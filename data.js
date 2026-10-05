@@ -11,6 +11,7 @@
 //   subscribe(onChange)            → appelle onChange() à chaque modification (temps réel) ; renvoie la fonction d'arrêt
 //   vapidPublicKey, savePushSubscription(sub), removePushSubscription(endpoint), queueTestPush(), pushStatus(),
 //   updateMyProfile(patch)         → notifications (voir supabase/03_notifications.sql et supabase/functions/send-push)
+//   listWidgetKeys(), registerWidgetKey(sha256, label), revokeWidgetKey(id) → widgets (supabase/05_widgets.sql)
 //
 // Format d'une tâche dans l'app : { id, owner, date: "AAAA-MM-JJ", end: "AAAA-MM-JJ" | null, time: "HH:MM" | null,
 //   course: nom de catégorie | null, label, done, moon: "full" | "crescent" | null, private, source }
@@ -105,6 +106,11 @@ export function createBackend() {
       const me = (await this.user())?.id;
       must(await sb.from("profiles").update(patch).eq("id", me));
     },
+
+    // Widgets d'écran d'accueil : seule l'empreinte SHA-256 de la clé est envoyée (voir supabase/05_widgets.sql)
+    async listWidgetKeys() { return must(await sb.from("widget_tokens").select("id, label, created_at, last_used_at").order("created_at")); },
+    async registerWidgetKey(sha256, label) { return must(await sb.rpc("register_widget_token", { p_sha256: sha256, p_label: label })); },
+    async revokeWidgetKey(id) { must(await sb.from("widget_tokens").delete().eq("id", id)); },
 
     // Temps réel : sur téléphone, le système coupe la connexion en arrière-plan → l'app se réabonne au retour (voir app.js)
     subscribe(onChange) {
