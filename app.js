@@ -53,7 +53,7 @@ const remindInputs = (e) => `<span class="pl-remind" title="Notification on your
 const remindOf = (f) => (f.get("rtime") ? `${f.get("rdate") || f.get("date")} ${f.get("rtime")}` : null);
 const moonRadios = (pre = "") => `<span class="pl-moon">${[["", "No glow"], ["full", "🌕 Full moon"], ["crescent", "🌙 Crescent"]]
   .map(([v, l]) => `<label><input type="radio" name="moon" value="${v}" ${v === (pre ?? "") ? "checked" : ""}> ${l}</label>`).join("")}</span>`;
-const SRC = { devoir: "PC", excel: "Excel", echeance: "deadline" }; // tâches venues du tableau de bord Obsidian
+const SRC = { devoir: "PC", excel: "Excel", echeance: "deadline", phone: "📱 planner" }; // tâches venues du tableau de bord Obsidian
 const byDate = (a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? ""));
 const upcomingOf = (list) => [
   ...list.filter((e) => urgency(e) === "late"),
@@ -468,7 +468,7 @@ function overlay(html) {
 
 function openEditor(e) {
   if (!e?.tickable) return;
-  if (e.fromPC) { toast("This task comes from your Obsidian dashboard (Devoirs.md / Excel / deadlines) — edit it there. You can tick it here."); return; }
+  if (e.fromPC) { toast("This task comes from your Obsidian dashboard (Devoirs.md / Excel / deadlines / phone planner) — edit it there. You can tick it here."); return; }
   const cats = myCats();
   const ov = overlay(`<form class="pl-editor-card"><h4>✏️ Edit task</h4>
     <label>Task<input type="text" name="text" value="${esc(e.label)}" maxlength="300" required></label>
