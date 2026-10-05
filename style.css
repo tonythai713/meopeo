@@ -210,3 +210,6 @@ input[type=radio], input[type=checkbox] { accent-color: #ffe8a3; width: 18px; he
 }
 .mp-toast button { margin-left: auto; border-radius: 999px; font-weight: 700; background: rgba(255, 232, 163, 0.20); border-color: #ffe8a3; white-space: nowrap; }
 @keyframes mp-in { from { opacity: 0; transform: translateY(8px); } }
+
+/* Hors connexion : bandeau en haut (données gardées sur l'appareil, lecture seule) */
+.mp-offline { margin: 0 0 10px; padding: 8px 12px; border-radius: 12px; font-size: 0.9em; color: #1b1f45; background: #ffe8a3; box-shadow: 0 0 14px rgba(255, 232, 163, 0.5); }

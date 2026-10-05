@@ -1,0 +1,54 @@
+// Service worker de MeoPeo : l'app s'ouvre même sans réseau (ses fichiers sont gardés sur le téléphone).
+// ⚠️ À CHAQUE publication d'une nouvelle version : changer VERSION, sinon les téléphones gardent l'ancienne.
+// Les données (Supabase : tâches, connexion, temps réel) ne passent JAMAIS par ce cache.
+const VERSION = "2026-10-05.1";
+const CACHE = "meopeo-" + VERSION;
+const SHELL = [
+  "./", "index.html", "app.js", "data.js", "config.js", "style.css", "manifest.webmanifest",
+  "background.jpg", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png",
+];
+
+// Bibliothèque Supabase 2.117.2 et ses modules (versions figées : à mettre à jour si data.js change de version)
+const CDN = "https://cdn.jsdelivr.net/npm/";
+const LIBS = [
+  "@supabase/supabase-js@2.117.2/+esm", "@supabase/functions-js@2.117.2/+esm", "@supabase/postgrest-js@2.117.2/+esm",
+  "@supabase/realtime-js@2.117.2/+esm", "@supabase/storage-js@2.117.2/+esm", "@supabase/auth-js@2.117.2/+esm",
+  "tslib@2.8.1/+esm", "@supabase/phoenix@0.4.5/+esm", "iceberg-js@0.8.1/+esm",
+].map((p) => CDN + p);
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(caches.open(CACHE).then(async (c) => {
+    await c.addAll(SHELL);
+    await c.addAll(LIBS).catch(() => { /* gardés au premier chargement sinon */ });
+  }).then(() => self.skipWaiting()));
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("meopeo-") && k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  // Fichiers de l'app : depuis le cache (ouverture instantanée, marche hors ligne), sinon le réseau
+  if (url.origin === self.location.origin) {
+    event.respondWith(caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req)));
+    return;
+  }
+  // Bibliothèque Supabase (version figée sur jsdelivr) : gardée après le premier chargement
+  if (url.hostname === "cdn.jsdelivr.net") {
+    event.respondWith(caches.open(CACHE).then(async (c) => {
+      const hit = await c.match(req);
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (res.ok) c.put(req, res.clone());
+      return res;
+    }));
+  }
+  // Tout le reste (Supabase) : réseau direct, sans cache
+});

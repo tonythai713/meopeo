@@ -21,6 +21,24 @@
     import { createBackend } from "./data.js";
     import { start } from "./app.js";
     start(createBackend()).catch((err) => { document.getElementById("app").textContent = "MeoPeo couldn't start: " + err.message; });
+
+    // Hors connexion : service worker (pas sur le PC de test, sauf avec ?sw=1, pour ne jamais tester une vieille version)
+    if ("serviceWorker" in navigator && (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname) || /[?&]sw=1/.test(location.search))) {
+      const hadWorker = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register("sw.js").catch((err) => console.warn("Service worker", err));
+      // Nouvelle version installée : la page en cours garde l'ancienne jusqu'au prochain rechargement
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!hadWorker || document.querySelector(".mp-update")) return;
+        const t = document.createElement("div");
+        t.className = "mp-toast mp-update";
+        t.append("✨ New version of MeoPeo installed");
+        const b = document.createElement("button");
+        b.textContent = "Reload";
+        b.addEventListener("click", () => location.reload());
+        t.append(b);
+        document.getElementById("toasts").append(t);
+      });
+    }
   </script>
 </body>
 </html>

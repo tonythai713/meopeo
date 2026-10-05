@@ -58,7 +58,11 @@ const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [] 
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
+  del(k) { try { localStorage.removeItem("meopeo." + k); } catch { /* stockage indisponible */ } },
 };
+// Hors connexion : les dernières données reçues sont gardées sur l'appareil (par compte) et affichées en lecture seule
+const offlineKey = () => "cache." + S.user.id;
+async function logout() { if (S.user) store.del(offlineKey()); await db.signOut(); showLogin(); }
 const UI = { offset: 0, day: null, showPartner: true, addOpen: false, addCat: "", focusAdd: false, manageOpen: false };
 const myCats = () => S.cats.filter((c) => c.owner === S.user.id);
 const catColor = (owner, name) => S.cats.find((c) => c.owner === owner && c.name === name)?.color;
@@ -95,8 +99,25 @@ function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 25
 
 async function load() {
   if (!S.user) return;
+  let data;
   try {
-    const data = await db.loadAll(iso(addDays(now, -90)));
+    data = await db.loadAll(iso(addDays(now, -90)));
+    S.offline = null;
+    store.set(offlineKey(), { at: new Date().toISOString(), data });
+  } catch (err) {
+    const saved = store.get(offlineKey(), null);
+    if (!saved) {
+      toast(`⚠️ Couldn't load the tasks (${err.message})`);
+      if (!S.me) {
+        root.innerHTML = `<div class="pl-card mp-msg"><h4>Connection problem</h4><p>${esc(err.message)}</p><button data-act="retry">Try again</button> <button data-act="logout">Log out</button></div>`;
+        bindMsg();
+      }
+      return;
+    }
+    S.offline = saved.at; // on affiche les données gardées, avec le bandeau « Offline »
+    data = saved.data;
+  }
+  {
     S.me = data.profiles.find((p) => p.id === S.user.id) ?? null;
     S.partner = data.profiles.find((p) => p.id !== S.user.id) ?? null;
     if (!S.me) { renderNoProfile(); return; }
@@ -109,18 +130,14 @@ async function load() {
     S.mine = data.tasks.filter((e) => e.owner === S.user.id).map(paint).sort(byDate);
     S.theirs = data.tasks.filter((e) => e.owner !== S.user.id).map(paint).sort(byDate);
     render();
-  } catch (err) {
-    toast(`⚠️ Couldn't load the tasks (${err.message})`);
-    if (!S.me) {
-      root.innerHTML = `<div class="pl-card mp-msg"><h4>Connection problem</h4><p>${esc(err.message)}</p><button data-act="retry">Try again</button> <button data-act="logout">Log out</button></div>`;
-      bindMsg();
-    }
   }
 }
 
-// Appel à la base avec message en cas d'erreur ; renvoie true si tout s'est bien passé
-async function guard(promise, what = "Couldn't save") {
-  try { await promise; return true; } catch (err) { toast(`⚠️ ${what} (${err.message})`); return false; }
+// Appel à la base avec message en cas d'erreur ; renvoie true si tout s'est bien passé.
+// `run` est une fonction (pour ne rien envoyer du tout quand on est hors connexion).
+async function guard(run, what = "Couldn't save") {
+  if (!navigator.onLine) { toast("📴 You're offline — this change can't be saved yet."); return false; }
+  try { await run(); return true; } catch (err) { toast(`⚠️ ${what} (${err.message})`); if (/fetch|network/i.test(err.message)) reload(); return false; }
 }
 
 // ---------- Messages en bas de l'écran (avec bouton d'annulation) ----------
@@ -169,14 +186,15 @@ function renderNoProfile() {
 }
 function bindMsg() {
   root.querySelector("[data-act=retry]")?.addEventListener("click", () => load());
-  root.querySelector("[data-act=logout]")?.addEventListener("click", () => db.signOut().then(showLogin));
+  root.querySelector("[data-act=logout]")?.addEventListener("click", () => logout());
 }
 
 // ---------- Page principale ----------
 function render() {
   if (root.offsetHeight) root.style.minHeight = root.offsetHeight + "px"; // pas de saut de page pendant le réaffichage
   const P = S.partner;
-  root.innerHTML = `<header class="pl-hello"><span class="mp-date">${dayTitle(now)}, ${now.getFullYear()}</span>
+  const off = S.offline ? new Date(S.offline) : null;
+  root.innerHTML = `${off ? `<div class="mp-offline">📴 Offline — showing your tasks as of ${off.getDate()}.${pad(off.getMonth() + 1)} at ${pad(off.getHours())}:${pad(off.getMinutes())}. Changes can't be saved until you're back online.</div>` : ""}<header class="pl-hello"><span class="mp-date">${dayTitle(now)}, ${now.getFullYear()}</span>
       <span class="mp-who">${esc(S.me.mark)} ${esc(S.me.label)}</span>
       <button class="pl-refresh" data-act="refresh" title="Reload">⟳</button><button class="pl-refresh" data-act="menu" title="Account">⚙</button></header>
     <div class="pl-split"><div class="pl-left"></div><div class="pl-right"></div></div>
@@ -210,8 +228,8 @@ async function toggleDone(e, done) {
   if (!e) return;
   e.done = done;
   render();
-  if (!(await guard(db.updateTask(e.id, { done })))) { e.done = !done; render(); return; }
-  if (done) toast(`✓ Done: ${e.label}`, { action: "↶ Undo", ms: 8000, onAction: async () => { if (await guard(db.updateTask(e.id, { done: false }))) { toast(`Unticked: ${e.label}`); load(); } } });
+  if (!(await guard(() => db.updateTask(e.id, { done })))) { e.done = !done; render(); return; }
+  if (done) toast(`✓ Done: ${e.label}`, { action: "↶ Undo", ms: 8000, onAction: async () => { if (await guard(() => db.updateTask(e.id, { done: false }))) { toast(`Unticked: ${e.label}`); load(); } } });
 }
 
 // Colonne gauche : mes prochaines tâches + ajout
@@ -246,7 +264,7 @@ function renderMine(el) {
     const end = endOf(f.get("date"), f.get("end"));
     if (f.get("end") && !end) toast("“until” must be after the start date — saved as a one-day task");
     form.querySelector("button[type=submit]").disabled = true;
-    const ok = await guard(db.insertTask({ date: f.get("date"), end, time: f.get("time") || null, course: f.get("course") || null,
+    const ok = await guard(() => db.insertTask({ date: f.get("date"), end, time: f.get("time") || null, course: f.get("course") || null,
       label, moon: f.get("moon") || null, private: f.get("private") === "on" }), "Couldn't add the task");
     UI.addCat = f.get("course") || ""; UI.focusAdd = ok;
     if (ok) toast(`Added: ${label}`);
@@ -258,7 +276,7 @@ function renderMine(el) {
     const name = String(form.catname.value).trim();
     if (!name) return;
     if (cats.some((c) => c.name === name)) { toast(`“${name}” already exists`); return; }
-    if (await guard(db.insertCategory({ name, color: form.catcolor.value }), "Couldn't create the category")) {
+    if (await guard(() => db.insertCategory({ name, color: form.catcolor.value }), "Couldn't create the category")) {
       UI.addCat = name; UI.addOpen = true;
       toast(`Category “${name}” created`);
       await load();
@@ -272,17 +290,17 @@ function renderMine(el) {
       + `<div class="pl-legend">Renaming updates your tasks that use it; deleting a category keeps its tasks.</div>`;
     box.querySelectorAll(".pl-catrow").forEach((row) => {
       const c = cats.find((x) => x.id === row.dataset.id);
-      row.querySelector("[data-a=color]").addEventListener("change", async (ev) => { if (await guard(db.updateCategory(c.id, { color: ev.target.value }))) load(); });
+      row.querySelector("[data-a=color]").addEventListener("change", async (ev) => { if (await guard(() => db.updateCategory(c.id, { color: ev.target.value }))) load(); });
       row.querySelector("[data-a=rename]").addEventListener("click", async () => {
         const next = String(row.querySelector("[data-a=name]").value).trim();
         if (!next || next === c.name) return;
         if (cats.some((x) => x.name === next)) { toast(`“${next}” already exists`); return; }
-        if (await guard(db.renameCategory(c.id, c.name, next), "Couldn't rename")) { if (UI.addCat === c.name) UI.addCat = next; toast(`Category renamed: ${c.name} → ${next}`); load(); }
+        if (await guard(() => db.renameCategory(c.id, c.name, next), "Couldn't rename")) { if (UI.addCat === c.name) UI.addCat = next; toast(`Category renamed: ${c.name} → ${next}`); load(); }
       });
       const del = row.querySelector("[data-a=del]");
       del.addEventListener("click", async () => {
         if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "Sure? 🗑"; return; } // 2e appui pour confirmer
-        if (await guard(db.deleteCategory(c.id), "Couldn't delete")) { toast(`Category “${c.name}” deleted (its tasks are kept)`); load(); }
+        if (await guard(() => db.deleteCategory(c.id), "Couldn't delete")) { toast(`Category “${c.name}” deleted (its tasks are kept)`); load(); }
       });
     });
   };
@@ -422,12 +440,12 @@ function openEditor(e) {
     const end = endOf(d.get("date"), d.get("end"));
     if (d.get("end") && !end) toast("“until” must be after the start date — saved as a one-day task");
     const patch = { label, date: d.get("date"), end, time: d.get("time") || null, course: d.get("course") || null, moon: d.get("moon") || null, private: d.get("private") === "on", done: d.get("done") === "on" };
-    if (await guard(db.updateTask(e.id, patch))) { ov.remove(); toast("Task updated"); load(); }
+    if (await guard(() => db.updateTask(e.id, patch))) { ov.remove(); toast("Task updated"); load(); }
   });
   const del = f.querySelector("[data-act=delete]");
   del.addEventListener("click", async () => {
     if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "Sure? 🗑"; return; } // 2e appui pour confirmer
-    if (await guard(db.deleteTask(e.id), "Couldn't delete")) { ov.remove(); toast(`Deleted: ${e.label}`); load(); }
+    if (await guard(() => db.deleteTask(e.id), "Couldn't delete")) { ov.remove(); toast(`Deleted: ${e.label}`); load(); }
   });
   f.text.focus({ preventScroll: true });
 }
@@ -443,7 +461,7 @@ function openMenu() {
     ev.preventDefault();
     if (!f.pw.value) return;
     if (f.pw.value !== f.pw2.value) { toast("The two passwords are different"); return; }
-    if (await guard(db.changePassword(f.pw.value), "Couldn't change the password")) { ov.remove(); toast("Password changed"); }
+    if (await guard(() => db.changePassword(f.pw.value), "Couldn't change the password")) { ov.remove(); toast("Password changed"); }
   });
-  f.querySelector("[data-act=logout]").addEventListener("click", async () => { ov.remove(); await db.signOut(); showLogin(); });
+  f.querySelector("[data-act=logout]").addEventListener("click", async () => { ov.remove(); await logout(); });
 }

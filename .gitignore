@@ -9,5 +9,6 @@
 !/config.js
 !/style.css
 !/manifest.webmanifest
+!/sw.js
 !/background.jpg
 !/icons/
