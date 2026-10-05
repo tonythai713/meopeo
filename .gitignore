@@ -1,0 +1,13 @@
+# Le dépôt GitHub (public, sert GitHub Pages) ne contient QUE les fichiers de l'app.
+# Restent uniquement sur le PC : notes de travail (CLAUDE.md, README.md), page et données de test, scripts SQL.
+/*
+!/.gitignore
+!/.nojekyll
+!/index.html
+!/app.js
+!/data.js
+!/config.js
+!/style.css
+!/manifest.webmanifest
+!/background.jpg
+!/icons/
