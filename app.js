@@ -53,6 +53,7 @@ const remindInputs = (e) => `<span class="pl-remind" title="Notification on your
 const remindOf = (f) => (f.get("rtime") ? `${f.get("rdate") || f.get("date")} ${f.get("rtime")}` : null);
 const moonRadios = (pre = "") => `<span class="pl-moon">${[["", "No glow"], ["full", "🌕 Full moon"], ["crescent", "🌙 Crescent"]]
   .map(([v, l]) => `<label><input type="radio" name="moon" value="${v}" ${v === (pre ?? "") ? "checked" : ""}> ${l}</label>`).join("")}</span>`;
+const SRC = { devoir: "PC", excel: "Excel", echeance: "deadline" }; // tâches venues du tableau de bord Obsidian
 const byDate = (a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? ""));
 const upcomingOf = (list) => [
   ...list.filter((e) => urgency(e) === "late"),
@@ -168,7 +169,8 @@ async function load() {
     const paint = (e) => {
       const mine = e.owner === S.user.id;
       const person = mine ? S.me : S.partner;
-      return { ...e, who: mine ? "me" : "partner", editable: mine, color: catColor(e.owner, e.course) ?? person?.color ?? "#999" };
+      const fromPC = e.source !== "app"; // tâche de cours envoyée par le tableau de bord Obsidian de Tony
+      return { ...e, who: mine ? "me" : "partner", tickable: mine, editable: mine && !fromPC, fromPC, color: catColor(e.owner, e.course) ?? person?.color ?? "#999" };
     };
     S.mine = data.tasks.filter((e) => e.owner === S.user.id).map(paint).sort(byDate);
     S.theirs = data.tasks.filter((e) => e.owner !== S.user.id).map(paint).sort(byDate);
@@ -253,13 +255,13 @@ function render() {
 }
 
 function itemHtml(e) {
-  const box = e.editable ? `<input type="checkbox" data-tick="${e.id}" ${e.done ? "checked" : ""} aria-label="Done">`
+  const box = e.tickable ? `<input type="checkbox" data-tick="${e.id}" ${e.done ? "checked" : ""} aria-label="Done">`
     : `<span class="pl-lock" title="${esc(S.partner?.label ?? "")}'s task — read-only">●</span>`;
   const tag = e.course ? `<b>${esc(e.course)}</b> ` : "";
   const when = ongoing(e) && !e.done;
   return `<div class="pl-item ${urgency(e)}${glowClass(e)}" style="--c:${e.color}">${box}
     <span class="pl-when">${when ? "now" : relDay(e.date)}<small>${dm(when ? today : e.date)}</small></span>
-    <span class="pl-what"${e.editable ? ` data-edit="${e.id}"` : ""}>${tag}${hourPill(e)}${esc(e.label)}${e.private ? ` <span class="mp-priv" title="Private: only you can see it">🔒</span>` : ""}${rangeInfo(e)}${bellPill(e)}</span>${e.editable ? `<button class="pl-edit" data-edit="${e.id}" title="Edit this task">✏️</button>` : ""}</div>`;
+    <span class="pl-what"${e.tickable ? ` data-edit="${e.id}"` : ""}>${tag}${hourPill(e)}${esc(e.label)}${SRC[e.source] ? ` <span class="mp-src" title="From Tony's Obsidian dashboard">${SRC[e.source]}</span>` : ""}${e.private ? ` <span class="mp-priv" title="Private: only you can see it">🔒</span>` : ""}${rangeInfo(e)}${bellPill(e)}</span>${e.editable ? `<button class="pl-edit" data-edit="${e.id}" title="Edit this task">✏️</button>` : ""}</div>`;
 }
 function bindItems(el) {
   el.querySelectorAll("[data-tick]").forEach((cb) => cb.addEventListener("change", () => toggleDone(findTask(cb.dataset.tick), cb.checked)));
@@ -375,12 +377,12 @@ function renderCalendar(el) {
     if (c === 0) lanes = weekLanes(spans, k);
     const cls = [d.getMonth() !== first.getMonth() && "out", k === today && "today", k === UI.day && "sel", dow(d) >= 6 && "we"].filter(Boolean).join(" ");
     html += `<div class="pl-day ${cls}" data-day="${k}" style="grid-row:${w + 2};grid-column:${c + 1}"><div class="pl-num">${d.getDate()}</div>${lanes.n ? `<div class="pl-lanes" style="--n:${lanes.n}"></div>` : ""}`;
-    html += list.slice(0, CAL_PER_DAY).map((e) => `<div class="pl-chip ${urgency(e)}${glowClass(e)}"${e.editable ? ` data-edit="${e.id}"` : ""} style="--c:${e.color}" title="${chipTitle(e)}${e.time ? " (" + e.time + ")" : ""}">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${hourPill(e)}${esc(e.label)}${bellMark(e)}</div>`).join("");
+    html += list.slice(0, CAL_PER_DAY).map((e) => `<div class="pl-chip ${urgency(e)}${glowClass(e)}"${e.tickable ? ` data-edit="${e.id}"` : ""} style="--c:${e.color}" title="${chipTitle(e)}${e.time ? " (" + e.time + ")" : ""}">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${hourPill(e)}${esc(e.label)}${bellMark(e)}</div>`).join("");
     if (list.length > CAL_PER_DAY) html += `<div class="pl-more">+${list.length - CAL_PER_DAY}</div>`;
     html += `</div>`;
     if (c === 6) html += lanes.segs.map((g) => {
       const e = g.e;
-      return `<div class="pl-chip pl-span ${urgency(e)}${glowClass(e)}${g.head ? " head" : ""}${g.tail ? " tail" : ""}"${e.editable ? ` data-edit="${e.id}"` : ` data-goto="${g.first}"`}
+      return `<div class="pl-chip pl-span ${urgency(e)}${glowClass(e)}${g.head ? " head" : ""}${g.tail ? " tail" : ""}"${e.tickable ? ` data-edit="${e.id}"` : ` data-goto="${g.first}"`}
         style="--c:${e.color};--lane:${g.lane};grid-row:${w + 2};grid-column:${g.c0 + 1} / ${g.c1 + 2}" title="${chipTitle(e)} (${dm(e.date)} → ${dm(e.end)})">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${g.head ? hourPill(e) : "↪ "}${esc(e.label)}${bellMark(e)}</div>`;
     }).join("");
   }
@@ -465,7 +467,8 @@ function overlay(html) {
 }
 
 function openEditor(e) {
-  if (!e?.editable) return;
+  if (!e?.tickable) return;
+  if (e.fromPC) { toast("This task comes from your Obsidian dashboard (Devoirs.md / Excel / deadlines) — edit it there. You can tick it here."); return; }
   const cats = myCats();
   const ov = overlay(`<form class="pl-editor-card"><h4>✏️ Edit task</h4>
     <label>Task<input type="text" name="text" value="${esc(e.label)}" maxlength="300" required></label>

@@ -221,3 +221,6 @@ input[type=radio], input[type=checkbox] { accent-color: #ffe8a3; width: 18px; he
 .mp-notif .mp-cta { margin-top: 2px; }
 .mp-row { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .pl-editor-card h4 + .mp-notif { margin-top: -4px; }
+
+/* Tâches venues du tableau de bord Obsidian (PC, Excel, échéances) */
+.mp-src { font-size: 0.72em; padding: 0 6px; border-radius: 8px; border: 1px solid var(--pl-line); color: var(--text-muted); white-space: nowrap; }
