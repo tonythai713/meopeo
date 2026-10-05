@@ -1,7 +1,7 @@
 // Service worker de MeoPeo : l'app s'ouvre même sans réseau (ses fichiers sont gardés sur le téléphone).
 // ⚠️ À CHAQUE publication d'une nouvelle version : changer VERSION, sinon les téléphones gardent l'ancienne.
 // Les données (Supabase : tâches, connexion, temps réel) ne passent JAMAIS par ce cache.
-const VERSION = "2026-10-05.1";
+const VERSION = "2026-10-05.2";
 const CACHE = "meopeo-" + VERSION;
 const SHELL = [
   "./", "index.html", "app.js", "data.js", "config.js", "style.css", "manifest.webmanifest",
@@ -51,4 +51,23 @@ self.addEventListener("fetch", (event) => {
     }));
   }
   // Tout le reste (Supabase) : réseau direct, sans cache
+});
+
+// Notifications : affichées même quand l'app est fermée (sur iPhone, chaque message reçu DOIT afficher une notification)
+self.addEventListener("push", (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch { d = { body: event.data ? event.data.text() : "" }; }
+  event.waitUntil(self.registration.showNotification(d.title || "MeoPeo", {
+    body: d.body || "", tag: d.tag || undefined, icon: "icons/icon-192.png", badge: "icons/icon-192.png", data: { url: d.url || "./" },
+  }));
+});
+// Toucher la notification ouvre MeoPeo (ou le remet au premier plan)
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const open = wins.find((w) => w.url.startsWith(self.registration.scope));
+    if (open) return open.focus();
+    return self.clients.openWindow(new URL(event.notification.data?.url || "./", self.registration.scope).href);
+  })());
 });

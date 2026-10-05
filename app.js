@@ -44,6 +44,13 @@ function urgency(e) {
 }
 const relDay = (k) => { const d = diffDays(today, k); return d === 0 ? "today" : d === 1 ? "tomorrow" : d === -1 ? "yesterday" : d > 0 ? `in ${d} d` : `${-d} d ago`; };
 const hourPill = (e) => (e.time ? `<span class="pl-hour">${e.time}</span> ` : "");
+// Rappel sur le téléphone : « AAAA-MM-JJ HH:MM » (heure locale) ; le jour est toujours écrit en clair (« today », « tomorrow », « Tue 06.10 »)
+const BELL = "🔔";
+const remindLabel = (r) => { const d = r.slice(0, 10); return `${d === today ? "today" : d === tomorrow ? "tomorrow" : `${DAYS[dow(fromIso(d)) - 1].slice(0, 3)} ${dm(d)}`} ${r.slice(11)}`; };
+const bellPill = (e) => (e.remind && !e.done ? ` <span class="pl-bell" title="Notification on your phone">${BELL} ${remindLabel(e.remind)}</span>` : "");
+const bellMark = (e) => (e.remind && !e.done ? " " + BELL : "");
+const remindInputs = (e) => `<span class="pl-remind" title="Notification on your phone at this time — leave the time empty for no reminder">${BELL} <input type="date" name="rdate" title="Reminder day (empty = the task's day)" value="${e?.remind?.slice(0, 10) ?? ""}"><input type="time" name="rtime" title="Reminder time" value="${e?.remind?.slice(11) ?? ""}"></span>`;
+const remindOf = (f) => (f.get("rtime") ? `${f.get("rdate") || f.get("date")} ${f.get("rtime")}` : null);
 const moonRadios = (pre = "") => `<span class="pl-moon">${[["", "No glow"], ["full", "🌕 Full moon"], ["crescent", "🌙 Crescent"]]
   .map(([v, l]) => `<label><input type="radio" name="moon" value="${v}" ${v === (pre ?? "") ? "checked" : ""}> ${l}</label>`).join("")}</span>`;
 const byDate = (a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? ""));
@@ -87,12 +94,48 @@ export async function start(backend) {
   window.addEventListener("resize", () => align());
 }
 
+// ---------- Notifications (Web Push) ----------
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const keyBytes = (b64) => Uint8Array.from(atob(b64.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
+const sameKey = (a, b) => { const x = new Uint8Array(a); return x.length === b.length && x.every((v, i) => v === b[i]); };
+async function pushState() {
+  if (isIOS && !standalone()) return "install";
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "unsupported";
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) return "unsupported";
+  if (Notification.permission === "denied") return "blocked";
+  const sub = await reg.pushManager.getSubscription();
+  return Notification.permission === "granted" && sub ? "on" : "off";
+}
+// Abonne cet appareil (ou renouvelle l'abonnement) et l'enregistre pour la personne connectée
+async function subscribePush() {
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) throw new Error("not available here");
+  const key = keyBytes(db.vapidPublicKey);
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && sub.options?.applicationServerKey && !sameKey(sub.options.applicationServerKey, key)) { await sub.unsubscribe(); sub = null; }
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  await db.savePushSubscription(sub);
+}
+// À chaque ouverture : si les notifications sont autorisées, l'abonnement de cet appareil est remis à jour
+async function ensurePush() {
+  try { if ("Notification" in window && Notification.permission === "granted" && (await navigator.serviceWorker?.getRegistration())) await subscribePush(); }
+  catch (err) { console.warn("Notifications", err); }
+}
+function remindNotice(r) {
+  if (!r) return;
+  if (new Date(r.replace(" ", "T")) < new Date()) { toast(`⚠️ ${BELL} ${remindLabel(r)} is already past — no notification will be sent`); return; }
+  pushState().then((st) => toast(`${BELL} Reminder set: ${remindLabel(r)}${st === "on" ? "" : " — turn on notifications in ⚙ to receive it"}`));
+}
+
 async function boot(user) {
   S.user = user;
   toastBox.innerHTML = ""; // pas de message du compte précédent
   root.innerHTML = `<div class="mp-loading">🌙 Loading…</div>`;
   await load();
   resubscribe();
+  ensurePush();
 }
 function resubscribe() { unsubscribe?.(); unsubscribe = S.user ? db.subscribe(() => reload()) : null; }
 function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 250); } // plusieurs événements d'affilée = un seul rechargement
@@ -216,7 +259,7 @@ function itemHtml(e) {
   const when = ongoing(e) && !e.done;
   return `<div class="pl-item ${urgency(e)}${glowClass(e)}" style="--c:${e.color}">${box}
     <span class="pl-when">${when ? "now" : relDay(e.date)}<small>${dm(when ? today : e.date)}</small></span>
-    <span class="pl-what"${e.editable ? ` data-edit="${e.id}"` : ""}>${tag}${hourPill(e)}${esc(e.label)}${e.private ? ` <span class="mp-priv" title="Private: only you can see it">🔒</span>` : ""}${rangeInfo(e)}</span>${e.editable ? `<button class="pl-edit" data-edit="${e.id}" title="Edit this task">✏️</button>` : ""}</div>`;
+    <span class="pl-what"${e.editable ? ` data-edit="${e.id}"` : ""}>${tag}${hourPill(e)}${esc(e.label)}${e.private ? ` <span class="mp-priv" title="Private: only you can see it">🔒</span>` : ""}${rangeInfo(e)}${bellPill(e)}</span>${e.editable ? `<button class="pl-edit" data-edit="${e.id}" title="Edit this task">✏️</button>` : ""}</div>`;
 }
 function bindItems(el) {
   el.querySelectorAll("[data-tick]").forEach((cb) => cb.addEventListener("change", () => toggleDone(findTask(cb.dataset.tick), cb.checked)));
@@ -250,6 +293,7 @@ function renderMine(el) {
       <input type="text" name="text" placeholder="What needs doing" maxlength="300" required>
       ${moonRadios()}
       <label class="mp-check" title="Private: ${esc(S.partner?.label ?? "the other")} won't see it"><input type="checkbox" name="private"> 🔒 Private</label>
+      ${remindInputs()}
       <button type="submit" class="mp-cta">Add</button></form></details></div>`;
   bindItems(el);
   const form = el.querySelector("form");
@@ -265,9 +309,9 @@ function renderMine(el) {
     if (f.get("end") && !end) toast("“until” must be after the start date — saved as a one-day task");
     form.querySelector("button[type=submit]").disabled = true;
     const ok = await guard(() => db.insertTask({ date: f.get("date"), end, time: f.get("time") || null, course: f.get("course") || null,
-      label, moon: f.get("moon") || null, private: f.get("private") === "on" }), "Couldn't add the task");
+      label, moon: f.get("moon") || null, private: f.get("private") === "on", remind: remindOf(f) }), "Couldn't add the task");
     UI.addCat = f.get("course") || ""; UI.focusAdd = ok;
-    if (ok) toast(`Added: ${label}`);
+    if (ok) { toast(`Added: ${label}`); remindNotice(remindOf(f)); }
     await load(); // la tâche apparaît tout de suite (l'autre la reçoit en temps réel)
   });
   // Nouvelle catégorie
@@ -331,13 +375,13 @@ function renderCalendar(el) {
     if (c === 0) lanes = weekLanes(spans, k);
     const cls = [d.getMonth() !== first.getMonth() && "out", k === today && "today", k === UI.day && "sel", dow(d) >= 6 && "we"].filter(Boolean).join(" ");
     html += `<div class="pl-day ${cls}" data-day="${k}" style="grid-row:${w + 2};grid-column:${c + 1}"><div class="pl-num">${d.getDate()}</div>${lanes.n ? `<div class="pl-lanes" style="--n:${lanes.n}"></div>` : ""}`;
-    html += list.slice(0, CAL_PER_DAY).map((e) => `<div class="pl-chip ${urgency(e)}${glowClass(e)}"${e.editable ? ` data-edit="${e.id}"` : ""} style="--c:${e.color}" title="${chipTitle(e)}${e.time ? " (" + e.time + ")" : ""}">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${hourPill(e)}${esc(e.label)}</div>`).join("");
+    html += list.slice(0, CAL_PER_DAY).map((e) => `<div class="pl-chip ${urgency(e)}${glowClass(e)}"${e.editable ? ` data-edit="${e.id}"` : ""} style="--c:${e.color}" title="${chipTitle(e)}${e.time ? " (" + e.time + ")" : ""}">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${hourPill(e)}${esc(e.label)}${bellMark(e)}</div>`).join("");
     if (list.length > CAL_PER_DAY) html += `<div class="pl-more">+${list.length - CAL_PER_DAY}</div>`;
     html += `</div>`;
     if (c === 6) html += lanes.segs.map((g) => {
       const e = g.e;
       return `<div class="pl-chip pl-span ${urgency(e)}${glowClass(e)}${g.head ? " head" : ""}${g.tail ? " tail" : ""}"${e.editable ? ` data-edit="${e.id}"` : ` data-goto="${g.first}"`}
-        style="--c:${e.color};--lane:${g.lane};grid-row:${w + 2};grid-column:${g.c0 + 1} / ${g.c1 + 2}" title="${chipTitle(e)} (${dm(e.date)} → ${dm(e.end)})">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${g.head ? hourPill(e) : "↪ "}${esc(e.label)}</div>`;
+        style="--c:${e.color};--lane:${g.lane};grid-row:${w + 2};grid-column:${g.c0 + 1} / ${g.c1 + 2}" title="${chipTitle(e)} (${dm(e.date)} → ${dm(e.end)})">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${g.head ? hourPill(e) : "↪ "}${esc(e.label)}${bellMark(e)}</div>`;
     }).join("");
   }
   html += `</div><div class="pl-legend"><span class="pl-dot" style="--c:${S.me.color}"></span> ${esc(S.me.label)}${S.partner ? ` · <span class="pl-dot" style="--c:${S.partner.color}"></span> ${esc(S.partner.label)}` : ""} · categories in their own colours · tap a day for details · struck through = done</div>
@@ -428,6 +472,7 @@ function openEditor(e) {
     <div class="pl-editor-row"><label>Date<input type="date" name="date" value="${e.date}" required></label><label title="Last day — only for something that lasts several days">Until<input type="date" name="end" value="${e.end ?? ""}"></label><label>Time<input type="time" name="time" value="${e.time ?? ""}"></label></div>
     <label>Category<select name="course"><option value="">— no category —</option>${cats.map((c) => `<option ${c.name === e.course ? "selected" : ""}>${esc(c.name)}</option>`).join("")}${e.course && !cats.some((c) => c.name === e.course) ? `<option selected>${esc(e.course)}</option>` : ""}</select></label>
     ${moonRadios(e.moon)}
+    <div class="pl-editor-row">${remindInputs(e)}</div>
     <div class="pl-editor-row"><label class="mp-check"><input type="checkbox" name="private" ${e.private ? "checked" : ""}> 🔒 Private</label>
       <label class="mp-check" title="Untick to put the task back in your to-do list"><input type="checkbox" name="done" ${e.done ? "checked" : ""}> ✓ Done</label></div>
     <div class="pl-editor-actions"><button type="button" data-act="delete" class="mp-danger">🗑 Delete</button><span class="mp-grow"></span><button type="button" data-act="cancel">Cancel</button><button type="submit" class="mp-cta">Save</button></div></form>`);
@@ -439,8 +484,8 @@ function openEditor(e) {
     if (!label) return;
     const end = endOf(d.get("date"), d.get("end"));
     if (d.get("end") && !end) toast("“until” must be after the start date — saved as a one-day task");
-    const patch = { label, date: d.get("date"), end, time: d.get("time") || null, course: d.get("course") || null, moon: d.get("moon") || null, private: d.get("private") === "on", done: d.get("done") === "on" };
-    if (await guard(() => db.updateTask(e.id, patch))) { ov.remove(); toast("Task updated"); load(); }
+    const patch = { label, date: d.get("date"), end, time: d.get("time") || null, course: d.get("course") || null, moon: d.get("moon") || null, remind: remindOf(d), private: d.get("private") === "on", done: d.get("done") === "on" };
+    if (await guard(() => db.updateTask(e.id, patch))) { ov.remove(); toast("Task updated"); if (patch.remind !== e.remind) remindNotice(patch.remind); load(); }
   });
   const del = f.querySelector("[data-act=delete]");
   del.addEventListener("click", async () => {
@@ -450,9 +495,48 @@ function openEditor(e) {
   f.text.focus({ preventScroll: true });
 }
 
+const when = (isoStr) => { const d = new Date(isoStr); return `${d.getDate()}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+async function fillNotif(box) {
+  const st = await pushState();
+  let html = {
+    install: "📲 Install MeoPeo on your home screen first (Safari → Share → <b>Add to Home Screen</b>), then open it from its icon and come back here.",
+    unsupported: "This browser can't receive notifications. Use MeoPeo installed on your phone's home screen.",
+    blocked: "⚠️ Notifications are blocked for MeoPeo. Allow them in the phone's settings (iPhone: Settings → Notifications → MeoPeo), then come back here.",
+    off: `<button type="button" class="mp-cta" data-act="enable">Turn on notifications on this device</button>`,
+    on: `✓ Notifications are on for this device. <span class="mp-row"><button type="button" data-act="test">Send me a test</button><button type="button" data-act="disable">Turn off</button></span>`,
+  }[st];
+  try {
+    const info = await db.pushStatus();
+    if (info.last) html += `<div class="pl-legend">Last notification: ${esc(info.last.title)} — <b>${esc(info.last.status ?? (info.last.sent_at ? "sent" : "waiting to be sent…"))}</b> (${when(info.last.created_at)})</div>`;
+    html += `<div class="pl-legend">${info.devices.length} device${info.devices.length === 1 ? "" : "s"} receiving your notifications</div>`;
+  } catch { /* hors connexion ou pas encore installé côté serveur */ }
+  box.innerHTML = html;
+  box.querySelector("[data-act=enable]")?.addEventListener("click", async () => {
+    const perm = await Notification.requestPermission(); // en premier : doit suivre directement l'appui (iPhone)
+    if (perm !== "granted") { toast("Notifications not allowed"); fillNotif(box); return; }
+    if (await guard(() => subscribePush(), "Couldn't turn on notifications")) { toast("🔔 Notifications are on — sending a test…"); await guard(() => db.queueTestPush()); }
+    fillNotif(box);
+  });
+  box.querySelector("[data-act=test]")?.addEventListener("click", async () => {
+    if (await guard(() => db.queueTestPush())) toast("Test on its way — it should arrive within a minute");
+    setTimeout(() => box.isConnected && fillNotif(box), 4000);
+  });
+  box.querySelector("[data-act=disable]")?.addEventListener("click", async () => {
+    const sub = await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription();
+    if (sub) { await guard(() => db.removePushSubscription(sub.endpoint)); await sub.unsubscribe(); }
+    toast("Notifications turned off on this device");
+    fillNotif(box);
+  });
+}
+
 function openMenu() {
+  const P = S.partner;
   const ov = overlay(`<form class="pl-editor-card"><h4>${esc(S.me.mark)} ${esc(S.me.label)}</h4>
     <p class="mp-sub">Signed in as ${esc(S.user.email)}</p>
+    <h4>🔔 Notifications</h4>
+    <div class="mp-notif">Checking…</div>
+    ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}
+    <h4>🔑 Password</h4>
     <label>New password<input type="password" name="pw" autocomplete="new-password" minlength="6"></label>
     <label>Repeat it<input type="password" name="pw2" autocomplete="new-password" minlength="6"></label>
     <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button><span class="mp-grow"></span><button type="button" data-act="cancel">Close</button><button type="submit" class="mp-cta">Change password</button></div></form>`);
@@ -464,4 +548,10 @@ function openMenu() {
     if (await guard(() => db.changePassword(f.pw.value), "Couldn't change the password")) { ov.remove(); toast("Password changed"); }
   });
   f.querySelector("[data-act=logout]").addEventListener("click", async () => { ov.remove(); await logout(); });
+  fillNotif(f.querySelector(".mp-notif"));
+  f.notify?.addEventListener("change", async (ev) => {
+    const on = ev.target.checked;
+    if (await guard(() => db.updateMyProfile({ notify_partner: on }))) { S.me.notify_partner = on; toast(on ? `You'll be told when ${P.label} adds a task` : `No more notifications for ${P.label}'s new tasks`); }
+    else ev.target.checked = !on;
+  });
 }
