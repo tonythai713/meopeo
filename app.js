@@ -243,10 +243,9 @@ function render() {
       <span class="mp-who">${esc(S.me.mark)} ${esc(S.me.label)}</span>
       <button class="pl-refresh" data-act="refresh" title="Reload">⟳</button><button class="pl-refresh" data-act="menu" title="Account">⚙</button></header>
     <div class="pl-split"><div class="pl-left"></div><div class="pl-right"></div></div>
-    <div class="pl-bottom"><div class="mp-soon"></div><div class="mp-partner"></div></div>`;
+    <div class="pl-bottom"><div class="mp-partner"></div></div>`;
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
-  renderSoon(root.querySelector(".mp-soon"));
   renderPartner(root.querySelector(".mp-partner"), P);
   root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); resubscribe(); });
   root.querySelector("[data-act=menu]").addEventListener("click", openMenu);
@@ -392,8 +391,10 @@ function renderCalendar(el) {
   const detail = el.querySelector(".pl-detail");
   const showDay = (k) => {
     const list = all.filter((e) => onDay(e, k));
-    detail.innerHTML = `<h4>${k === today ? "Today — " : ""}${dayTitle(fromIso(k))}</h4>` + (list.length ? list.map(itemHtml).join("") : `<div class="pl-empty">Nothing that day.</div>`);
+    detail.innerHTML = `<h4>${k === today ? "Today — " : ""}${dayTitle(fromIso(k))}</h4>` + (list.length ? list.map(itemHtml).join("") : `<div class="pl-empty">Nothing that day.</div>`)
+      + `<button type="button" class="mp-addday">＋ Add a task on ${DAYS[dow(fromIso(k)) - 1].slice(0, 3)} ${dm(k)}</button>`;
     bindItems(detail);
+    detail.querySelector(".mp-addday").addEventListener("click", () => openNewTask(k));
   };
   showDay(UI.day);
   el.querySelectorAll("[data-m]").forEach((b) => b.addEventListener("click", () => { UI.offset = +b.dataset.m === 0 ? 0 : UI.offset + +b.dataset.m; renderCalendar(el); align(); }));
@@ -403,6 +404,8 @@ function renderCalendar(el) {
     el.querySelectorAll(".pl-day.sel").forEach((x) => x.classList.remove("sel"));
     c.classList.add("sel");
     showDay(UI.day);
+    // sur téléphone, le détail est juste sous le calendrier : on le fait apparaître
+    if (matchMedia("(max-width: 760px)").matches) detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }));
   el.querySelectorAll(".pl-cal [data-edit]").forEach((ch) => ch.addEventListener("click", (ev) => { ev.stopPropagation(); openEditor(findTask(ch.dataset.edit)); }));
   el.querySelectorAll(".pl-span[data-goto]").forEach((b) => b.addEventListener("click", () => el.querySelector(`.pl-day[data-day="${b.dataset.goto}"]`)?.click()));
@@ -438,15 +441,7 @@ function align() {
   });
 }
 
-// En dessous : aujourd'hui / demain, et les prochaines tâches de l'autre
-function renderSoon(el) {
-  const block = (k, title) => {
-    const list = S.mine.filter((e) => onDay(e, k));
-    return `<div class="pl-sub">${title}</div>` + (list.length ? list.map(itemHtml).join("") : `<div class="pl-empty">Nothing planned.</div>`);
-  };
-  el.innerHTML = `<div class="pl-card"><h4>Today and tomorrow</h4>${block(today, "Today")}${block(tomorrow, "Tomorrow — " + dayTitle(addDays(now, 1)))}</div>`;
-  bindItems(el);
-}
+// En dessous : les prochaines tâches de l'autre
 function renderPartner(el, P) {
   if (!P) { el.innerHTML = ""; return; }
   const up = upcomingOf(S.theirs);
@@ -464,6 +459,38 @@ function overlay(html) {
   ov.addEventListener("click", (ev) => { if (ev.target === ov) ov.remove(); });
   ov.querySelector("[data-act=cancel]")?.addEventListener("click", () => ov.remove());
   return ov;
+}
+
+// Nouvelle tâche pour un jour précis (bouton « ＋ Add a task on … » sous le calendrier)
+function openNewTask(date) {
+  const cats = myCats();
+  const ov = overlay(`<form class="pl-editor-card"><h4>➕ New task — ${dayTitle(fromIso(date))}</h4>
+    <label>Task<input type="text" name="text" maxlength="300" placeholder="What needs doing" required></label>
+    <div class="pl-editor-row"><label>Date<input type="date" name="date" value="${date}" required></label><label title="Last day — only for something that lasts several days">Until<input type="date" name="end"></label><label>Time<input type="time" name="time"></label></div>
+    <label>Category<select name="course"><option value="">— no category —</option>${cats.map((c) => `<option ${c.name === UI.addCat ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
+    ${moonRadios()}
+    <div class="pl-editor-row">${remindInputs()}</div>
+    <div class="pl-editor-row"><label class="mp-check" title="Private: ${esc(S.partner?.label ?? "the other")} won't see it"><input type="checkbox" name="private"> 🔒 Private</label></div>
+    <div class="pl-editor-actions"><span class="mp-grow"></span><button type="button" data-act="cancel">Cancel</button><button type="submit" class="mp-cta">Add</button></div></form>`);
+  const f = ov.querySelector("form");
+  f.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const d = new FormData(f);
+    const label = String(d.get("text")).trim();
+    if (!label) return;
+    const end = endOf(d.get("date"), d.get("end"));
+    if (d.get("end") && !end) toast("“until” must be after the start date — saved as a one-day task");
+    f.querySelector("button[type=submit]").disabled = true;
+    const ok = await guard(() => db.insertTask({ date: d.get("date"), end, time: d.get("time") || null, course: d.get("course") || null,
+      label, moon: d.get("moon") || null, private: d.get("private") === "on", remind: remindOf(d) }), "Couldn't add the task");
+    if (!ok) { f.querySelector("button[type=submit]").disabled = false; return; }
+    ov.remove();
+    UI.day = d.get("date"); UI.addCat = d.get("course") || "";
+    toast(`Added: ${label}`);
+    remindNotice(remindOf(d));
+    load();
+  });
+  f.text.focus({ preventScroll: true });
 }
 
 function openEditor(e) {
