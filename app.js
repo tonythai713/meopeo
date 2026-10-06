@@ -63,7 +63,7 @@ const upcomingOf = (list) => [
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [] };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -89,7 +89,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("focus", wake);
   window.addEventListener("online", wake);
@@ -136,10 +136,14 @@ async function boot(user) {
   toastBox.innerHTML = ""; // pas de message du compte précédent
   root.innerHTML = `<div class="mp-loading">🌙 Loading…</div>`;
   await load();
+  loadTino();
   resubscribe();
   ensurePush();
 }
-function resubscribe() { unsubscribe?.(); unsubscribe = S.user ? db.subscribe(() => reload()) : null; }
+function resubscribe() {
+  unsubscribe?.(); unsubscribe = S.user ? db.subscribe(() => reload()) : null;
+  unsubTino?.(); unsubTino = S.user ? db.subscribeTino(() => loadTino()) : null;
+}
 function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 250); } // plusieurs événements d'affilée = un seul rechargement
 
 async function load() {
@@ -205,11 +209,13 @@ function toast(msg, { action, onAction, ms = 6000 } = {}) {
 function showLogin() {
   S.user = null; S.me = null;
   unsubscribe?.(); unsubscribe = null;
+  unsubTino?.(); unsubTino = null;
   root.innerHTML = `<div class="mp-login pl-card"><h1>MeoPeo</h1><p class="mp-sub">💗 MeoMeo · 💜 PeoPeo</p>
     <form><input type="email" name="email" placeholder="E-mail" autocomplete="username" required>
       <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
       <button type="submit" class="mp-cta">Sign in</button><div class="mp-err" hidden></div></form></div>`;
   mascots?.refresh(); // plus de calendrier : les personnages disparaissent
+  mascots?.hush(); tinoShown = null; S.tino = []; S.tinoOk = null; renderTino();
   const form = root.querySelector("form");
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -249,9 +255,10 @@ function render() {
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); resubscribe(); });
   root.querySelector("[data-act=menu]").addEventListener("click", openMenu);
   root.style.minHeight = "";
+  renderTino();
   align();
 }
 
@@ -406,6 +413,7 @@ function renderCalendar(el) {
     el.querySelectorAll(".pl-day.sel").forEach((x) => x.classList.remove("sel"));
     c.classList.add("sel");
     showDay(UI.day);
+    mascots?.poke(c); // Tino était dans cette case ? il s'envole ailleurs
     // sur téléphone, le détail est juste sous le calendrier : on le fait apparaître
     if (matchMedia("(max-width: 760px)").matches) detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }));
@@ -468,6 +476,82 @@ function refreshMascots() {
   document.body.append(layer);
   // un appui sur un personnage passe au calendrier en dessous, jamais aux boutons du mois ni à l'interrupteur
   mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, tapThrough: (el) => !!el.closest(".pl-cal") });
+  syncTinoBubble();
+}
+
+// ---------- Messages via Tino (supabase/07_tino_messages.sql) ----------
+// L'un écrit un petit mot en bas de la page ; chez l'autre, Tino le dit dans une bulle (+ notification) jusqu'à ce qu'on
+// le touche. La carte vit hors de #app : les réaffichages (temps réel) n'effacent pas un message en cours d'écriture.
+let tinoHost = null, tinoShown = null, unsubTino = null;
+const tinoWhen = (at) => { const d = new Date(at); return `${relDay(iso(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+
+function tinoBox() {
+  if (tinoHost) return tinoHost;
+  tinoHost = document.createElement("section");
+  tinoHost.className = "mp-tino-host";
+  tinoHost.hidden = true;
+  tinoHost.innerHTML = `<div class="pl-card mp-tino"><h4>🦭 Message via Tino</h4>
+    <form class="mp-tino-form"><input type="text" name="tinomsg" maxlength="200" autocomplete="off" enterkeyhint="send" required>
+      <button type="submit" class="mp-cta">Send 💌</button></form>
+    <div class="mp-tino-list"></div><div class="pl-legend mp-tino-legend"></div></div>`;
+  root.after(tinoHost);
+  const form = tinoHost.querySelector("form");
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const P = S.partner, text = form.tinomsg.value.trim();
+    if (!P || !text) return;
+    form.querySelector("button").disabled = true;
+    const ok = await guard(() => db.sendTinoMessage(P.id, text), "Couldn't send the message");
+    form.querySelector("button").disabled = false;
+    if (!ok) return;
+    form.tinomsg.value = "";
+    if (!tinoShown) mascots?.say(`Okay! I'll tell ${P.label} 💌`, { ms: 3000 }); // (sans cacher un message pas encore lu)
+    mascots?.flyAway(); // il part porter le message
+    loadTino();
+  });
+  return tinoHost;
+}
+
+async function loadTino() {
+  if (!S.user) return;
+  try { S.tino = await db.listTinoMessages(); S.tinoOk = true; }
+  catch (err) { if (/does not exist|schema cache|tino_messages/i.test(err.message)) S.tinoOk = false; } // sinon (hors ligne) : on garde la dernière liste
+  renderTino();
+  syncTinoBubble();
+}
+
+function renderTino() {
+  const box = tinoBox(), P = S.partner, show = !!(S.user && S.me && P);
+  box.hidden = !show;
+  document.body.classList.toggle("mp-has-tino", show);
+  if (!show) return;
+  const form = box.querySelector("form"), list = box.querySelector(".mp-tino-list"), legend = box.querySelector(".mp-tino-legend");
+  form.tinomsg.placeholder = `Tino will tell ${P.label}…`;
+  form.tinomsg.disabled = form.querySelector("button").disabled = S.tinoOk === false;
+  if (S.tinoOk === false) {
+    list.innerHTML = "";
+    legend.textContent = "Messages via Tino aren't available yet."; // (supabase/07_tino_messages.sql pas encore exécuté)
+    return;
+  }
+  list.innerHTML = S.tino.slice(0, 5).map((m) => {
+    const mine = m.from === S.user.id, who = mine ? `${S.me.mark} You` : `${P.mark} ${P.label}`;
+    const state = mine ? (m.seen ? " · seen ✓" : " · not seen yet") : (m.seen ? "" : " · new");
+    return `<div class="mp-tino-row${mine ? " mine" : ""}"><span class="mp-tino-meta">${esc(who)} · ${tinoWhen(m.at)}${state}</span><span class="mp-tino-text">${esc(m.body)}</span></div>`;
+  }).join("");
+  legend.textContent = `Tino says it on ${P.label}'s calendar and sends a notification. A message for you: tap Tino or the bubble once it's read.`;
+}
+
+// Le plus ancien message reçu pas encore lu → Tino le dit (un à la fois) ; lu ailleurs → la bulle disparaît
+function syncTinoBubble() {
+  if (!mascots || !S.user) return;
+  const P = S.partner, next = S.tino.filter((m) => m.to === S.user.id && !m.seen).sort((a, b) => a.id - b.id)[0];
+  if (!next || !P) { if (tinoShown) { mascots.hush(); tinoShown = null; } return; }
+  if (tinoShown === next.id) return;
+  tinoShown = next.id;
+  mascots.say(next.body, {
+    sticky: true, who: `${P.mark} ${P.label}:`, color: P.color,
+    onClose: async () => { tinoShown = null; if (await guard(() => db.markTinoSeen(next.id))) loadTino(); },
+  });
 }
 
 // En dessous : les prochaines tâches de l'autre

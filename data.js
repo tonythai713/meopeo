@@ -12,6 +12,8 @@
 //   vapidPublicKey, savePushSubscription(sub), removePushSubscription(endpoint), queueTestPush(), pushStatus(),
 //   updateMyProfile(patch)         → notifications (voir supabase/03_notifications.sql et supabase/functions/send-push)
 //   listWidgetKeys(), registerWidgetKey(sha256, label), revokeWidgetKey(id) → widgets (supabase/05_widgets.sql)
+//   listTinoMessages(), sendTinoMessage(to, body), markTinoSeen(id), subscribeTino(onChange) → messages via Tino
+//     (supabase/07_tino_messages.sql) ; un message : { id, from, to, body, at: date ISO, seen: date ISO | null }
 //
 // Format d'une tâche dans l'app : { id, owner, date: "AAAA-MM-JJ", end: "AAAA-MM-JJ" | null, time: "HH:MM" | null,
 //   course: nom de catégorie | null, label, done, moon: "full" | "crescent" | null, private, source }
@@ -111,6 +113,20 @@ export function createBackend() {
     async listWidgetKeys() { return must(await sb.from("widget_tokens").select("id, label, created_at, last_used_at").order("created_at")); },
     async registerWidgetKey(sha256, label) { return must(await sb.rpc("register_widget_token", { p_sha256: sha256, p_label: label })); },
     async revokeWidgetKey(id) { must(await sb.from("widget_tokens").delete().eq("id", id)); },
+
+    // Messages via Tino (les 30 derniers, envoyés ou reçus) ; canal temps réel à part : s'il échoue, les tâches ne sont pas touchées
+    async listTinoMessages() {
+      const rows = must(await sb.from("tino_messages").select("id, sender, recipient, body, created_at, seen_at").order("id", { ascending: false }).limit(30));
+      return rows.map((r) => ({ id: r.id, from: r.sender, to: r.recipient, body: r.body, at: r.created_at, seen: r.seen_at }));
+    },
+    async sendTinoMessage(to, body) { must(await sb.from("tino_messages").insert({ recipient: to, body })); },
+    async markTinoSeen(id) { must(await sb.from("tino_messages").update({ seen_at: new Date().toISOString() }).eq("id", id)); },
+    subscribeTino(onChange) {
+      const ch = sb.channel("tino-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "tino_messages" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
 
     // Temps réel : sur téléphone, le système coupe la connexion en arrière-plan → l'app se réabonne au retour (voir app.js)
     subscribe(onChange) {
