@@ -1,5 +1,6 @@
 // MeoPeo — l'interface (même mise en page que les planners Obsidian MeoMeo / PeoPeo).
 // Ne parle jamais directement à Supabase : tout passe par `db` (data.js ; data-mock.js dans test.html).
+import { mountMascots } from "./mascot.js";
 
 // ---------- Dates ----------
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -208,6 +209,7 @@ function showLogin() {
     <form><input type="email" name="email" placeholder="E-mail" autocomplete="username" required>
       <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
       <button type="submit" class="mp-cta">Sign in</button><div class="mp-err" hidden></div></form></div>`;
+  mascots?.refresh(); // plus de calendrier : les personnages disparaissent
   const form = root.querySelector("form");
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -425,20 +427,47 @@ function weekLanes(spans, monday) {
 
 // Le calendrier s'aligne sur la carte « To do » (même haut, même bas) quand les deux colonnes sont côte à côte
 function align() {
-  requestAnimationFrame(() => {
-    const split = root.querySelector(".pl-split"), left = root.querySelector(".pl-left"), right = root.querySelector(".pl-right");
-    const cal = right?.querySelector(".pl-cal"), todo = left?.querySelector(".pl-todo");
-    if (!cal || !todo) return;
-    right.style.paddingTop = left.style.paddingTop = cal.style.minHeight = "";
-    cal.classList.remove("pl-fit");
-    if (getComputedStyle(split).gridTemplateColumns.split(" ").length < 2) return; // colonnes empilées (téléphone)
-    const nav = right.querySelector(".pl-nav");
-    const navH = nav ? nav.getBoundingClientRect().height + parseFloat(getComputedStyle(nav).marginBottom) : 0;
-    const offset = todo.getBoundingClientRect().top - right.getBoundingClientRect().top - navH;
-    if (offset >= 0) right.style.paddingTop = offset + "px"; else left.style.paddingTop = -offset + "px";
-    cal.style.minHeight = Math.max(CAL_MIN_HEIGHT, todo.getBoundingClientRect().height) + "px";
-    cal.classList.add("pl-fit");
-  });
+  requestAnimationFrame(() => { alignColumns(); refreshMascots(); });
+}
+function alignColumns() {
+  const split = root.querySelector(".pl-split"), left = root.querySelector(".pl-left"), right = root.querySelector(".pl-right");
+  const cal = right?.querySelector(".pl-cal"), todo = left?.querySelector(".pl-todo");
+  if (!cal || !todo) return;
+  right.style.paddingTop = left.style.paddingTop = cal.style.minHeight = "";
+  cal.classList.remove("pl-fit");
+  if (getComputedStyle(split).gridTemplateColumns.split(" ").length < 2) return; // colonnes empilées (téléphone)
+  const nav = right.querySelector(".pl-nav");
+  const navH = nav ? nav.getBoundingClientRect().height + parseFloat(getComputedStyle(nav).marginBottom) : 0;
+  const offset = todo.getBoundingClientRect().top - right.getBoundingClientRect().top - navH;
+  if (offset >= 0) right.style.paddingTop = offset + "px"; else left.style.paddingTop = -offset + "px";
+  cal.style.minHeight = Math.max(CAL_MIN_HEIGHT, todo.getBoundingClientRect().height) + "px";
+  cal.classList.add("pl-fit");
+}
+
+// Personnages qui se promènent sur le calendrier (mascot.js : Tino, le phoque). Calque posé sur la page, hors de l'app : il survit
+// aux réaffichages ; plateformes = haut du calendrier, haut de chaque semaine, bas du calendrier (coordonnées de page)
+let mascots = null;
+function calDays() { return [...(root?.querySelectorAll(".pl-cal .pl-day") ?? [])]; }
+function mascotPlatforms() {
+  const cal = root?.querySelector(".pl-cal"), days = calDays();
+  if (!cal || !days.length || !cal.getClientRects().length) return [];
+  const c = cal.getBoundingClientRect(), ys = [c.top];
+  for (let i = 7; i < days.length; i += 7) ys.push(days[i].getBoundingClientRect().top);
+  ys.push(c.bottom);
+  return ys.map((y) => ({ y: y + scrollY, x0: c.left + scrollX + 18, x1: c.right + scrollX - 18 }));
+}
+function mascotToday() {
+  const days = calDays(), i = days.findIndex((d) => d.classList.contains("today"));
+  if (i < 0) return null;
+  const r = days[i].getBoundingClientRect();
+  return { p: Math.floor(i / 7) + 1, x: r.left + scrollX + r.width / 2 };
+}
+function refreshMascots() {
+  if (mascots) return mascots.refresh();
+  const layer = document.createElement("div");
+  document.body.append(layer);
+  // un appui sur un personnage passe au calendrier en dessous, jamais aux boutons du mois ni à l'interrupteur
+  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, tapThrough: (el) => !!el.closest(".pl-cal") });
 }
 
 // En dessous : les prochaines tâches de l'autre

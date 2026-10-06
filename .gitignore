@@ -5,6 +5,7 @@
 !/.nojekyll
 !/index.html
 !/app.js
+!/mascot.js
 !/data.js
 !/config.js
 !/style.css
