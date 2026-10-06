@@ -95,9 +95,10 @@ export function createBigTino({ onTap = () => {} } = {}) {
 }
 
 // ---------- Vidéo → planche d'images (fait sur l'appareil, rien n'est envoyé avant la fin) ----------
-// La vidéo est jouée une fois, sans le son ; chaque image affichée est copiée (carré central, `size` px).
-// Au plus maxSeconds secondes et maxFrames images (au-delà, une image sur deux, trois…). Résultat : JPEG + description.
-export async function videoToSprite(src, { size = 256, maxFrames = 40, maxSeconds = 6, onProgress = () => {} } = {}) {
+// La vidéo est jouée une fois, sans le son ; les images sont copiées au fil de la lecture (carré central, `size` px),
+// pas plus souvent que maxFrames / durée par seconde (10 s → 9 images par seconde ; vidéo courte → jusqu'à 30).
+// Au plus maxSeconds secondes (la suite est ignorée). Résultat : JPEG (≤ ~9,5 Mo) + description.
+export async function videoToSprite(src, { size = 240, maxFrames = 90, maxSeconds = 10, onProgress = () => {} } = {}) {
   const url = typeof src === "string" ? src : URL.createObjectURL(src);
   const v = document.createElement("video");
   v.muted = true; v.playsInline = true; v.preload = "auto";
@@ -125,15 +126,17 @@ export async function videoToSprite(src, { size = 256, maxFrames = 40, maxSecond
       shots.push({ t, c });
       onProgress(Math.min(1, t / end));
     };
-    // Lecture : une copie par image affichée (requestVideoFrameCallback), sinon à chaque changement de position
+    // Lecture : une copie par nouvelle image (requestVideoFrameCallback), sinon à chaque changement de position,
+    // espacées d'au moins `step` secondes (le rythme de la vidéo est gardé, même avec des pauses)
+    const step = 1 / Math.min(30, maxFrames / Math.max(end, 0.1)) - 0.004;
     await new Promise((ok, ko) => {
-      let done = false, lastT = -1;
+      let done = false, lastT = -Infinity;
       const finish = () => { if (done) return; done = true; v.pause(); clearTimeout(guard); ok(); };
-      const guard = setTimeout(finish, end * 1000 + 6000); // une vidéo qui cale ne bloque pas tout
+      const guard = setTimeout(finish, end * 1000 + 8000); // une vidéo qui cale ne bloque pas tout
       v.addEventListener("ended", finish, { once: true });
       const onFrame = (t) => {
         if (done) return;
-        if (t !== lastT && t <= end + 1e-3) { lastT = t; grab(t); }
+        if (t - lastT >= step && t <= end + 1e-3) { lastT = t; grab(t); }
         if (t >= end - 1e-3) finish();
       };
       if ("requestVideoFrameCallback" in v) {
@@ -144,18 +147,9 @@ export async function videoToSprite(src, { size = 256, maxFrames = 40, maxSecond
         requestAnimationFrame(loop);
       }
       v.currentTime = 0;
-      v.play().catch(() => { done = true; clearTimeout(guard); ko(new Error("the phone wouldn't play this video (Low Power Mode?) — turn Low Power Mode off for a moment, or use a GIF")); });
+      v.play().catch(() => { done = true; clearTimeout(guard); ko(new Error("the phone stopped the video (Low Power Mode, or MeoPeo went to the background) — try again with Low Power Mode off, or use a GIF")); });
     });
-    // Images identiques à la précédente : retirées (une vidéo à 9 images/s lue à 60 Hz)
-    const sig = (c) => { const s = document.createElement("canvas"); s.width = s.height = 16; const g = s.getContext("2d"); g.drawImage(c, 0, 0, 16, 16); return g.getImageData(0, 0, 16, 16).data; };
-    let frames = [], prev = null;
-    for (const f of shots) {
-      const d = sig(f.c);
-      let diff = 0;
-      if (prev) for (let i = 0; i < d.length; i += 4) diff += Math.abs(d[i] - prev[i]) + Math.abs(d[i + 1] - prev[i + 1]) + Math.abs(d[i + 2] - prev[i + 2]);
-      if (!prev || diff > 120) frames.push(f);
-      prev = d;
-    }
+    let frames = shots;
     if (!frames.length) throw new Error("couldn't read any image from this video");
     const span = frames.length > 1 ? frames[frames.length - 1].t - frames[0].t : 1;
     let fps = frames.length > 1 ? (frames.length - 1) / span : 1;
@@ -173,8 +167,13 @@ export async function videoToSprite(src, { size = 256, maxFrames = 40, maxSecond
     g.fillStyle = "#ffffff";
     g.fillRect(0, 0, sheet.width, sheet.height);
     frames.forEach((f, i) => g.drawImage(f.c, (i % cols) * size, Math.floor(i / cols) * size));
-    const blob = await new Promise((ok) => sheet.toBlob(ok, "image/jpeg", 0.86));
-    if (!blob || blob.type !== "image/jpeg") throw new Error("this browser couldn't save the animation");
+    // Qualité baissée si le fichier dépasse ~9,5 Mo (le stockage accepte 10 Mo au plus, voir 09_tino_10mo.sql)
+    let blob = null;
+    for (const quality of [0.86, 0.72, 0.58]) {
+      blob = await new Promise((ok) => sheet.toBlob(ok, "image/jpeg", quality));
+      if (!blob || blob.type !== "image/jpeg") throw new Error("this browser couldn't save the animation");
+      if (blob.size <= 9.5 * 1024 * 1024) break;
+    }
     return { blob, meta: { kind: "sprite", n, cols, rows, fps } };
   } finally {
     v.removeAttribute("src");

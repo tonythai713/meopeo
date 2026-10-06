@@ -631,7 +631,7 @@ async function chooseAnimation(file, status) {
   } else if (["image/gif", "image/webp", "image/png", "image/jpeg"].includes(file.type)) {
     blob = file; meta = { kind: "image" };
   } else throw new Error("use a GIF, WebP, PNG or a short video");
-  if (blob.size > 5 * 1024 * 1024) throw new Error(`too big (${(blob.size / 1048576).toFixed(1)} MB, 5 MB max) — use a shorter video or a smaller GIF`);
+  if (blob.size > 10 * 1024 * 1024) throw new Error(`too big (${(blob.size / 1048576).toFixed(1)} MB, 10 MB max) — use a shorter video or a smaller GIF`);
   status("Sending…");
   await db.setBigTino(blob, meta);
 }
@@ -643,7 +643,7 @@ function fillTinoSettings(box) {
   box.innerHTML = `<label class="mp-check"><input type="checkbox" name="bigtino" ${showBig() ? "checked" : ""}> Big Tino above the calendar <span class="pl-legend">(this device)</span></label>
     ${ok ? `<div class="mp-row mp-anim"><span>Animation: <b>${big ? `new one, from ${who} (${shortDate(big.at)})` : "the original"}</b></span></div>
     <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/gif,image/webp,image/png,image/jpeg,video/*" hidden> Change… (GIF or video)</label>${big ? `<button type="button" data-act="bigreset">Back to the original</button>` : ""}</span>
-    <div class="pl-legend mp-animstatus">Shared: ${esc(P?.label ?? "the other")} sees the same animation. A video becomes a looping animation (6 s max).</div>
+    <div class="pl-legend mp-animstatus">Shared: ${esc(P?.label ?? "the other")} sees the same animation. A video becomes a looping animation (10 s max); files up to 10 MB.</div>
     <div class="pl-sub">Tino's lines <span class="pl-legend">— Tino says them now and then, on both screens</span></div>
     <div class="mp-lines">${S.lines.length ? S.lines.map((l) => `<div class="mp-line"><span class="mp-line-who" title="${esc(lineWho(l)?.label ?? "")}">${esc(lineWho(l)?.mark ?? "•")}</span><span class="mp-line-text">${esc(l.body)}</span><button type="button" data-line="${l.id}" title="Remove this line">✕</button></div>`).join("") : `<div class="pl-empty">No lines yet.</div>`}</div>
     <div class="mp-row mp-lineadd"><input type="text" name="newline" maxlength="120" placeholder="Something Tino should say…" enterkeyhint="done"><button type="button" data-act="lineadd">Add</button></div>`
@@ -660,7 +660,10 @@ function fillTinoSettings(box) {
     box.querySelectorAll("button, .mp-filebtn").forEach((b) => b.classList.add("mp-busy"));
     try { await chooseAnimation(file, status); toast("🦭 New animation for Tino!"); await loadExtras(); }
     catch (err) {
-      toast(`⚠️ Couldn't change the animation (${/bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql" : err.message})`);
+      const why = /bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql"
+        : /exceeded the maximum allowed size|payload too large/i.test(err.message) ? "the file storage still takes 5 MB max — Tony needs to run supabase/09_tino_10mo.sql"
+        : err.message;
+      toast(`⚠️ Couldn't change the animation (${why})`);
       fillTinoSettings(box);
     }
   });
