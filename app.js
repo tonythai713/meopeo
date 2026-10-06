@@ -1,6 +1,7 @@
 // MeoPeo — l'interface (même mise en page que les planners Obsidian MeoMeo / PeoPeo).
 // Ne parle jamais directement à Supabase : tout passe par `db` (data.js ; data-mock.js dans test.html).
 import { mountMascots } from "./mascot.js";
+import { createBigTino, DEFAULT_ANIM, videoToSprite } from "./bigtino.js";
 
 // ---------- Dates ----------
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -63,7 +64,7 @@ const upcomingOf = (list) => [
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -89,7 +90,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("focus", wake);
   window.addEventListener("online", wake);
@@ -137,12 +138,14 @@ async function boot(user) {
   root.innerHTML = `<div class="mp-loading">🌙 Loading…</div>`;
   await load();
   loadTino();
+  loadExtras();
   resubscribe();
   ensurePush();
 }
 function resubscribe() {
   unsubscribe?.(); unsubscribe = S.user ? db.subscribe(() => reload()) : null;
   unsubTino?.(); unsubTino = S.user ? db.subscribeTino(() => loadTino()) : null;
+  unsubExtras?.(); unsubExtras = S.user ? db.subscribeTinoExtras(() => loadExtras()) : null;
 }
 function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 250); } // plusieurs événements d'affilée = un seul rechargement
 
@@ -210,6 +213,7 @@ function showLogin() {
   S.user = null; S.me = null;
   unsubscribe?.(); unsubscribe = null;
   unsubTino?.(); unsubTino = null;
+  unsubExtras?.(); unsubExtras = null; S.lines = []; S.extrasOk = null;
   root.innerHTML = `<div class="mp-login pl-card"><h1>MeoPeo</h1><p class="mp-sub">💗 MeoMeo · 💜 PeoPeo</p>
     <form><input type="email" name="email" placeholder="E-mail" autocomplete="username" required>
       <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
@@ -255,9 +259,10 @@ function render() {
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); resubscribe(); });
   root.querySelector("[data-act=menu]").addEventListener("click", openMenu);
   root.style.minHeight = "";
+  placeBigTino();
   renderTino();
   align();
 }
@@ -462,7 +467,7 @@ function mascotPlatforms() {
   const c = cal.getBoundingClientRect(), ys = [c.top];
   for (let i = 7; i < days.length; i += 7) ys.push(days[i].getBoundingClientRect().top);
   ys.push(c.bottom);
-  return ys.map((y) => ({ y: y + scrollY, x0: c.left + scrollX + 18, x1: c.right + scrollX - 18 }));
+  return ys.map((y) => ({ y: y + scrollY, x0: c.left + scrollX + 18, x1: c.right + scrollX - 18, cell: c.width / 7 })); // cell : largeur d'une case (le lit n'en dépasse pas)
 }
 function mascotToday() {
   const days = calDays(), i = days.findIndex((d) => d.classList.contains("today"));
@@ -475,7 +480,7 @@ function refreshMascots() {
   const layer = document.createElement("div");
   document.body.append(layer);
   // un appui sur un personnage passe au calendrier en dessous, jamais aux boutons du mois ni à l'interrupteur
-  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, tapThrough: (el) => !!el.closest(".pl-cal") });
+  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, tapThrough: (el) => !!el.closest(".pl-cal"), lines: () => S.lines.map((l) => l.body) });
   syncTinoBubble();
 }
 
@@ -552,6 +557,126 @@ function syncTinoBubble() {
     sticky: true, who: `${P.mark} ${P.label}:`, color: P.color,
     onClose: async () => { tinoShown = null; if (await guard(() => db.markTinoSeen(next.id))) loadTino(); },
   });
+}
+
+// ---------- Grand Tino au-dessus du calendrier + petites phrases de Tino (supabase/08_tino_extras.sql) ----------
+// La scène (bigtino.js) est créée une fois et remise dans la page après chaque réaffichage : son animation ne repart pas
+// à zéro. Animation commune aux deux (réglage « big_tino ») ; montrer / cacher : sur cet appareil seulement.
+// Le fichier d'une animation choisie est gardé sur l'appareil (cache « mpmedia », pas « meopeo-… » que sw.js efface).
+let stage = null, unsubExtras = null, bigShown = null, bigUrl = null;
+const MEDIA = "mpmedia-v1";
+const showBig = () => store.get("bigTino", true);
+const missingTable = (msg) => /does not exist|schema cache|tino_lines|shared_settings/i.test(msg);
+
+function placeBigTino() {
+  if (!showBig() || !S.me) { stage?.el.remove(); return; }
+  if (!stage) { stage = createBigTino(); applyBig(); }
+  root.querySelector(".pl-split")?.before(stage.el);
+  stage.resume();
+}
+
+async function loadExtras() {
+  if (!S.user) return;
+  try {
+    const [lines, big] = await Promise.all([db.listTinoLines(), db.getBigTino()]);
+    S.lines = lines; S.big = big; S.extrasOk = true;
+    store.set("big." + S.user.id, big); // hors connexion : la dernière animation connue
+  } catch (err) {
+    if (missingTable(err.message)) { S.extrasOk = false; S.lines = []; S.big = null; }
+    else S.big = store.get("big." + S.user.id, null); // hors ligne : on garde ce qu'on a
+  }
+  applyBig();
+  const box = document.querySelector(".mp-tinoset");
+  if (box) fillTinoSettings(box);
+}
+
+// Montre l'animation du réglage commun (ou celle d'origine) ; le fichier vient du cache de l'appareil, sinon de Supabase
+async function applyBig() {
+  if (!stage) return;
+  const big = S.big, key = big?.path ?? "";
+  if (key === bigShown) return;
+  bigShown = key;
+  if (!big) { stage.set(DEFAULT_ANIM); dropUrl(); return; }
+  try {
+    const url = URL.createObjectURL(await mediaBlob(big.path));
+    if (bigShown !== key) { URL.revokeObjectURL(url); return; } // une autre animation a été choisie entre-temps
+    stage.set(big.kind === "sprite" ? { ...big, url } : { kind: "image", url });
+    dropUrl(); bigUrl = url;
+  } catch (err) {
+    console.warn("Big Tino", err);
+    bigShown = null; // on réessaiera au prochain chargement
+    stage.set(DEFAULT_ANIM); // fichier introuvable / hors ligne sans copie : l'original en attendant
+  }
+}
+function dropUrl() { if (bigUrl) URL.revokeObjectURL(bigUrl); bigUrl = null; }
+async function mediaBlob(path) {
+  const key = new URL(`__media/${path}`, location.href).href;
+  const cache = "caches" in window ? await caches.open(MEDIA).catch(() => null) : null;
+  const hit = await cache?.match(key);
+  if (hit) return hit.blob();
+  const blob = await db.tinoFile(path);
+  if (cache) {
+    for (const r of await cache.keys()) if (r.url !== key) await cache.delete(r); // une seule animation gardée
+    await cache.put(key, new Response(blob, { headers: { "Content-Type": blob.type } })).catch(() => {});
+  }
+  return blob;
+}
+
+// Nouvelle animation choisie dans ⚙ : une vidéo devient une planche d'images sur l'appareil, un GIF part tel quel
+async function chooseAnimation(file, status) {
+  let blob, meta;
+  if (file.type.startsWith("video/")) {
+    status("Turning the video into an animation…");
+    ({ blob, meta } = await videoToSprite(file, { onProgress: (p) => status(`Turning the video into an animation… ${Math.round(p * 100)}%`) }));
+  } else if (["image/gif", "image/webp", "image/png", "image/jpeg"].includes(file.type)) {
+    blob = file; meta = { kind: "image" };
+  } else throw new Error("use a GIF, WebP, PNG or a short video");
+  if (blob.size > 5 * 1024 * 1024) throw new Error(`too big (${(blob.size / 1048576).toFixed(1)} MB, 5 MB max) — use a shorter video or a smaller GIF`);
+  status("Sending…");
+  await db.setBigTino(blob, meta);
+}
+
+const lineWho = (l) => (l.by === S.user?.id ? S.me : S.partner);
+function fillTinoSettings(box) {
+  const ok = S.extrasOk !== false, P = S.partner;
+  const big = S.big, who = big && (big.by === S.user.id ? "you" : esc(P?.label ?? "the other"));
+  box.innerHTML = `<label class="mp-check"><input type="checkbox" name="bigtino" ${showBig() ? "checked" : ""}> Big Tino above the calendar <span class="pl-legend">(this device)</span></label>
+    ${ok ? `<div class="mp-row mp-anim"><span>Animation: <b>${big ? `new one, from ${who} (${shortDate(big.at)})` : "the original"}</b></span></div>
+    <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/gif,image/webp,image/png,image/jpeg,video/*" hidden> Change… (GIF or video)</label>${big ? `<button type="button" data-act="bigreset">Back to the original</button>` : ""}</span>
+    <div class="pl-legend mp-animstatus">Shared: ${esc(P?.label ?? "the other")} sees the same animation. A video becomes a looping animation (6 s max).</div>
+    <div class="pl-sub">Tino's lines <span class="pl-legend">— Tino says them now and then, on both screens</span></div>
+    <div class="mp-lines">${S.lines.length ? S.lines.map((l) => `<div class="mp-line"><span class="mp-line-who" title="${esc(lineWho(l)?.label ?? "")}">${esc(lineWho(l)?.mark ?? "•")}</span><span class="mp-line-text">${esc(l.body)}</span><button type="button" data-line="${l.id}" title="Remove this line">✕</button></div>`).join("") : `<div class="pl-empty">No lines yet.</div>`}</div>
+    <div class="mp-row mp-lineadd"><input type="text" name="newline" maxlength="120" placeholder="Something Tino should say…" enterkeyhint="done"><button type="button" data-act="lineadd">Add</button></div>`
+    : `<div class="pl-legend">Tino's lines and changing the animation aren't available yet — Tony needs to run <code>supabase/08_tino_extras.sql</code>.</div>`}`;
+  box.querySelector("[name=bigtino]").addEventListener("change", (ev) => { store.set("bigTino", ev.target.checked); placeBigTino(); align(); });
+  if (!ok) return;
+  const status = (t) => { box.querySelector(".mp-animstatus").textContent = t; };
+  const input = box.querySelector("input[type=file]");
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    input.value = "";
+    if (!file) return;
+    if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
+    box.querySelectorAll("button, .mp-filebtn").forEach((b) => b.classList.add("mp-busy"));
+    try { await chooseAnimation(file, status); toast("🦭 New animation for Tino!"); await loadExtras(); }
+    catch (err) {
+      toast(`⚠️ Couldn't change the animation (${/bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql" : err.message})`);
+      fillTinoSettings(box);
+    }
+  });
+  box.querySelector("[data-act=bigreset]")?.addEventListener("click", async () => {
+    if (await guard(() => db.resetBigTino(), "Couldn't change the animation")) { toast("🦭 Tino is back to the original"); loadExtras(); }
+  });
+  box.querySelectorAll("[data-line]").forEach((b) => b.addEventListener("click", async () => {
+    if (await guard(() => db.deleteTinoLine(+b.dataset.line), "Couldn't remove the line")) loadExtras();
+  }));
+  const add = async () => {
+    const field = box.querySelector("[name=newline]"), text = field.value.trim();
+    if (!text) return;
+    if (await guard(() => db.addTinoLine(text), "Couldn't add the line")) { field.value = ""; await loadExtras(); box.querySelector("[name=newline]")?.focus(); }
+  };
+  box.querySelector("[data-act=lineadd]").addEventListener("click", add);
+  box.querySelector("[name=newline]").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); add(); } });
 }
 
 // En dessous : les prochaines tâches de l'autre
@@ -763,6 +888,8 @@ function openMenu() {
     <h4>🔔 Notifications</h4>
     <div class="mp-notif">Checking…</div>
     ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}
+    <h4>🦭 Tino</h4>
+    <div class="mp-tinoset"></div>
     <h4>📱 Home-screen widget</h4>
     <div class="mp-widgets">Checking…</div>
     <h4>🔑 Password</h4>
@@ -778,6 +905,7 @@ function openMenu() {
   });
   f.querySelector("[data-act=logout]").addEventListener("click", async () => { ov.remove(); await logout(); });
   fillNotif(f.querySelector(".mp-notif"));
+  fillTinoSettings(f.querySelector(".mp-tinoset"));
   fillWidgets(f.querySelector(".mp-widgets"));
   f.notify?.addEventListener("change", async (ev) => {
     const on = ev.target.checked;

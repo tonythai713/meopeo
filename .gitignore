@@ -6,6 +6,7 @@
 !/index.html
 !/app.js
 !/mascot.js
+!/bigtino.js
 !/data.js
 !/config.js
 !/style.css
@@ -15,3 +16,6 @@
 !/icons/
 !/widget.html
 !/widget/
+!/art/
+/art/*
+!/art/big-tino.jpg

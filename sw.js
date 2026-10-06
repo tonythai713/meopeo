@@ -1,11 +1,11 @@
 // Service worker de MeoPeo : l'app s'ouvre même sans réseau (ses fichiers sont gardés sur le téléphone).
 // ⚠️ À CHAQUE publication d'une nouvelle version : changer VERSION, sinon les téléphones gardent l'ancienne.
 // Les données (Supabase : tâches, connexion, temps réel) ne passent JAMAIS par ce cache.
-const VERSION = "2026-10-06.2";
+const VERSION = "2026-10-06.3";
 const CACHE = "meopeo-" + VERSION;
 const SHELL = [
-  "./", "index.html", "app.js", "mascot.js", "data.js", "config.js", "style.css", "manifest.webmanifest",
-  "background.jpg", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png",
+  "./", "index.html", "app.js", "mascot.js", "bigtino.js", "data.js", "config.js", "style.css", "manifest.webmanifest",
+  "background.jpg", "art/big-tino.jpg", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png",
 ];
 
 // Bibliothèque Supabase 2.117.2 et ses modules (versions figées : à mettre à jour si data.js change de version)

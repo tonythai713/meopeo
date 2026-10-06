@@ -7,7 +7,7 @@ const STYLE = `
 .ms-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .ms { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; will-change: transform;
   -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
-.ms[hidden], .ms-bubble[hidden] { display: none; }
+.ms[hidden], .ms-bubble[hidden], .ms-bed[hidden], .ms-blanket[hidden] { display: none; }
 .ms-in { width: 100%; height: 100%; transform-origin: 50% 100%; }
 .ms svg { width: 100%; height: 100%; overflow: visible; display: block; }
 .ms-in svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
@@ -30,6 +30,9 @@ const STYLE = `
 .ms-bubble b { font-weight: 700; }
 .ms-bubble.ms-out { opacity: 0; }
 @keyframes ms-pop { from { opacity: 0; } to { opacity: 1; } }
+.ms-bed, .ms-blanket { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transform-origin: 50% 50%; will-change: transform, opacity; }
+.ms-bed svg, .ms-blanket svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.ms-bed svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
 `;
 
 // Petite étoile à 5 branches (le coussin de Tino en est couvert)
@@ -81,6 +84,26 @@ function sealSvg() {
   </g>
 </svg>`;
 }
+
+// Le lit de la nuit (derrière Tino) : repère 120 × 40, posé sur y = 40, tête de lit à droite (retourné si Tino dort
+// la tête à gauche). Le haut du matelas est à y = 20 : c'est là que Tino se couche.
+const BED_W = 120, BED_H = 40, MATTRESS = 20;
+const BED = `<svg viewBox="0 0 ${BED_W} ${BED_H}" aria-hidden="true">
+  <rect x="7" y="33" width="5" height="7" rx="1.5" fill="#6b5446"/><rect x="108" y="33" width="5" height="7" rx="1.5" fill="#6b5446"/>
+  <rect x="3" y="27" width="114" height="8" rx="3" fill="#8b6d5c"/>
+  <rect x="1" y="15" width="10" height="20" rx="4" fill="#a3826d"/>
+  <path d="M105 35V9Q105 1 112 1Q119 1 119 9V35Z" fill="#a3826d"/>
+  <path d="M114.5 7a4.2 4.2 0 1 0 0 7.6a3.3 3.3 0 1 1 0-7.6Z" fill="#ffe8a3"/>
+  <rect x="9" y="${MATTRESS}" width="98" height="9" rx="4" fill="#f3f0ff" stroke="#d3d0ee" stroke-width="1"/>
+  <ellipse cx="93" cy="${MATTRESS - 2}" rx="13" ry="5.5" fill="#ffffff" stroke="#d8dcf0" stroke-width="1"/>
+</svg>`;
+// La couverture (devant Tino) : repère 100 × 110, posée sur le matelas, couvre son corps de ses pieds jusqu'au cou
+// (pieds à gauche) ; sa tête reste dehors
+const BLANKET = `<svg viewBox="0 0 100 110" aria-hidden="true">
+  <path d="M0 110V62Q0 36 18 28Q36 12 58 12Q84 12 90 36L94 110Z" fill="#8fa0ee" stroke="#6f7fd0" stroke-width="2"/>
+  <path d="M77 15Q89 21 90.5 38L94 110H83L80.5 40Q79 25 68 15Z" fill="#f6f4ff" stroke="#d3d0ee" stroke-width="1.5"/>
+  ${[[20, 52], [42, 30], [60, 46], [32, 78], [56, 72], [68, 98], [14, 96], [42, 102]].map(([x, y]) => star(x, y, 4.6, "#ffe8a3")).join("")}
+</svg>`;
 
 // « z » et cœur : à part du corps, pour rester droits pendant une roulade ou couché sur le côté
 const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
@@ -231,11 +254,30 @@ const ACTIONS = {
       p.rot = 3 * Math.sin(m.clock * 6) * k; p.head = 6 * Math.sin(m.clock * 6) * k;
     },
   },
-  // Sieste couché sur le côté (et toute la nuit)
+  // Il dit une des petites phrases (⚙ → Tino), jamais par-dessus une bulle déjà ouverte (un message à lire…)
+  chat: {
+    weight: (m, ctx) => (ctx.lines.length && !m.bubble ? 7 : 0),
+    make: () => [{ type: "chat", dur: rand(3.8, 5.2) }],
+    start(m, a) {
+      const lines = m.eng.lines();
+      if (m.bubble || !lines.length) { a.dur = 0; return; }
+      const pool = lines.length > 1 ? lines.filter((l) => l !== m.lastLine) : lines;
+      m.lastLine = pick(pool);
+      m.gaze = pick([-LOOK * 0.5, LOOK * 0.5]);
+      m.say(m.lastLine, { ms: a.dur * 1000 + 600 });
+    },
+    look: (m) => m.gaze,
+    pose(m, a, p) {
+      const k = smooth(clamp(Math.min(a.t, a.dur - a.t) / 0.3, 0, 1)), c = m.clock;
+      p.head = 6 * Math.sin(c * 7) * k; p.sy += 0.025 * Math.abs(Math.sin(c * 9)) * k;
+      p.armL = (-22 - 16 * Math.sin(c * 5)) * k; p.armR = (22 + 16 * Math.sin(c * 5 + 1.3)) * k;
+    },
+  },
+  // Sieste couché sur le côté (et toute la nuit, dans son lit)
   nap: {
     weight: () => 6,
     make: () => [{ type: "nap", dur: rand(6, 11) }],
-    start(m) { m.side = pick([-1, 1]); },
+    start(m, a) { m.side = a.side ?? pick([-1, 1]); if (a.bed) m.bedAt = { p: m.p, x: m.x }; },
     step: untilMorning,
     lie: true, zzz: true,
   },
@@ -297,8 +339,15 @@ class Mascot {
     this.el.innerHTML = `<div class="ms-in">${def.svg()}</div>${FX}`;
     this.inner = this.el.firstChild;
     for (const k of ["head", "face", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    // Lit (derrière lui) et couverture (devant lui) : seulement la nuit, quand il dort dans la case d'aujourd'hui
+    this.bedEl = document.createElement("div");
+    this.bedEl.className = "ms-bed";
+    this.bedEl.innerHTML = BED;
+    this.blanketEl = document.createElement("div");
+    this.blanketEl.className = "ms-blanket";
+    this.blanketEl.innerHTML = BLANKET;
     this.p = 0; this.x = 0; this.y = 0; this.dir = 1; this.side = 1; this.clock = rand(0, 10);
-    this.look = 0; this.gaze = 0; this.sink = 0; this.lie = 0; this.stay = false; this.bubble = null;
+    this.look = 0; this.gaze = 0; this.sink = 0; this.lie = 0; this.stay = false; this.bubble = null; this.bedK = 0; this.bedAt = null;
     this.act = null; this.plan = [];
     this.el.addEventListener("click", (ev) => this.tap(ev));
     // appui long → assis / debout (sans menu « copier l'image » du téléphone)
@@ -388,7 +437,7 @@ class Mascot {
 
   // Choix de la prochaine action
   think() {
-    const me = this.plat(), ctx = { plats: this.eng.plats, today: this.eng.today };
+    const me = this.plat(), ctx = { plats: this.eng.plats, today: this.eng.today, lines: this.eng.lines() };
     if (!me) return { type: "idle", dur: 1 };
     if (this.stay) return this.eng.night() && !this.bubble ? { type: "sleep", dur: Infinity } : { type: "sit", dur: Infinity };
     let name;
@@ -396,7 +445,7 @@ class Mascot {
     else if (this.eng.night()) { // la nuit : il va dans la case d'aujourd'hui et dort couché sur le côté
       const t = ctx.today;
       if (t && (t.p !== this.p || Math.abs(t.x - this.x) > 4)) { this.plan = this.pathTo(t); return this.plan.shift(); }
-      return { type: "nap", dur: Infinity };
+      return { type: "nap", dur: Infinity, bed: true };
     } else name = weighted(Object.keys(ACTIONS).map((n) => [ACTIONS[n].weight?.(this, ctx) ?? 0, n]));
     const steps = (ACTIONS[name].make ?? (() => [{ type: name }]))(this, me, ctx);
     this.plan = [...steps.slice(1), { type: "idle", dur: rand(0.6, 2.4) }];
@@ -438,7 +487,15 @@ class Mascot {
     this.look += ((A?.look ? A.look(this, a) : 0) - this.look) * Math.min(1, dt * 7);
     this.sink += ((A?.sit ? 1 : 0) - this.sink) * Math.min(1, dt * 6);
     this.lie += ((A?.lie ? 1 : 0) - this.lie) * Math.min(1, dt * (A?.lie ? 3 : 6));
+    // Le lit reste tant qu'il est dessus la nuit (un petit saut quand on le touche ne le fait pas disparaître)
+    const moving = a && ["walk", "hop", "fly", "roll"].includes(a.type);
+    const onBed = this.eng.night() && !!this.bedAt && this.bedAt.p === this.p && Math.abs(this.bedAt.x - this.x) < 4 && !moving;
+    this.bedK += ((onBed ? 1 : 0) - this.bedK) * Math.min(1, dt * 3);
+    if (!onBed && this.bedK < 0.01) { this.bedK = 0; if (!this.eng.night()) this.bedAt = null; }
   }
+
+  // Largeur du lit : un peu plus long que Tino, sans dépasser de la case du jour
+  bedWidth() { const P = this.plat(this.bedAt?.p); return Math.min(this.size * 1.3, (P?.cell ?? Infinity) - 4); }
 
   render() {
     const W = this.size, a = this.act ?? { type: "idle", t: 0 }, A = ACTIONS[a.type] ?? ACTIONS.idle, c = this.clock, u = W / 100, B = this.def.body;
@@ -460,7 +517,8 @@ class Mascot {
     }
     // En tournant (roulade, couché) le corps pivote autour de son centre et reste posé sur la ligne
     const th = p.spin * Math.PI / 180, sup = B.support, k = (((p.spin % 360) + 360) % 360) / 15, i = Math.floor(k);
-    const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * SINK * u + lift;
+    const bw = this.bedK > 0.001 ? this.bedWidth() : 0, onMattress = this.bedK * bw * (BED_H - MATTRESS) / BED_W; // dans son lit : posé sur le matelas
+    const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * SINK * u + lift - onMattress;
     const look = this.look;
     this.el.classList.toggle("ms-sleep", !!A.zzz);
     this.el.style.transform = `translate3d(${(this.x - W / 2).toFixed(1)}px, ${(this.y - W * 0.98).toFixed(1)}px, 0)`;
@@ -480,6 +538,27 @@ class Mascot {
     this.zzz_at.style.transform = `translate(${zx.toFixed(1)}px, ${zy.toFixed(1)}px)`;
     this.heart_at.style.transform = `translate(${(nx - hx).toFixed(1)}px, ${(ny - hy).toFixed(1)}px)`;
     this.placeBubble((nx - 50) * u, (ny - 30) * u);
+    this.placeBed(bw);
+  }
+
+  // Lit centré sur sa place de la nuit, tête de lit du côté de sa tête ; couverture de ses pieds jusqu'au cou
+  placeBed(bw) {
+    const P = this.bedAt && this.plat(this.bedAt.p), show = this.bedK > 0.01 && !!P;
+    this.bedEl.style.visibility = this.blanketEl.style.visibility = show ? "visible" : "hidden";
+    if (!show) return;
+    const bh = bw * BED_H / BED_W, x = this.bedAt.x, s = this.side, W = this.size;
+    // l'oreiller (x = 93 sur 120) sous sa tête (≈ 0,15 × sa taille du côté de la tête), sans sortir de la case
+    const shift = clamp(W * 0.15 - bw * (93 - BED_W / 2) / BED_W, -((P.cell ?? Infinity) - bw) / 2, ((P.cell ?? Infinity) - bw) / 2);
+    const bx = x + s * shift;
+    this.bedEl.style.width = bw.toFixed(1) + "px";
+    this.bedEl.style.height = bh.toFixed(1) + "px";
+    this.bedEl.style.opacity = this.bedK.toFixed(3);
+    this.bedEl.style.transform = `translate3d(${(bx - bw / 2).toFixed(1)}px, ${(P.y - bh).toFixed(1)}px, 0) scaleX(${s})`;
+    const kw = W * 0.58, kh = kw * 1.3, top = P.y - bw * (BED_H - MATTRESS) / BED_W + W * 0.08 - kh;
+    this.blanketEl.style.width = kw.toFixed(1) + "px";
+    this.blanketEl.style.height = kh.toFixed(1) + "px";
+    this.blanketEl.style.opacity = (this.bedK * this.lie).toFixed(3); // il se lève (on l'a touché) : la couverture s'efface
+    this.blanketEl.style.transform = `translate3d(${(x - s * W * 0.3 - kw / 2).toFixed(1)}px, ${top.toFixed(1)}px, 0) scaleX(${s})`;
   }
 
   // La bulle se place au-dessus de la tête, sans sortir du calendrier ; sa pointe vise Tino
@@ -506,12 +585,13 @@ function injectStyle() {
 // layer : calque positionné au-dessus du calendrier (les coordonnées sont relatives à lui)
 // platforms() : [{ y, x0, x1 }] triées de haut en bas ; today() : { p, x } (où s'asseoir) ou null
 // tapThrough(el) : l'appui sur un personnage est-il aussi transmis à cet élément en dessous ?
-export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, night = isNight, tapThrough = () => true }) {
+// lines() : les petites phrases que Tino dit de temps en temps (⚙ → Tino), [] s'il n'y en a pas
+export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, night = isNight, tapThrough = () => true, lines = () => [] }) {
   injectStyle();
   layer.classList.add("ms-layer");
-  const eng = { plats: [], today: null, night, tapThrough, layer, tapping: null };
+  const eng = { plats: [], today: null, night, tapThrough, layer, tapping: null, lines };
   const list = kinds.map((k) => new Mascot(eng, KINDS[k] ?? KINDS.tino));
-  list.forEach((m) => layer.append(m.el));
+  list.forEach((m) => layer.append(m.bedEl, m.el, m.blanketEl));
   const reduce = matchMedia("(prefers-reduced-motion: reduce)");
   let raf = 0, last = 0;
 
@@ -521,7 +601,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     eng.plats = platforms() ?? [];
     eng.today = today();
     list.forEach((m, i) => {
-      m.el.hidden = !eng.plats.length;
+      m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = !eng.plats.length;
       if (m.bubble) m.bubble.el.hidden = !eng.plats.length;
       if (!eng.plats.length) return;
       if (!m.placed || m.p >= eng.plats.length) {
@@ -587,24 +667,28 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     say(text, opts) { tino?.say(text, opts); },
     hush() { tino?.hush(true); },
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
-    destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); list.forEach((m) => { m.hush(true); m.el.remove(); }); },
+    destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); }); },
   };
 }
 
 // Aperçu d'une seule pose qui tourne en boucle sur place (page de test) ; dir = -1 : tourné vers la gauche
-export function demoPose(box, kind, type, size, dir = 1) {
+// type "bed" : la sieste de la nuit, dans son lit ; type "chat" : il dit une phrase ; cell : largeur d'une case du calendrier
+export function demoPose(box, kind, type, size, dir = 1, cell = Infinity) {
   injectStyle();
-  const eng = { plats: [{ y: size, x0: size / 2, x1: size / 2 }], today: null, night: () => type === "sleep" || type === "nap", tapThrough: () => false, layer: box };
+  const lines = ["Drink some water 💧", "You've got this!"];
+  const eng = { plats: [{ y: size, x0: size / 2, x1: size / 2, cell }], today: null, night: () => ["sleep", "nap", "bed"].includes(type), tapThrough: () => false, layer: box, lines: () => (type === "chat" ? lines : []) };
   const m = new Mascot(eng, { ...KINDS[kind], size });
   box.style.position = "relative";
   box.style.width = box.style.height = size + "px";
-  box.append(m.el);
+  box.append(m.bedEl, m.el, m.blanketEl);
   m.x = size / 2; m.y = size; m.dir = dir;
   if (type === "walk") m.update = function (dt) { this.clock += dt; this.act ??= { type: "walk", t: 0, x: this.x }; this.dir = dir; this.ease(dt); }; // marche sur place
   m.think = () => ({
     hop: { type: "hop", p1: 0, x1: m.x + dir * 0.01 },
     roll: { type: "roll", dir, n: 1 },
     fly: { type: "fly", p1: 0, x1: m.x + dir * 0.01 },
+    bed: { type: "nap", dur: Infinity, bed: true, side: dir },
+    chat: { type: "chat", dur: 4 },
   }[type] ?? { type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
   let last = performance.now();
   const loop = (t) => { m.update(Math.min(0.05, (t - last) / 1000)); last = t; m.render(); requestAnimationFrame(loop); };

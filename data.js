@@ -14,6 +14,8 @@
 //   listWidgetKeys(), registerWidgetKey(sha256, label), revokeWidgetKey(id) → widgets (supabase/05_widgets.sql)
 //   listTinoMessages(), sendTinoMessage(to, body), markTinoSeen(id), subscribeTino(onChange) → messages via Tino
 //     (supabase/07_tino_messages.sql) ; un message : { id, from, to, body, at: date ISO, seen: date ISO | null }
+//   listTinoLines(), addTinoLine(body), deleteTinoLine(id), getBigTino(), setBigTino(blob, meta), resetBigTino(),
+//   tinoFile(path), subscribeTinoExtras(onChange) → phrases de Tino et grand Tino (supabase/08_tino_extras.sql)
 //
 // Format d'une tâche dans l'app : { id, owner, date: "AAAA-MM-JJ", end: "AAAA-MM-JJ" | null, time: "HH:MM" | null,
 //   course: nom de catégorie | null, label, done, moon: "full" | "crescent" | null, private, source }
@@ -124,6 +126,42 @@ export function createBackend() {
     subscribeTino(onChange) {
       const ch = sb.channel("tino-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "*", schema: "public", table: "tino_messages" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+
+    // Phrases de Tino et grand Tino (supabase/08_tino_extras.sql) ; canal temps réel à part (sans le script 08, rien d'autre ne casse)
+    async listTinoLines() {
+      const rows = must(await sb.from("tino_lines").select("id, author, body, created_at").order("id"));
+      return rows.map((r) => ({ id: r.id, by: r.author, body: r.body, at: r.created_at }));
+    },
+    async addTinoLine(body) { must(await sb.from("tino_lines").insert({ body })); },
+    async deleteTinoLine(id) { must(await sb.from("tino_lines").delete().eq("id", id)); },
+    // Animation du grand Tino : null = celle d'origine ; sinon { kind, path, n, cols, rows, fps, by, at }
+    async getBigTino() {
+      const r = must(await sb.from("shared_settings").select("value, updated_by, updated_at").eq("key", "big_tino").maybeSingle());
+      return r ? { ...r.value, by: r.updated_by, at: r.updated_at } : null;
+    },
+    // Nouveau fichier (nom unique, jamais remplacé), puis le réglage commun, puis l'ancien fichier est supprimé
+    async setBigTino(blob, meta) {
+      const ext = { "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/png": "png" }[blob.type];
+      if (!ext) throw new Error("unsupported file type");
+      const old = await this.getBigTino();
+      const path = `big/${crypto.randomUUID()}.${ext}`;
+      must(await sb.storage.from("tino").upload(path, blob, { contentType: blob.type, upsert: false }));
+      must(await sb.from("shared_settings").upsert({ key: "big_tino", value: { ...meta, path } }));
+      if (old?.path) await sb.storage.from("tino").remove([old.path]); // (s'il reste, il ne gêne pas)
+    },
+    async resetBigTino() {
+      const old = await this.getBigTino();
+      must(await sb.from("shared_settings").delete().eq("key", "big_tino"));
+      if (old?.path) await sb.storage.from("tino").remove([old.path]);
+    },
+    async tinoFile(path) { return must(await sb.storage.from("tino").download(path)); }, // → Blob
+    subscribeTinoExtras(onChange) {
+      const ch = sb.channel("tinox-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "tino_lines" }, () => onChange())
+        .on("postgres_changes", { event: "*", schema: "public", table: "shared_settings" }, () => onChange())
         .subscribe();
       return () => sb.removeChannel(ch);
     },

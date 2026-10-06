@@ -231,6 +231,22 @@ input[type=radio], input[type=checkbox] { accent-color: #ffe8a3; width: 18px; he
 .mp-addday { width: 100%; margin-top: 8px; border-style: dashed; color: #ffe8a3; border-color: rgba(255, 232, 163, 0.6); background: rgba(255, 232, 163, 0.08); }
 .mp-addday:hover { background: rgba(255, 232, 163, 0.16); }
 
+/* ⚙ → Tino : grand Tino (montrer, changer l'animation), petites phrases */
+.mp-tinoset { font-size: 0.92em; line-height: 1.5; color: var(--text-normal); display: flex; flex-direction: column; gap: 4px; }
+.pl-editor-card h4 + .mp-tinoset { margin-top: -4px; }
+.mp-tinoset .mp-check { display: flex; align-items: center; gap: 8px; }
+.mp-tinoset .pl-sub { margin-top: 10px; }
+.mp-filebtn { display: inline-flex; align-items: center; min-height: 36px; padding: 4px 12px; border-radius: 10px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.10); border: 1px solid var(--pl-line); }
+.mp-filebtn:hover { background: rgba(255, 255, 255, 0.18); }
+.mp-busy { opacity: 0.5; pointer-events: none; }
+.mp-line { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--pl-line); }
+.mp-line-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mp-line button { min-height: 28px; padding: 0 8px; background: transparent; border-color: transparent; opacity: 0.7; }
+.mp-line button:hover { opacity: 1; border-color: var(--pl-line); }
+.mp-lineadd { display: flex; width: 100%; }
+.mp-lineadd input { flex: 1; min-width: 0; }
+
 /* ⚙ → widgets d'écran d'accueil : clés existantes, mode d'emploi + code (montré une fois) */
 .mp-widgets { font-size: 0.92em; line-height: 1.5; color: var(--text-normal); }
 .pl-editor-card h4 + .mp-widgets { margin-top: -4px; }
