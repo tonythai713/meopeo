@@ -336,3 +336,23 @@ textarea { font: inherit; font-size: 16px; color: var(--text-normal); background
 .mp-nl-check input { width: 22px; height: 22px; flex: none; margin-top: 1px; }
 .mp-nl-check.done span { text-decoration: line-through; color: var(--text-muted); }
 .mp-note-editor [hidden] { display: none !important; }
+
+/* Décor dessiné : leur image en fond (ancrée en haut au centre), à la place du fond d'origine */
+body.mp-decor-on::before { background: var(--mp-decor) center top / cover no-repeat, #0b0f2a; }
+.mp-decor-seasons { flex-wrap: wrap; margin: 8px 0; }
+.mp-decor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mp-decor-slot { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px dashed var(--pl-line); border-radius: 12px; min-width: 0; }
+.mp-decor-slot.on { border-style: solid; }
+.mp-decor-slot.shown { border-color: #ffe8a3; box-shadow: 0 0 10px rgba(255, 232, 163, 0.35); }
+.mp-decor-thumb { display: grid; place-items: center; border-radius: 8px; overflow: hidden; background: rgba(0, 0, 20, 0.35); color: var(--text-muted); font-size: 0.8em; }
+.mp-decor-slot.phone .mp-decor-thumb { aspect-ratio: 1290 / 2796; max-height: 170px; }
+.mp-decor-slot.desktop .mp-decor-thumb { aspect-ratio: 16 / 9; }
+.mp-decor-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.mp-decor-name { font-size: 0.88em; }
+.mp-decor-device { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--pl-line); }
+.mp-decor-device label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Sur un décor dessiné (souvent clair le jour) : date, boutons du mois et pastilles restent lisibles */
+body.mp-decor-on .pl-hello { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 14px rgba(0, 0, 20, 0.55); }
+body.mp-decor-on .pl-month, body.mp-decor-on .pl-toggle { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 20, 0.6); }
+body.mp-decor-on .pl-hello button, body.mp-decor-on .pl-nav button, body.mp-decor-on .mp-who { background: rgba(14, 18, 48, 0.55); }
+body.mp-decor-on .mp-who { padding: 2px 8px; border-radius: 999px; }

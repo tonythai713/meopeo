@@ -18,6 +18,8 @@
 //   tinoFile(path), subscribeTinoExtras(onChange) → phrases de Tino et grand Tino (supabase/08_tino_extras.sql)
 //   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id),
 //   subscribeOutfits(onChange) → garde-robe du petit Tino (supabase/12_tino_outfits.sql)
+//   listDecor(), setDecor(blob, { season, layout, light }), deleteDecor({ season, layout, light }),
+//   subscribeDecor(onChange) → décor dessiné, fond d'écran par saison / jour-nuit / format (supabase/16_decor.sql)
 //   listGrumbles(), addGrumble(body), deleteGrumble(id), subscribeGrumbles(onChange) → phrases râleuses (13_tino_grumbles.sql)
 //   listSeries(), createSeries(task, rule, today), topUpSeries(today), splitSeries(id, task, shift), endSeries(id),
 //   subscribeSeries(onChange) → tâches récurrentes (15_recurring.sql) ; une tâche a aussi « series » (id de sa série ou null)
@@ -271,6 +273,32 @@ export function createBackend() {
       const ch = sb.channel("tinow-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "*", schema: "public", table: "tino_outfits" }, () => onChange())
         .on("postgres_changes", { event: "*", schema: "public", table: "shared_settings" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+    // Décor dessiné (supabase/16_decor.sql) : une image par saison × format (phone / desktop) × moment (day / night), commune
+    async listDecor() {
+      const rows = must(await sb.from("decor").select("season, layout, light, path, author, updated_at"));
+      return rows.map((r) => ({ season: r.season, layout: r.layout, light: r.light, path: r.path, by: r.author, at: r.updated_at }));
+    },
+    // Nouveau fichier (nom unique), puis l'emplacement pointe dessus (set_decor renvoie l'ancien fichier), puis l'ancien est effacé
+    async setDecor(blob, { season, layout, light }) {
+      const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[blob.type];
+      if (!ext) throw new Error("unsupported file type");
+      const path = `decor/${crypto.randomUUID()}.${ext}`;
+      must(await sb.storage.from("tino").upload(path, blob, { contentType: blob.type, upsert: false }));
+      let old;
+      try { old = must(await sb.rpc("set_decor", { p_season: season, p_layout: layout, p_light: light, p_path: path })); }
+      catch (err) { await sb.storage.from("tino").remove([path]); throw err; } // (le fichier envoyé ne servirait à rien)
+      if (old) await sb.storage.from("tino").remove([old]); // (s'il reste, il ne gêne pas)
+    },
+    async deleteDecor({ season, layout, light }) {
+      const rows = must(await sb.from("decor").delete().match({ season, layout, light }).select("path"));
+      if (rows[0]?.path) await sb.storage.from("tino").remove([rows[0].path]);
+    },
+    subscribeDecor(onChange) {
+      const ch = sb.channel("decor-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "decor" }, () => onChange())
         .subscribe();
       return () => sb.removeChannel(ch);
     },

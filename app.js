@@ -77,7 +77,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, series: [], seriesOk: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -104,11 +104,12 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); loadDecor(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("focus", wake);
   window.addEventListener("online", wake);
   window.addEventListener("resize", () => align());
+  portrait.addEventListener?.("change", () => applyDecor()); // téléphone tourné / fenêtre élargie : l'autre format du décor
 }
 
 // ---------- Notifications (Web Push) ----------
@@ -157,6 +158,7 @@ async function boot(user) {
   loadGrumbles();
   loadNotes();
   loadSeries();
+  loadDecor();
   resubscribe();
   ensurePush();
 }
@@ -168,6 +170,7 @@ function resubscribe() {
   unsubGrumbles?.(); unsubGrumbles = S.user ? db.subscribeGrumbles(() => loadGrumbles()) : null; // idem (13)
   unsubNotes?.(); unsubNotes = S.user ? db.subscribeNotes(() => loadNotes()) : null; // idem (14)
   unsubSeries?.(); unsubSeries = S.user ? db.subscribeSeries(() => loadSeries()) : null; // idem (15)
+  unsubDecor?.(); unsubDecor = S.user ? db.subscribeDecor(() => loadDecor()) : null; // idem (16)
 }
 function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 250); } // plusieurs événements d'affilée = un seul rechargement
 
@@ -240,6 +243,7 @@ function showLogin() {
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
   unsubNotes?.(); unsubNotes = null; S.notes = []; S.notesOk = null;
   unsubSeries?.(); unsubSeries = null; S.series = []; S.seriesOk = null; toppedUp = 0;
+  unsubDecor?.(); unsubDecor = null; S.decor = []; S.decorOk = null; applyDecor(); // fond d'origine sur l'écran de connexion
   showTab(); // plus de barre d'onglets sur l'écran de connexion
   root.innerHTML = `<div class="mp-login pl-card"><h1>MeoPeo</h1><p class="mp-sub">💗 MeoMeo · 💜 PeoPeo</p>
     <form><input type="email" name="email" placeholder="E-mail" autocomplete="username" required>
@@ -286,7 +290,7 @@ function render() {
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); loadDecor(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
@@ -805,11 +809,11 @@ async function prepareOutfit(file) {
   return blob;
 }
 // Modèle : feuille de partage (iPhone / iPad : « Enregistrer l'image », « Enregistrer dans Fichiers »), sinon téléchargement
-async function shareTemplate() {
-  const blob = await outfitTemplate();
-  const file = new File([blob], "tino-template.png", { type: "image/png" });
+async function shareTemplate() { await shareFile(await outfitTemplate(), "tino-template.png", "Tino template"); }
+async function shareFile(blob, name, title) {
+  const file = new File([blob], name, { type: blob.type || "image/png" });
   if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: "Tino template" }); return; } catch (err) { if (err.name === "AbortError") return; }
+    try { await navigator.share({ files: [file], title }); return; } catch (err) { if (err.name === "AbortError") return; }
   }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(file); a.download = file.name;
@@ -870,6 +874,210 @@ function fillWardrobe(box) {
       fillWardrobe(box);
     }
   });
+}
+
+// ---------- Décor dessiné (supabase/16_decor.sql) ----------
+// Une image par saison × format (phone = écran en hauteur, desktop = en largeur) × moment (day / night), commune aux deux,
+// posée en fond plein écran (body::before, ancré en haut au centre). Ce qui est montré dépend de CET appareil : saison
+// « auto » = celle du jour, moment « auto » = soleil levé ou couché (Yverdon) ; s'il manque l'image voulue, la plus proche
+// qui existe (même format d'abord, saison la plus proche, autre moment), sinon le fond d'origine.
+let unsubDecor = null, decorShown = null, decorTimer = 0;
+const decorUrls = new Map(); // fichier → adresse locale de l'image
+const portrait = matchMedia("(orientation: portrait)");
+const SEASONS = [["winter", "❄️ Winter"], ["spring", "🌸 Spring"], ["summer", "☀️ Summer"], ["autumn", "🍂 Autumn"]];
+const LAYOUTS = [["phone", "📱 Phone"], ["desktop", "💻 Computer"]];
+const LIGHTS = [["day", "☀️ Day"], ["night", "🌙 Night"]];
+const DECOR_SIZE = { phone: [1290, 2796], desktop: [2560, 1440] }; // = les modèles (art/decor-template-*.png)
+const DECOR_MAX = 4.5 * 1024 * 1024; // sous l'ancienne limite de 5 Mo du stockage
+const decorLabel = (list, k) => list.find((x) => x[0] === k)?.[1] ?? k;
+
+// Saisons astronomiques (à un jour près)
+function seasonOf(d) {
+  const md = (d.getMonth() + 1) * 100 + d.getDate();
+  return md >= 1221 || md < 320 ? "winter" : md < 621 ? "spring" : md < 923 ? "summer" : "autumn";
+}
+// Lever / coucher du soleil à Yverdon (équation du lever, ±3 min ; vérifié avec sunrise-sunset.org, été / hiver / changement d'heure)
+function sunTimes(d, lat = 46.78, lon = 6.64) {
+  const R = Math.PI / 180, noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12);
+  const J = Math.round(noon.getTime() / 86400000 + 2440587.5 - 2451545 + 0.0008 - 0.5) - lon / 360;
+  const M = (357.5291 + 0.98560028 * J) % 360;
+  const L = (M + 1.9148 * Math.sin(M * R) + 0.02 * Math.sin(2 * M * R) + 0.0003 * Math.sin(3 * M * R) + 282.9372) % 360;
+  const T = 2451545 + J + 0.0053 * Math.sin(M * R) - 0.0069 * Math.sin(2 * L * R);
+  const dec = Math.asin(Math.sin(L * R) * Math.sin(23.4397 * R));
+  const w = Math.acos(Math.max(-1, Math.min(1, (Math.sin(-0.833 * R) - Math.sin(lat * R) * Math.sin(dec)) / (Math.cos(lat * R) * Math.cos(dec))))) / R;
+  const at = (j) => new Date((j - 2440587.5) * 86400000);
+  return { rise: at(T - w / 360), set: at(T + w / 360) };
+}
+function decorWanted(now = new Date()) {
+  const season = store.get("decorSeason", "auto"), light = store.get("decorLight", "auto"), sun = sunTimes(now);
+  return {
+    season: season === "auto" ? seasonOf(now) : season, autoSeason: season === "auto",
+    light: light === "auto" ? (now >= sun.rise && now < sun.set ? "day" : "night") : light, autoLight: light === "auto",
+    layout: portrait.matches ? "phone" : "desktop", sun,
+  };
+}
+function decorPick(w) {
+  const order = SEASONS.map((x) => x[0]), i = order.indexOf(w.season);
+  const seasons = [0, 1, -1, 2].map((k) => order[(i + k + 4) % 4]); // la saison voulue, la suivante, la précédente, l'opposée
+  for (const layout of [w.layout, w.layout === "phone" ? "desktop" : "phone"])
+    for (const season of seasons)
+      for (const light of [w.light, w.light === "day" ? "night" : "day"]) {
+        const d = S.decor.find((x) => x.season === season && x.layout === layout && x.light === light);
+        if (d) return d;
+      }
+  return null;
+}
+async function loadDecor() {
+  if (!S.user) return;
+  let fresh = false;
+  try { S.decor = await db.listDecor(); S.decorOk = true; fresh = true; store.set("decor." + S.user.id, S.decor); }
+  catch (err) {
+    if (/does not exist|schema cache/i.test(err.message) && /decor/.test(err.message)) { S.decorOk = false; S.decor = []; }
+    else S.decor = store.get("decor." + S.user.id, S.decor); // hors ligne : la dernière liste connue
+  }
+  await applyDecor();
+  if (fresh) pruneDecor(); // (jamais depuis la copie hors ligne)
+  const box = document.querySelector(".mp-decor");
+  if (box) fillDecor(box);
+}
+async function decorUrl(path) {
+  if (!decorUrls.has(path)) decorUrls.set(path, URL.createObjectURL(await mediaBlob(path)));
+  return decorUrls.get(path);
+}
+// Montre l'image choisie ; se refait tout seul au lever / coucher du soleil (au plus tard toutes les 30 min)
+async function applyDecor() {
+  clearTimeout(decorTimer);
+  const w = decorWanted(), d = S.user ? decorPick(w) : null;
+  const next = [w.sun.rise, w.sun.set].map((t) => t - Date.now()).filter((ms) => ms > 0);
+  decorTimer = setTimeout(applyDecor, Math.min(30 * 60000, ...next.map((ms) => ms + 2000)));
+  const was = S.decorNow;
+  S.decorNow = d ? { ...d, wanted: w } : null;
+  const box = document.querySelector(".mp-decor"); // carte ouverte : « On screen » à jour (sauf pendant un envoi)
+  if (box && !box.querySelector(".mp-busy") && JSON.stringify(was) !== JSON.stringify(S.decorNow)) fillDecor(box);
+  const key = d?.path ?? "";
+  if (key === decorShown) return;
+  decorShown = key;
+  if (!d) { document.body.classList.remove("mp-decor-on"); document.body.style.removeProperty("--mp-decor"); return; }
+  try {
+    const url = await decorUrl(d.path);
+    await Promise.race([loadImg(url).catch(() => {}), new Promise((ok) => setTimeout(ok, 4000))]); // prête avant d'être posée (pas d'écran vide)
+    if (decorShown !== key) return; // une autre image a été choisie entre-temps
+    document.body.style.setProperty("--mp-decor", `url("${url}")`);
+    document.body.classList.add("mp-decor-on");
+  } catch (err) { console.warn("Decor", err); decorShown = null; } // hors ligne sans copie : on garde le fond actuel
+}
+// Images qui n'existent plus : retirées de l'appareil (seulement après une liste fraîche)
+async function pruneDecor() {
+  const keep = new Set(S.decor.map((d) => d.path));
+  for (const [p, u] of decorUrls) if (!keep.has(p)) { URL.revokeObjectURL(u); decorUrls.delete(p); }
+  if (!("caches" in window)) return;
+  const cache = await caches.open(MEDIA).catch(() => null);
+  for (const r of (await cache?.keys()) ?? []) { const m = r.url.match(/__media\/(decor\/.+)$/); if (m && !keep.has(m[1])) await cache.delete(r); }
+}
+// Dessin choisi : bon sens (en hauteur pour le téléphone, en largeur pour l'ordinateur), réduit à la taille du modèle,
+// posé sur un fond uni (le transparent deviendrait noir) et enregistré en JPEG de moins de 4,5 Mo
+async function prepareDecor(file, layout) {
+  if (file.type && !/^image\//.test(file.type)) throw new Error("pick a picture (PNG or JPG)");
+  const url = URL.createObjectURL(file);
+  let img;
+  try { img = await loadImg(url); } catch { throw new Error("this picture can't be read — export it as PNG or JPG"); } finally { URL.revokeObjectURL(url); }
+  const w = img.naturalWidth, h = img.naturalHeight;
+  if (layout === "phone" && w > h) throw new Error(`this picture is wide (${w} × ${h}): it's for 💻 Computer — the phone picture is tall, like its template`);
+  if (layout === "desktop" && h > w) throw new Error(`this picture is tall (${w} × ${h}): it's for 📱 Phone — the computer picture is wide, like its template`);
+  const [tw, th] = DECOR_SIZE[layout], k = Math.min(1, Math.max(tw / w, th / h));
+  const c = document.createElement("canvas");
+  c.width = Math.round(w * k); c.height = Math.round(h * k);
+  const g = c.getContext("2d");
+  g.fillStyle = "#0b0f2a"; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(img, 0, 0, c.width, c.height);
+  for (const q of [0.88, 0.8, 0.7, 0.6]) {
+    const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", q));
+    if (!blob) throw new Error("this phone couldn't process the picture — try a smaller export");
+    if (blob.size <= DECOR_MAX) return blob;
+  }
+  throw new Error("the picture is too big even after shrinking it");
+}
+// (onload plutôt que decode() : decode() ne finit jamais tant que la page est cachée)
+function loadImg(url) {
+  return new Promise((ok, fail) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => fail(new Error("unreadable image")); im.src = url; });
+}
+// Modèles chargés dès que la carte s'affiche : sur iPhone, la feuille de partage doit s'ouvrir tout de suite après l'appui
+const decorTpl = {};
+function fetchDecorTemplate(layout) {
+  decorTpl[layout] ??= fetch(`art/decor-template-${layout}.png`)
+    .then((r) => { if (!r.ok) throw new Error(navigator.onLine ? "not found" : "you're offline"); return r.blob(); })
+    .then((blob) => (decorTpl[layout] = blob))
+    .catch((err) => { delete decorTpl[layout]; throw err; });
+  return Promise.resolve(decorTpl[layout]); // (déjà là : le fichier ; sinon : le chargement en cours)
+}
+async function shareDecorTemplate(layout) {
+  const blob = decorTpl[layout] instanceof Blob ? decorTpl[layout] : await fetchDecorTemplate(layout);
+  await shareFile(blob, `meopeo-decor-template-${layout}.png`, "MeoPeo decor template");
+}
+const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function fillDecor(box) {
+  if (S.decorOk === false) { box.innerHTML = `<div class="pl-legend">The decor isn't available yet — Tony needs to run <code>supabase/16_decor.sql</code>.</div>`; return; }
+  const P = S.partner, now = S.decorNow, w = decorWanted();
+  const sel = box.dataset.season || now?.season || "winter"; // (rien de dessiné : on commence par l'hiver)
+  box.dataset.season = sel;
+  const slot = (layout, light) => S.decor.find((d) => d.season === sel && d.layout === layout && d.light === light);
+  const who = (d) => (d.by === S.user.id ? S.me : P);
+  const tile = (layout, light) => {
+    const d = slot(layout, light);
+    return `<div class="mp-decor-slot ${layout}${d ? " on" : ""}${d && now?.path === d.path ? " shown" : ""}">
+      <div class="mp-decor-thumb">${d ? `<img alt="" data-decor="${d.path}">` : "<span>no picture</span>"}</div>
+      <span class="mp-decor-name">${decorLabel(LAYOUTS, layout)} · ${decorLabel(LIGHTS, light)}${d ? ` <span class="pl-legend">${esc(who(d)?.mark ?? "")}${now?.path === d.path ? " · on screen now" : ""}</span>` : ""}</span>
+      <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/png,image/jpeg,image/webp" hidden data-slot="${layout}|${light}"> ${d ? "Replace" : "＋ Add"}</label>${d ? `<button type="button" data-undecor="${layout}|${light}" title="Remove this picture">✕</button>` : ""}</span></div>`;
+  };
+  const why = !now ? "" : [
+    now.season !== now.wanted.season ? `no ${decorLabel(SEASONS, now.wanted.season).split(" ")[1]} drawing yet` : "",
+    now.light !== now.wanted.light ? `no ${now.wanted.light} version yet` : "",
+    now.layout !== now.wanted.layout ? `no ${now.wanted.layout === "phone" ? "phone" : "computer"} version yet` : "",
+  ].filter(Boolean).join(", ");
+  box.innerHTML = `<div class="pl-legend">Draw the background yourselves on a tablet: download a template, draw on your own layers, <b>hide the template</b>, then export the whole picture (PNG or JPG). One picture per season, for the day ☀️ and the night 🌙 — tall for phones, wide for computers. Shared: ${esc(P?.mark ?? "")} ${esc(P?.label ?? "the other")} sees the same decor.</div>
+    <span class="mp-row"><button type="button" data-tpl="phone">⬇ Phone template</button><button type="button" data-tpl="desktop">⬇ Computer template</button></span>
+    <span class="mp-seg mp-decor-seasons">${SEASONS.map(([k, l]) => `<button type="button" data-season="${k}" aria-pressed="${k === sel}">${l}${S.decor.some((d) => d.season === k) ? " ●" : ""}</button>`).join("")}</span>
+    <div class="mp-decor-grid">${LAYOUTS.map(([lay]) => LIGHTS.map(([li]) => tile(lay, li)).join("")).join("")}</div>
+    <div class="pl-legend mp-dstatus"></div>
+    <div class="mp-decor-device"><b>On this device</b>
+      <label>Season <select name="dseason"><option value="auto">Auto (now: ${decorLabel(SEASONS, seasonOf(new Date()))})</option>${SEASONS.map(([k, l]) => `<option value="${k}">Always ${l}</option>`).join("")}</select></label>
+      <label>Day / night <select name="dlight"><option value="auto">Auto (☀️ ${hhmm(w.sun.rise)} – 🌙 ${hhmm(w.sun.set)})</option><option value="day">Always ☀️ day</option><option value="night">Always 🌙 night</option></select></label>
+      <div class="pl-legend">${now ? `On screen: ${decorLabel(SEASONS, now.season)} · ${decorLabel(LIGHTS, now.light)} · ${decorLabel(LAYOUTS, now.layout)}${why ? ` (${why})` : ""}` : "On screen: the original background (no drawing yet)"}</div></div>`;
+  box.querySelector("[name=dseason]").value = store.get("decorSeason", "auto");
+  box.querySelector("[name=dlight]").value = store.get("decorLight", "auto");
+  box.querySelectorAll("[data-decor]").forEach(async (im) => { try { im.src = await decorUrl(im.dataset.decor); } catch { im.alt = "?"; } });
+  if (navigator.onLine) for (const [lay] of LAYOUTS) fetchDecorTemplate(lay).catch(() => {});
+  box.querySelectorAll("[data-tpl]").forEach((b) => b.addEventListener("click", () => shareDecorTemplate(b.dataset.tpl).catch((err) => toast(`⚠️ Couldn't get the template (${err.message})`))));
+  box.querySelectorAll("[data-season]").forEach((b) => b.addEventListener("click", () => { box.dataset.season = b.dataset.season; fillDecor(box); }));
+  for (const [name, key] of [["dseason", "decorSeason"], ["dlight", "decorLight"]])
+    box.querySelector(`[name=${name}]`).addEventListener("change", async (ev) => { store.set(key, ev.target.value); await applyDecor(); fillDecor(box); });
+  box.querySelectorAll("[data-undecor]").forEach((b) => b.addEventListener("click", async () => {
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Sure? ✕"; return; } // 2e appui pour confirmer
+    const [layout, light] = b.dataset.undecor.split("|");
+    if (await guard(() => db.deleteDecor({ season: sel, layout, light }), "Couldn't remove the picture")) loadDecor();
+  }));
+  const status = (t) => { box.querySelector(".mp-dstatus").textContent = t; };
+  box.querySelectorAll("input[data-slot]").forEach((input) => input.addEventListener("change", async () => {
+    const file = input.files[0];
+    input.value = "";
+    if (!file) return;
+    const [layout, light] = input.dataset.slot.split("|");
+    if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
+    input.closest(".mp-filebtn").classList.add("mp-busy");
+    try {
+      status("Preparing the picture…");
+      const blob = await prepareDecor(file, layout);
+      status(`Sending (${(blob.size / 1048576).toFixed(1)} MB)…`);
+      await db.setDecor(blob, { season: sel, layout, light });
+      toast(`🏖 New decor: ${decorLabel(SEASONS, sel)} · ${decorLabel(LIGHTS, light)} · ${decorLabel(LAYOUTS, layout)}`);
+      await loadDecor();
+    } catch (err) {
+      const why = /bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql"
+        : /exceeded the maximum allowed size/i.test(err.message) ? "too big for the storage" : err.message;
+      toast(`⚠️ Couldn't add the picture (${why})`);
+      fillDecor(box);
+    }
+  }));
 }
 
 // En dessous : les prochaines tâches de l'autre
@@ -1173,10 +1381,12 @@ function showTab() {
 function renderTinoPane(pane) {
   pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><h4>🦭 Tino</h4><div class="mp-tinoset"></div><div class="mp-grumbles"></div></div>
     <div class="pl-editor-card mp-pane-card"><h4>👒 Tino's wardrobe</h4><div class="mp-wardrobe"></div></div>
+    <div class="pl-editor-card mp-pane-card"><h4>🏖 Decor</h4><div class="mp-decor"></div></div>
     <div class="pl-editor-card mp-pane-card mp-soon"><h4>🎣 Coming soon</h4><p>Take care of Tino 🍼 and go fishing with him 🎣 — and win things to dress him up.</p></div>`;
   fillTinoSettings(pane.querySelector(".mp-tinoset"));
   fillGrumbles(pane.querySelector(".mp-grumbles"));
   fillWardrobe(pane.querySelector(".mp-wardrobe"));
+  fillDecor(pane.querySelector(".mp-decor"));
 }
 
 // ---------- Onglet ⚙ Settings : compte, notifications, widget, mot de passe ----------
