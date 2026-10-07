@@ -1,6 +1,6 @@
 // MeoPeo — l'interface (même mise en page que les planners Obsidian MeoMeo / PeoPeo).
 // Ne parle jamais directement à Supabase : tout passe par `db` (data.js ; data-mock.js dans test.html).
-import { mountMascots } from "./mascot.js";
+import { mountMascots, outfitTemplate } from "./mascot.js";
 import { createBigTino, DEFAULT_ANIM, videoToSprite } from "./bigtino.js";
 
 // ---------- Dates ----------
@@ -64,7 +64,7 @@ const upcomingOf = (list) => [
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -90,7 +90,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("focus", wake);
   window.addEventListener("online", wake);
@@ -139,6 +139,7 @@ async function boot(user) {
   await load();
   loadTino();
   loadExtras();
+  loadOutfits();
   resubscribe();
   ensurePush();
 }
@@ -146,6 +147,7 @@ function resubscribe() {
   unsubscribe?.(); unsubscribe = S.user ? db.subscribe(() => reload()) : null;
   unsubTino?.(); unsubTino = S.user ? db.subscribeTino(() => loadTino()) : null;
   unsubExtras?.(); unsubExtras = S.user ? db.subscribeTinoExtras(() => loadExtras()) : null;
+  unsubOutfits?.(); unsubOutfits = S.user ? db.subscribeOutfits(() => loadOutfits()) : null; // canal à part (sans 12, rien d'autre ne casse)
 }
 function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 250); } // plusieurs événements d'affilée = un seul rechargement
 
@@ -214,6 +216,7 @@ function showLogin() {
   unsubscribe?.(); unsubscribe = null;
   unsubTino?.(); unsubTino = null;
   unsubExtras?.(); unsubExtras = null; S.lines = []; S.extrasOk = null;
+  unsubOutfits?.(); unsubOutfits = null; S.outfits = []; S.worn = { head: null, body: null }; S.outfitsOk = null; applyOutfit();
   root.innerHTML = `<div class="mp-login pl-card"><h1>MeoPeo</h1><p class="mp-sub">💗 MeoMeo · 💜 PeoPeo</p>
     <form><input type="email" name="email" placeholder="E-mail" autocomplete="username" required>
       <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
@@ -259,7 +262,7 @@ function render() {
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); resubscribe(); });
   root.querySelector("[data-act=menu]").addEventListener("click", openMenu);
   root.style.minHeight = "";
   placeBigTino();
@@ -482,6 +485,7 @@ function refreshMascots() {
   // un appui sur un personnage passe au calendrier en dessous, jamais aux boutons du mois ni à l'interrupteur
   mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, tapThrough: (el) => !!el.closest(".pl-cal"), lines: () => S.lines.map((l) => l.body) });
   syncTinoBubble();
+  applyOutfit();
 }
 
 // ---------- Messages via Tino (supabase/07_tino_messages.sql) ----------
@@ -616,7 +620,7 @@ async function mediaBlob(path) {
   if (hit) return hit.blob();
   const blob = await db.tinoFile(path);
   if (cache) {
-    for (const r of await cache.keys()) if (r.url !== key) await cache.delete(r); // une seule animation gardée
+    if (path.startsWith("big/")) for (const r of await cache.keys()) if (r.url.includes("/__media/big/") && r.url !== key) await cache.delete(r); // une seule animation gardée
     await cache.put(key, new Response(blob, { headers: { "Content-Type": blob.type } })).catch(() => {});
   }
   return blob;
@@ -680,6 +684,129 @@ function fillTinoSettings(box) {
   };
   box.querySelector("[data-act=lineadd]").addEventListener("click", add);
   box.querySelector("[name=newline]").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); add(); } });
+}
+
+// ---------- Garde-robe du petit Tino (supabase/12_tino_outfits.sql) ----------
+// Une tenue = un dessin PNG transparent fait sur le modèle (⬇ Template), posé sur la tête ou sur le corps de Tino.
+// Commune aux deux, comme ce que Tino porte (une tenue « head » + une tenue « body » au plus).
+let unsubOutfits = null;
+const outfitUrls = new Map(); // fichier → adresse locale de l'image (gardée tant que la tenue existe)
+async function loadOutfits() {
+  if (!S.user) return;
+  try { const r = await db.listOutfits(); S.outfits = r.outfits; S.worn = r.worn; S.outfitsOk = true; store.set("outfits." + S.user.id, r); }
+  catch (err) {
+    if (/does not exist|schema cache|tino_outfits/i.test(err.message)) { S.outfitsOk = false; S.outfits = []; S.worn = { head: null, body: null }; }
+    else { const r = store.get("outfits." + S.user.id, null); if (r) { S.outfits = r.outfits; S.worn = r.worn; } } // hors ligne
+  }
+  await applyOutfit();
+  const box = document.querySelector(".mp-wardrobe");
+  if (box) fillWardrobe(box);
+}
+async function outfitUrl(o) {
+  if (!outfitUrls.has(o.path)) outfitUrls.set(o.path, URL.createObjectURL(await mediaBlob(o.path)));
+  return outfitUrls.get(o.path);
+}
+// Habille Tino ; fichiers des tenues disparues : retirés de l'appareil
+async function applyOutfit() {
+  const pick = (layer) => S.outfits.find((o) => o.id === S.worn[layer] && o.layer === layer);
+  const head = pick("head"), body = pick("body");
+  try {
+    mascots?.wear({ head: head ? await outfitUrl(head) : null, body: body ? await outfitUrl(body) : null, hideFlower: !!head?.hideFlower });
+  } catch (err) { console.warn("Tino's outfit", err); mascots?.wear({}); }
+  const keep = new Set(S.outfits.map((o) => o.path));
+  for (const [path, url] of outfitUrls) if (!keep.has(path)) { URL.revokeObjectURL(url); outfitUrls.delete(path); }
+  if (S.outfitsOk && "caches" in window) {
+    const cache = await caches.open(MEDIA).catch(() => null);
+    for (const r of (await cache?.keys()) ?? []) { const m = r.url.match(/__media\/(outfits\/.+)$/); if (m && !keep.has(m[1])) await cache.delete(r); }
+  }
+}
+
+// Dessin choisi : carré, avec de la transparence (sinon un carré blanc couvrirait Tino), réduit à 512 px en PNG
+async function prepareOutfit(file) {
+  if (!/^image\//.test(file.type)) throw new Error("pick a PNG drawing");
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  try { img.src = url; await img.decode(); } catch { throw new Error("this image can't be read — export it as PNG"); } finally { URL.revokeObjectURL(url); }
+  const w = img.naturalWidth, h = img.naturalHeight;
+  if (!w || Math.abs(w - h) > Math.max(2, w * 0.01)) throw new Error(`the drawing must be square, like the template (this one is ${w} × ${h})`);
+  const c = document.createElement("canvas");
+  c.width = c.height = 512;
+  const g = c.getContext("2d");
+  g.drawImage(img, 0, 0, 512, 512);
+  const a = g.getImageData(0, 0, 512, 512).data;
+  let clear = 0;
+  for (let i = 3; i < a.length; i += 4 * 7) if (a[i] < 200) clear++;
+  if (clear < a.length / 4 / 7 * 0.2) throw new Error("no transparent background — export only your drawing layer as PNG (hide the template and the background), and pick it from Files");
+  const blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
+  if (!blob || blob.type !== "image/png") throw new Error("this browser couldn't save the drawing");
+  return blob;
+}
+// Modèle : feuille de partage (iPhone / iPad : « Enregistrer l'image », « Enregistrer dans Fichiers »), sinon téléchargement
+async function shareTemplate() {
+  const blob = await outfitTemplate();
+  const file = new File([blob], "tino-template.png", { type: "image/png" });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "Tino template" }); return; } catch (err) { if (err.name === "AbortError") return; }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(file); a.download = file.name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+}
+
+function fillWardrobe(box) {
+  if (S.outfitsOk === false) { box.innerHTML = `<div class="pl-legend">Tino's wardrobe isn't available yet — Tony needs to run <code>supabase/12_tino_outfits.sql</code>.</div>`; return; }
+  const who = (o) => (o.by === S.user.id ? S.me : S.partner);
+  const row = (o) => {
+    const on = S.worn[o.layer] === o.id;
+    return `<div class="mp-outfit${on ? " on" : ""}"><img alt="" data-thumb="${o.id}"><span class="mp-outfit-name">${esc(o.name)} <span class="pl-legend">${o.layer === "head" ? "head" : "body"} · ${esc(who(o)?.mark ?? "")}</span></span>
+      <button type="button" data-wear="${o.id}">${on ? "Take off" : "Wear"}</button><button type="button" data-drop="${o.id}" title="Remove from the wardrobe">✕</button></div>`;
+  };
+  box.innerHTML = `<div class="pl-legend">Draw outfits for Tino on a tablet: download the template, draw on a <b>new layer</b> on top of it, then export <b>only your layer</b> as a PNG with a transparent background. Shared: ${esc(S.partner?.label ?? "the other")} sees what Tino wears.</div>
+    <span class="mp-row"><button type="button" data-act="template">⬇ Template</button></span>
+    <div class="mp-outfits">${S.outfits.length ? S.outfits.map(row).join("") : `<div class="pl-empty">No outfits yet.</div>`}</div>
+    <div class="mp-outfit-add">
+      <input type="text" name="oname" maxlength="40" placeholder="Name (e.g. Summer hat)">
+      <span class="mp-row"><label class="mp-check"><input type="radio" name="olayer" value="head" checked> On his head</label><label class="mp-check"><input type="radio" name="olayer" value="body"> On his body</label></span>
+      <label class="mp-check mp-oflower"><input type="checkbox" name="oflower"> Hide his flower</label>
+      <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/png,image/webp" hidden> ＋ Add a drawing (PNG)</label></span>
+      <div class="pl-legend mp-ostatus"></div>
+    </div>`;
+  box.querySelectorAll("[data-thumb]").forEach(async (im) => { const o = S.outfits.find((x) => x.id === im.dataset.thumb); try { im.src = await outfitUrl(o); } catch { im.alt = "?"; } });
+  box.querySelector("[data-act=template]").addEventListener("click", () => shareTemplate().catch((err) => toast(`⚠️ Couldn't make the template (${err.message})`)));
+  box.querySelectorAll("[data-wear]").forEach((b) => b.addEventListener("click", async () => {
+    const o = S.outfits.find((x) => x.id === b.dataset.wear);
+    if (await guard(() => db.wearOutfit(o.layer, S.worn[o.layer] === o.id ? null : o.id), "Couldn't change Tino's outfit")) loadOutfits();
+  }));
+  box.querySelectorAll("[data-drop]").forEach((b) => b.addEventListener("click", async () => {
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Sure? ✕"; return; } // 2e appui pour confirmer
+    if (await guard(() => db.deleteOutfit(b.dataset.drop), "Couldn't remove the outfit")) loadOutfits();
+  }));
+  const flower = box.querySelector(".mp-oflower");
+  box.querySelectorAll("[name=olayer]").forEach((r) => r.addEventListener("change", () => { flower.hidden = box.querySelector("[name=olayer]:checked").value !== "head"; })); // (seulement pour la tête)
+  const status = (t) => { box.querySelector(".mp-ostatus").textContent = t; };
+  const input = box.querySelector("input[type=file]");
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    input.value = "";
+    if (!file) return;
+    const name = box.querySelector("[name=oname]").value.trim() || file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "Outfit";
+    const layer = box.querySelector("[name=olayer]:checked").value;
+    if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
+    box.querySelector(".mp-filebtn").classList.add("mp-busy");
+    try {
+      status("Checking the drawing…");
+      const blob = await prepareOutfit(file);
+      status("Sending…");
+      await db.addOutfit(blob, { name, layer, hideFlower: layer === "head" && box.querySelector("[name=oflower]").checked });
+      toast(`👒 Tino is wearing “${name}”!`);
+      await loadOutfits();
+    } catch (err) {
+      const why = /bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql" : err.message;
+      toast(`⚠️ Couldn't add the outfit (${why})`);
+      fillWardrobe(box);
+    }
+  });
 }
 
 // En dessous : les prochaines tâches de l'autre
@@ -893,6 +1020,8 @@ function openMenu() {
     ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}
     <h4>🦭 Tino</h4>
     <div class="mp-tinoset"></div>
+    <h4>👒 Tino's wardrobe</h4>
+    <div class="mp-wardrobe"></div>
     <h4>📱 Home-screen widget</h4>
     <div class="mp-widgets">Checking…</div>
     <h4>🔑 Password</h4>
@@ -909,6 +1038,7 @@ function openMenu() {
   f.querySelector("[data-act=logout]").addEventListener("click", async () => { ov.remove(); await logout(); });
   fillNotif(f.querySelector(".mp-notif"));
   fillTinoSettings(f.querySelector(".mp-tinoset"));
+  fillWardrobe(f.querySelector(".mp-wardrobe"));
   fillWidgets(f.querySelector(".mp-widgets"));
   f.notify?.addEventListener("change", async (ev) => {
     const on = ev.target.checked;

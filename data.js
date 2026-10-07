@@ -16,6 +16,8 @@
 //     (supabase/07_tino_messages.sql) ; un message : { id, from, to, body, at: date ISO, seen: date ISO | null }
 //   listTinoLines(), addTinoLine(body), deleteTinoLine(id), getBigTino(), setBigTino(blob, meta), resetBigTino(),
 //   tinoFile(path), subscribeTinoExtras(onChange) → phrases de Tino et grand Tino (supabase/08_tino_extras.sql)
+//   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id),
+//   subscribeOutfits(onChange) → garde-robe du petit Tino (supabase/12_tino_outfits.sql)
 //
 // Format d'une tâche dans l'app : { id, owner, date: "AAAA-MM-JJ", end: "AAAA-MM-JJ" | null, time: "HH:MM" | null,
 //   course: nom de catégorie | null, label, done, moon: "full" | "crescent" | null, private, source }
@@ -158,6 +160,44 @@ export function createBackend() {
       if (old?.path) await sb.storage.from("tino").remove([old.path]);
     },
     async tinoFile(path) { return must(await sb.storage.from("tino").download(path)); }, // → Blob
+    // Garde-robe du petit Tino (supabase/12_tino_outfits.sql) : tenues dessinées + ce qu'il porte (réglage commun)
+    async listOutfits() {
+      const [rows, worn] = (await Promise.all([
+        sb.from("tino_outfits").select("id, author, name, layer, path, hide_flower, created_at").order("created_at"),
+        sb.from("shared_settings").select("value").eq("key", "tino_outfit").maybeSingle(),
+      ])).map(must);
+      return {
+        outfits: rows.map((r) => ({ id: r.id, by: r.author, name: r.name, layer: r.layer, path: r.path, hideFlower: r.hide_flower, at: r.created_at })),
+        worn: { head: worn?.value?.head ?? null, body: worn?.value?.body ?? null },
+      };
+    },
+    // Nouveau dessin (PNG transparent déjà réduit sur l'appareil) : fichier, puis la tenue, puis Tino la porte
+    async addOutfit(blob, { name, layer, hideFlower }) {
+      const ext = { "image/png": "png", "image/webp": "webp" }[blob.type];
+      if (!ext) throw new Error("unsupported file type");
+      const path = `outfits/${crypto.randomUUID()}.${ext}`;
+      must(await sb.storage.from("tino").upload(path, blob, { contentType: blob.type, upsert: false }));
+      const row = must(await sb.from("tino_outfits").insert({ name, layer, path, hide_flower: !!hideFlower }).select("id").single());
+      await this.wearOutfit(layer, row.id);
+    },
+    // Ce que Tino porte : une seule écriture (le réglage entier)
+    async wearOutfit(layer, id) {
+      const cur = must(await sb.from("shared_settings").select("value").eq("key", "tino_outfit").maybeSingle())?.value ?? {};
+      must(await sb.from("shared_settings").upsert({ key: "tino_outfit", value: { head: cur.head ?? null, body: cur.body ?? null, [layer]: id } }));
+    },
+    // Supprimer une tenue (la base l'enlève aussi de ce que Tino porte), puis son fichier
+    async deleteOutfit(id) {
+      const row = must(await sb.from("tino_outfits").select("path").eq("id", id).maybeSingle());
+      must(await sb.from("tino_outfits").delete().eq("id", id));
+      if (row?.path) await sb.storage.from("tino").remove([row.path]);
+    },
+    subscribeOutfits(onChange) {
+      const ch = sb.channel("tinow-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "tino_outfits" }, () => onChange())
+        .on("postgres_changes", { event: "*", schema: "public", table: "shared_settings" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
     subscribeTinoExtras(onChange) {
       const ch = sb.channel("tinox-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "*", schema: "public", table: "tino_lines" }, () => onChange())

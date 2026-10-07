@@ -60,6 +60,7 @@ function sealSvg() {
   <g class="ms-foot-r"><ellipse cx="62" cy="95" rx="8.5" ry="4.5" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
   <path d="M34 58C26 52 13 55 14 65C15 73 22 75 27 74C24 80 22 90 30 95C37 99 45 96 50 92C55 96 63 99 70 95C78 90 76 80 73 74C78 75 85 73 86 65C87 55 74 52 66 58Z" fill="#f7f0de" stroke="#dacfb4" stroke-width="1.3"/>
   ${stars}
+  <g class="ms-wear-body"></g>
   <g class="ms-arm-l"><ellipse cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
   <g class="ms-arm-r"><ellipse cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
   <g class="ms-head">
@@ -81,8 +82,27 @@ function sealSvg() {
       <g fill="#f7c948" stroke="#e0a52c" stroke-width="0.8">${petals}</g>
       <circle cx="22" cy="19" r="3" fill="#eeac25"/>
     </g>
+    <g class="ms-wear-head"></g>
   </g>
 </svg>`;
+}
+
+// ---------- Tenues dessinées (garde-robe) ----------
+// Un dessin = une image carrée posée dans le repère du MODÈLE : Tino au centre, 25 unités de marge tout autour
+// (repère -25…125, soit 150 × 150 ; le modèle fait 1500 × 1500 px = 10 px par unité). Calque « head » : suit la tête
+// (dans .ms-head) ; calque « body » : suit le corps, sous les bras.
+const WEAR = { x: -25, y: -25, size: 150 };
+// Modèle à dessiner par-dessus (PNG transparent, Tino dans sa pose de repos) — toujours identique au dessin du code
+export async function outfitTemplate(kind = "tino", px = 1500) {
+  const svg = KINDS[kind].svg().replace(/<svg viewBox="0 0 100 100"[^>]*>/,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${WEAR.x} ${WEAR.y} ${WEAR.size} ${WEAR.size}" width="${px}" height="${px}">`);
+  const img = new Image();
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = c.height = px;
+  c.getContext("2d").drawImage(img, 0, 0, px, px);
+  return new Promise((ok) => c.toBlob(ok, "image/png"));
 }
 
 // Le lit de la nuit (derrière Tino) : repère 120 × 40, posé sur y = 40, tête de lit à droite (retourné si Tino dort
@@ -338,7 +358,8 @@ class Mascot {
     this.el.setAttribute("aria-label", def.name);
     this.el.innerHTML = `<div class="ms-in">${def.svg()}</div>${FX}`;
     this.inner = this.el.firstChild;
-    for (const k of ["head", "face", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    for (const k of ["head", "face", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    if (eng.outfit) this.wear(eng.outfit);
     // Lit (derrière lui) et couverture (devant lui) : seulement la nuit, quand il dort dans la case d'aujourd'hui
     this.bedEl = document.createElement("div");
     this.bedEl.className = "ms-bed";
@@ -378,6 +399,14 @@ class Mascot {
     this.el.style.pointerEvents = "";
     this.eng.tapping = this; // ce toucher-là ne le fait pas s'envoler
     try { if (under && this.eng.tapThrough(under)) under.click(); } finally { this.eng.tapping = null; }
+  }
+
+  // Tenue dessinée : { head: url | null, body: url | null, hideFlower } (images dans le repère du modèle)
+  wear(o = {}) {
+    const img = (url) => (url ? `<image href="${String(url).replace(/"/g, "%22")}" x="${WEAR.x}" y="${WEAR.y}" width="${WEAR.size}" height="${WEAR.size}" preserveAspectRatio="none"/>` : "");
+    this.wear_head.innerHTML = img(o.head);
+    this.wear_body.innerHTML = img(o.body);
+    this.flower.style.display = o.head && o.hideFlower ? "none" : ""; // un chapeau peut remplacer la fleur
   }
 
   love() {
@@ -665,6 +694,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       });
     },
     say(text, opts) { tino?.say(text, opts); },
+    wear(o) { eng.outfit = o; list.forEach((m) => m.wear(o)); },
     hush() { tino?.hush(true); },
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
     destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); }); },

@@ -247,6 +247,17 @@ input[type=radio], input[type=checkbox] { accent-color: #ffe8a3; width: 18px; he
 .mp-lineadd { display: flex; width: 100%; }
 .mp-lineadd input { flex: 1; min-width: 0; }
 
+/* ⚙ → garde-robe du petit Tino : tenues dessinées (vignette, porter / enlever, retirer), ajout d'un dessin */
+.mp-wardrobe { font-size: 0.92em; line-height: 1.5; color: var(--text-normal); display: flex; flex-direction: column; gap: 4px; }
+.pl-editor-card h4 + .mp-wardrobe { margin-top: -4px; }
+.mp-outfit { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--pl-line); }
+.mp-outfit img { width: 40px; height: 40px; border-radius: 8px; flex: none; background: repeating-conic-gradient(rgba(255, 255, 255, 0.14) 0 25%, rgba(255, 255, 255, 0.04) 0 50%) 0 0 / 10px 10px; }
+.mp-outfit.on img { outline: 2px solid #ffe8a3; }
+.mp-outfit-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mp-outfit button { white-space: nowrap; }
+.mp-outfit-add { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.mp-outfit-add .mp-check { display: inline-flex; align-items: center; gap: 6px; }
+
 /* ⚙ → widgets d'écran d'accueil : clés existantes, mode d'emploi + code (montré une fois) */
 .mp-widgets { font-size: 0.92em; line-height: 1.5; color: var(--text-normal); }
 .pl-editor-card h4 + .mp-widgets { margin-top: -4px; }
