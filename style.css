@@ -356,3 +356,105 @@ body.mp-decor-on .pl-hello { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 14p
 body.mp-decor-on .pl-month, body.mp-decor-on .pl-toggle { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 20, 0.6); }
 body.mp-decor-on .pl-hello button, body.mp-decor-on .pl-nav button, body.mp-decor-on .mp-who { background: rgba(14, 18, 48, 0.55); }
 body.mp-decor-on .mp-who { padding: 2px 8px; border-radius: 999px; }
+
+/* Liens (dans les textes d'aide) */
+a { color: var(--text-accent); }
+/* ⚙ → 🎨 Appearance : thème et heures du jour (cet appareil) */
+.mp-look { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: 0.92em; }
+.mp-look .pl-sub { margin-top: 8px; }
+.mp-look .mp-seg { flex-wrap: wrap; }
+.mp-dayhours label { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ===== Thème clair (⚙ Settings → Appearance ; classe mp-light sur <html>) =====
+   Verre blanc, texte bleu nuit, or foncé à la place de l'or pâle. Ce qui est posé directement sur le fond (date, mois,
+   interrupteur, légende du calendrier) reste clair avec une ombre : le fond peut être la photo de nuit ou un dessin. */
+:root.mp-light {
+  color-scheme: light;
+  --text-normal: #1c2046; --text-muted: #565e8c; --text-accent: #8a5a00;
+  --text-on-accent: #10142e;
+  --pl-card: rgba(255, 255, 255, 0.74); --pl-line: rgba(40, 50, 110, 0.16); --pl-title: #8a5a00;
+  --mp-gold: #d9a520; --mp-gold-bg: rgba(255, 226, 140, 0.42);
+}
+.mp-light body { background: #dfe5f4; }
+.mp-light code { background: rgba(40, 50, 110, 0.08); }
+.mp-light button { background: rgba(255, 255, 255, 0.72); color: var(--text-normal); }
+.mp-light button:hover { background: rgba(255, 255, 255, 0.95); }
+.mp-light input[type=text], .mp-light input[type=email], .mp-light input[type=password], .mp-light input[type=date], .mp-light input[type=time],
+.mp-light select, .mp-light textarea { background: rgba(255, 255, 255, 0.85); }
+.mp-light select option { background: #ffffff; color: var(--text-normal); }
+.mp-light input[type=radio], .mp-light input[type=checkbox] { accent-color: #c28a00; }
+.mp-light .mp-cta { background: #ffd970; border-color: var(--mp-gold); color: #1c2046; }
+.mp-light .mp-cta:hover { background: #ffe38f; }
+.mp-light .mp-danger { color: #c22746; }
+.mp-light .mp-err { color: #c22746; }
+/* Cartes, titres */
+.mp-light .pl-card, .mp-light .pl-cal { box-shadow: 0 10px 30px rgba(20, 30, 80, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+.mp-light .pl-card h4, .mp-light .pl-editor-card h4 { color: var(--text-accent); text-shadow: none; }
+.mp-light .pl-sub { color: #3b4377; }
+.mp-light .mp-login h1 { color: #1c2046; text-shadow: 0 0 16px rgba(255, 210, 110, 0.55); }
+/* Tâches */
+.mp-light .pl-item { background: rgba(40, 50, 110, 0.05); }
+.mp-light .pl-item.late { background: rgba(255, 99, 132, 0.20); }
+.mp-light .pl-item.late .pl-when { color: #b01f3d; }
+.mp-light .pl-item.u1 { background: rgba(255, 120, 140, 0.16); }
+.mp-light .pl-item.u3 { background: rgba(255, 170, 90, 0.18); }
+.mp-light .pl-item.u7 { background: rgba(255, 210, 90, 0.20); }
+.mp-light .pl-item.u14 { background: rgba(90, 200, 150, 0.14); }
+.mp-light .pl-what b, .mp-light .pl-chip b { color: color-mix(in srgb, var(--c) 62%, #000000); }
+.mp-light .pl-hour, .mp-light .pl-bell { background: #fff3cf; border-color: var(--mp-gold); color: #6e4700; }
+.mp-light .pl-range, .mp-light .mp-rep { border-color: rgba(40, 50, 110, 0.35); color: #3b4377; }
+.mp-light .pl-add summary { color: var(--text-accent); }
+.mp-light .pl-until, .mp-light .mp-check, .mp-light .pl-remind, .mp-light .mp-repeat, .mp-light .mp-repeat-info { color: #3b4377; }
+.mp-light .mp-check, .mp-light .pl-moon label { border-color: rgba(40, 50, 110, 0.25); background: rgba(255, 255, 255, 0.6); color: var(--text-normal); }
+.mp-light .mp-check:has(input:checked), .mp-light .pl-moon label:has(input:checked) { background: var(--mp-gold-bg); border-color: var(--mp-gold); box-shadow: 0 0 8px rgba(217, 165, 32, 0.4); }
+.mp-light .mp-addday { color: #6e4700; border-color: var(--mp-gold); background: rgba(255, 226, 140, 0.25); }
+.mp-light .mp-addday:hover { background: var(--mp-gold-bg); }
+/* Calendrier */
+.mp-light .pl-dow { color: #3b4377; background: rgba(40, 50, 110, 0.05); }
+.mp-light .pl-day { border-color: rgba(40, 50, 110, 0.10); }
+.mp-light .pl-day.we { background: rgba(40, 50, 110, 0.06); }
+.mp-light .pl-day.sel { box-shadow: inset 0 0 0 2px rgba(200, 140, 0, 0.85); }
+.mp-light .pl-day.today .pl-num { background: #ffd970; box-shadow: 0 0 8px rgba(217, 165, 32, 0.7); }
+.mp-light .pl-chip { color: var(--text-normal); background: color-mix(in srgb, var(--c) 22%, rgba(255, 255, 255, 0.88)); }
+.mp-light .pl-chip.late { background: rgba(255, 99, 132, 0.30); }
+/* Halos : doré plus soutenu, « argenté » devenu bleuté (sur blanc l'argent ne se voit pas) */
+@keyframes pl-labglow-light {
+  0%, 100% { box-shadow: 0 0 4px rgba(90, 130, 220, 0.35), 0 0 10px rgba(90, 130, 220, 0.18); }
+  50% { box-shadow: 0 0 8px rgba(90, 130, 220, 0.65), 0 0 18px rgba(90, 130, 220, 0.32); }
+}
+.mp-light .pl-item.glow, .mp-light .pl-chip.glow { outline-color: var(--mp-gold); }
+.mp-light .pl-item.glow-lab, .mp-light .pl-chip.glow-lab { outline-color: rgba(90, 130, 220, 0.7); animation-name: pl-labglow-light; }
+.mp-light .pl-item.glow .pl-what, .mp-light .pl-chip.glow, .mp-light .pl-item.glow-lab .pl-what, .mp-light .pl-chip.glow-lab { text-shadow: none; }
+/* Fenêtres, onglets, messages, barre du bas */
+.mp-light .pl-editor { background: rgba(20, 30, 70, 0.30); }
+.mp-light .pl-editor-card, .mp-light .mp-toast { background: rgba(250, 251, 255, 0.97); box-shadow: 0 16px 40px rgba(20, 30, 80, 0.25); }
+.mp-light .mp-pane-card { background: rgba(250, 251, 255, 0.90); }
+.mp-light .mp-toast button { background: var(--mp-gold-bg); border-color: var(--mp-gold); }
+.mp-light .mp-nav { background: rgba(250, 251, 255, 0.90); box-shadow: 0 10px 30px rgba(20, 30, 80, 0.25); }
+.mp-light .mp-nav button { background: transparent; color: var(--text-muted); }
+.mp-light .mp-nav button:hover { background: rgba(40, 50, 110, 0.06); }
+.mp-light .mp-nav button[aria-current="page"] { background: var(--mp-gold-bg); border-color: var(--mp-gold); color: #6e4700; }
+.mp-light .mp-seg button { background: transparent; }
+.mp-light .mp-seg button[aria-pressed="true"] { background: var(--mp-gold-bg); color: #6e4700; }
+.mp-light .mp-filebtn { background: rgba(255, 255, 255, 0.72); }
+.mp-light .mp-filebtn:hover { background: rgba(255, 255, 255, 0.95); }
+.mp-light .mp-line button, .mp-light .pl-edit { background: transparent; }
+/* Tino, garde-robe, widgets, notes, décor */
+.mp-light .mp-tino-row, .mp-light .mp-note { background: rgba(40, 50, 110, 0.05); }
+.mp-light .mp-tino-row { border-left-color: var(--mp-gold); }
+.mp-light .mp-tino-row.mine { border-left-color: var(--interactive-accent); }
+.mp-light .mp-outfit img { background: repeating-conic-gradient(rgba(40, 50, 110, 0.12) 0 25%, rgba(40, 50, 110, 0.03) 0 50%) 0 0 / 10px 10px; }
+.mp-light .mp-outfit.on img { outline-color: var(--mp-gold); }
+.mp-light .mp-wsetup, .mp-light .mp-note-conflict, .mp-light .mp-scope { border-color: var(--mp-gold); background: rgba(255, 226, 140, 0.2); }
+.mp-light .mp-wsetup textarea { background: rgba(255, 255, 255, 0.85); }
+.mp-light .mp-nl-head { color: var(--text-accent); }
+.mp-light .mp-nl-bullet::before { color: #b07a00; }
+.mp-light .mp-decor-slot.shown { border-color: var(--mp-gold); box-shadow: 0 0 10px rgba(217, 165, 32, 0.35); }
+.mp-light .mp-decor-thumb { background: rgba(40, 50, 110, 0.08); }
+/* Posé directement sur le fond : reste clair et ombré (lisible sur la photo de nuit comme sur un dessin de jour) */
+.mp-light .pl-cal + .pl-legend { color: #eef0ff; text-shadow: 0 1px 3px rgba(0, 0, 20, 0.9), 0 0 10px rgba(0, 0, 20, 0.6); }
+.mp-light .pl-hello button, .mp-light .pl-nav button { color: var(--text-normal); text-shadow: none; }
+.mp-light body.mp-decor-on .pl-hello button, .mp-light body.mp-decor-on .pl-nav button { background: rgba(255, 255, 255, 0.78); }
+.mp-light body.mp-decor-on .mp-who { background: rgba(255, 255, 255, 0.78); color: #6e4700; text-shadow: none; }
+/* Boutons qui ont leur propre fond (sinon « .mp-light button » le remplacerait) : le disque du grand Tino reste une lune */
+.mp-light .bt-moon, .mp-light .bt-moon:hover { background: #fffdf6; color: inherit; }

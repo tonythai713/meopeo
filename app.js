@@ -93,6 +93,7 @@ const findTask = (id) => S.mine.find((x) => x.id === id) ?? S.theirs.find((x) =>
 
 export async function start(backend) {
   db = backend;
+  applyTheme(); // thème clair / sombre de cet appareil, avant tout affichage
   tick();
   root = document.getElementById("app");
   toastBox = document.getElementById("toasts");
@@ -106,6 +107,7 @@ export async function start(backend) {
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
   const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); loadDecor(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) applyTheme(); }); // (minuteries endormies en arrière-plan)
   window.addEventListener("focus", wake);
   window.addEventListener("online", wake);
   window.addEventListener("resize", () => align());
@@ -303,7 +305,7 @@ function itemHtml(e) {
     : `<span class="pl-lock" title="${esc(S.partner?.label ?? "")}'s task — read-only">●</span>`;
   const tag = e.course ? `<b>${esc(e.course)}</b> ` : "";
   const when = ongoing(e) && !e.done;
-  return `<div class="pl-item ${urgency(e)}${glowClass(e)}" style="--c:${e.color}">${box}
+  return `<div class="pl-item ${urgency(e)}${glowClass(e)}" data-id="${e.id}" style="--c:${e.color}">${box}
     <span class="pl-when">${when ? "now" : relDay(e.date)}<small>${dm(when ? today : e.date)}</small></span>
     <span class="pl-what"${e.tickable ? ` data-edit="${e.id}"` : ""}>${tag}${hourPill(e)}${esc(e.label)}${SRC[e.source] ? ` <span class="mp-src" title="From Tony's Obsidian dashboard">${SRC[e.source]}</span>` : ""}${e.private ? ` <span class="mp-priv" title="Private: only you can see it">🔒</span>` : ""}${rangeInfo(e)}${repeatPill(e)}${bellPill(e)}</span>${e.editable ? `<button class="pl-edit" data-edit="${e.id}" title="Edit this task">✏️</button>` : ""}</div>`;
 }
@@ -493,30 +495,69 @@ function alignColumns() {
   cal.classList.add("pl-fit");
 }
 
-// Personnages qui se promènent sur le calendrier (mascot.js : Tino, le phoque). Calque posé sur la page, hors de l'app : il survit
-// aux réaffichages ; plateformes = haut du calendrier, haut de chaque semaine, bas du calendrier (coordonnées de page)
+// Personnages qui se promènent sur la page (mascot.js : Tino, le phoque). Calque posé sur la page, hors de l'app : il survit
+// aux réaffichages. Plateformes (coordonnées de page), avec une clé qui ne change pas d'un affichage à l'autre :
+// - onglet Calendar : haut du calendrier, haut de chaque semaine, bas du calendrier (« cal:N »), haut de chaque carte (tâches,
+//   jour choisi, messages via Tino) et haut de chaque tâche (seulement au-dessus du texte : jamais sur une case à cocher ni ✏️) ;
+// - onglet Notes : haut et fond de la carte, haut de chaque note ; onglets Tino et Settings : aucune (Tino n'y est pas).
 let mascots = null;
 function calDays() { return [...(root?.querySelectorAll(".pl-cal .pl-day") ?? [])]; }
 function mascotPlatforms() {
-  const cal = root?.querySelector(".pl-cal"), days = calDays();
-  if (!cal || !days.length || !cal.getClientRects().length) return [];
-  const c = cal.getBoundingClientRect(), ys = [c.top];
-  for (let i = 7; i < days.length; i += 7) ys.push(days[i].getBoundingClientRect().top);
-  ys.push(c.bottom);
-  return ys.map((y) => ({ y: y + scrollY, x0: c.left + scrollX + 18, x1: c.right + scrollX - 18, cell: c.width / 7 })); // cell : largeur d'une case (le lit n'en dépasse pas)
+  const tab = currentTab(), out = [], seen = new Set();
+  out.section = tab;
+  if (!document.body.classList.contains("mp-logged")) return out;
+  const add = (el, key, l, r, floor = false) => { // floor : le bord du BAS (il se tient dans la carte, sur son fond)
+    const b = el.getBoundingClientRect();
+    if (!b.width || !el.getClientRects().length || seen.has(key) || b.right - r - (b.left + l) < 16) return;
+    seen.add(key);
+    out.push({ key, y: (floor ? b.bottom - 6 : b.top) + scrollY, x0: b.left + scrollX + l, x1: b.right + scrollX - r });
+  };
+  const cards = (scope, sel, items, itemKey, floor = false) => scope?.querySelectorAll(sel).forEach((card, i) => {
+    const ck = "card:" + (card.querySelector("h4")?.textContent.trim() || i);
+    add(card, ck, 22, 22);
+    if (floor) add(card, ck + "|floor", 22, 22, true);
+    card.querySelectorAll(items).forEach((it, j) => add(it, `${ck}|${itemKey(it) ?? j}`, 64, 60)); // (une tâche peut être dans deux cartes)
+  });
+  if (tab === "calendar") {
+    const cal = root?.querySelector(".pl-cal"), days = calDays();
+    if (cal && days.length && cal.getClientRects().length) {
+      const c = cal.getBoundingClientRect(), ys = [c.top];
+      for (let i = 7; i < days.length; i += 7) ys.push(days[i].getBoundingClientRect().top);
+      ys.push(c.bottom);
+      ys.forEach((y, n) => out.push({ key: "cal:" + n, cal: n, y: y + scrollY, x0: c.left + scrollX + 18, x1: c.right + scrollX - 18, cell: c.width / 7 }));
+    }
+    cards(root, ".pl-card", ".pl-item", (it) => it.dataset.id);
+    cards(tinoHost, ".pl-card", ".pl-item", () => null);
+  } else if (tab === "notes") cards(panes.notes, ".pl-editor-card", ".mp-note", (it) => it.dataset.note, true); // (+ le fond de la carte : le haut est collé au haut de l'écran)
+  return out;
 }
 function mascotToday() {
   const days = calDays(), i = days.findIndex((d) => d.classList.contains("today"));
   if (i < 0) return null;
   const r = days[i].getBoundingClientRect();
-  return { p: Math.floor(i / 7) + 1, x: r.left + scrollX + r.width / 2 };
+  return { key: "cal:" + (Math.floor(i / 7) + 1), x: r.left + scrollX + r.width / 2 };
 }
+// Partie visible de la page : sous la barre d'état de l'iPhone (l'app s'affiche dessous) et au-dessus de la barre d'onglets
+let safeTop = null;
+function mascotView() {
+  if (safeTop === null) {
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;top:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none";
+    document.body.append(probe);
+    safeTop = probe.getBoundingClientRect().height || 0;
+    probe.remove();
+  }
+  const navTop = nav && getComputedStyle(nav).display !== "none" ? nav.getBoundingClientRect().top : innerHeight;
+  return { top: scrollY + safeTop + 4, bottom: scrollY + navTop - 4, left: scrollX + 6, right: scrollX + document.documentElement.clientWidth - 6 };
+}
+// Un appui sur Tino passe aussi au jour du calendrier qu'il cache (ça ne fait que le choisir) — pas ailleurs : une tâche
+// ou une note s'ouvrirait par-dessus lui à chaque caresse (et les 5 appuis n'arriveraient plus jusqu'à lui) ; on touche à côté
+const mascotTapThrough = (el) => !el.closest("input, select, textarea, label, .pl-nav, .pl-hello, .mp-nav") && !!el.closest(".pl-cal");
 function refreshMascots() {
   if (mascots) return mascots.refresh();
   const layer = document.createElement("div");
   document.body.append(layer);
-  // un appui sur un personnage passe au calendrier en dessous, jamais aux boutons du mois ni à l'interrupteur
-  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, tapThrough: (el) => !!el.closest(".pl-cal"), lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines });
+  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines });
   syncTinoBubble();
   applyOutfit();
 }
@@ -876,11 +917,61 @@ function fillWardrobe(box) {
   });
 }
 
+// ---------- Jour / nuit et thème clair / sombre (réglages de CET appareil : ⚙ Settings → 🎨 Appearance) ----------
+// « Le jour » = du lever au coucher du soleil à Yverdon (par défaut), ou les heures choisies (« de 07:00 à 20:00 », peut
+// passer minuit). Il sert au thème « Auto » de l'interface ET au décor « Auto » (image de jour / de nuit) : les deux
+// changent en même temps. Thème forcé (toujours clair / toujours sombre) : le décor, lui, continue de suivre l'heure.
+// Thème clair = classe mp-light sur <html> (style.css, bloc à la fin ; le thème sombre reste celui de toujours).
+const THEMES = [["auto", "🌗 Auto"], ["light", "☀️ Always light"], ["dark", "🌙 Always dark"]];
+const minutesOf = (hm) => { const [h, m] = String(hm).split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+const dayHours = (dl) => (dl.mode === "hours" ? `☀️ ${dl.from} – 🌙 ${dl.to}` : `☀️ ${hhmm(dl.sun.rise)} – 🌙 ${hhmm(dl.sun.set)}`);
+function daylight(now = new Date()) {
+  const mode = store.get("dayMode", "sun"), from = store.get("dayFrom", "07:00"), to = store.get("dayTo", "20:00"), sun = sunTimes(now);
+  let day, edges; // edges : les prochains passages possibles (aujourd'hui et demain)
+  if (mode === "hours") {
+    const a = minutesOf(from), b = minutesOf(to), t = now.getHours() * 60 + now.getMinutes();
+    day = a === b || (a < b ? t >= a && t < b : t >= a || t < b);
+    edges = [0, 1].flatMap((k) => [a, b].map((m) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + k, 0, m)));
+  } else {
+    const tmr = sunTimes(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+    day = now >= sun.rise && now < sun.set;
+    edges = [sun.rise, sun.set, tmr.rise, tmr.set];
+  }
+  const next = edges.filter((d) => d > now).sort((x, y) => x - y)[0] ?? new Date(+now + 86400000);
+  return { day, next, mode, from, to, sun };
+}
+let themeTimer = 0;
+function applyTheme() {
+  clearTimeout(themeTimer);
+  const pref = store.get("theme", "auto"), dl = daylight(), light = pref === "light" || (pref === "auto" && dl.day);
+  document.documentElement.classList.toggle("mp-light", light);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#e6ebf7" : "#0e1230");
+  if (pref === "auto") themeTimer = setTimeout(applyTheme, Math.max(1000, Math.min(30 * 60000, dl.next - Date.now() + 1000)));
+}
+// Carte « 🎨 Appearance » de l'onglet Settings
+function fillLook(box) {
+  const pref = store.get("theme", "auto"), dl = daylight(), light = document.documentElement.classList.contains("mp-light");
+  box.innerHTML = `<div class="pl-legend">On this device only — ${esc(S.partner?.label ?? "the other")} chooses on theirs.</div>
+    <div class="pl-sub">Theme</div>
+    <span class="mp-seg">${THEMES.map(([k, l]) => `<button type="button" data-theme="${k}" aria-pressed="${k === pref}">${l}</button>`).join("")}</span>
+    <div class="pl-sub">Day time <span class="pl-legend">— Auto is light during the day, dark at night; the decor's day / night pictures follow it too</span></div>
+    <span class="mp-seg"><button type="button" data-daymode="sun" aria-pressed="${dl.mode === "sun"}">🌅 Sunrise → sunset</button><button type="button" data-daymode="hours" aria-pressed="${dl.mode === "hours"}">🕒 My hours</button></span>
+    ${dl.mode === "hours" ? `<span class="mp-row mp-dayhours"><label>☀️ Day from <input type="time" name="dfrom" value="${dl.from}"></label><label>🌙 night from <input type="time" name="dto" value="${dl.to}"></label></span>`
+      : `<div class="pl-legend">Today in Yverdon: sunrise ${hhmm(dl.sun.rise)}, sunset ${hhmm(dl.sun.set)}.</div>`}
+    <div class="pl-legend mp-lookstate">Now: ${light ? "☀️ light" : "🌙 dark"}${pref === "auto" ? ` — ${dl.day ? "🌙 dark" : "☀️ light"} from ${hhmm(dl.next)}${dl.next.getDate() !== new Date().getDate() ? " tomorrow" : ""}` : ""}.</div>`;
+  const redo = () => { applyTheme(); applyDecor(); fillLook(box); };
+  box.querySelectorAll("[data-theme]").forEach((b) => b.addEventListener("click", () => { store.set("theme", b.dataset.theme); redo(); }));
+  box.querySelectorAll("[data-daymode]").forEach((b) => b.addEventListener("click", () => { store.set("dayMode", b.dataset.daymode); redo(); }));
+  for (const [name, key] of [["dfrom", "dayFrom"], ["dto", "dayTo"]])
+    box.querySelector(`[name=${name}]`)?.addEventListener("change", (ev) => { if (/^\d\d:\d\d$/.test(ev.target.value)) { store.set(key, ev.target.value); redo(); } });
+}
+
 // ---------- Décor dessiné (supabase/16_decor.sql) ----------
 // Une image par saison × format (phone = écran en hauteur, desktop = en largeur) × moment (day / night), commune aux deux,
 // posée en fond plein écran (body::before, ancré en haut au centre). Ce qui est montré dépend de CET appareil : saison
-// « auto » = celle du jour, moment « auto » = soleil levé ou couché (Yverdon) ; s'il manque l'image voulue, la plus proche
-// qui existe (même format d'abord, saison la plus proche, autre moment), sinon le fond d'origine.
+// « auto » = celle du jour, moment « auto » = le jour de daylight() (soleil ou heures choisies, comme le thème) ; s'il manque
+// l'image voulue, la plus proche qui existe (saison la plus proche, puis autre moment ; dans chaque cas d'abord ce format,
+// sinon l'autre, ADAPTÉ à l'écran : un seul dessin suffit pour le téléphone et l'ordinateur), sinon le fond d'origine.
 let unsubDecor = null, decorShown = null, decorTimer = 0;
 const decorUrls = new Map(); // fichier → adresse locale de l'image
 const portrait = matchMedia("(orientation: portrait)");
@@ -897,9 +988,11 @@ function seasonOf(d) {
   return md >= 1221 || md < 320 ? "winter" : md < 621 ? "spring" : md < 923 ? "summer" : "autumn";
 }
 // Lever / coucher du soleil à Yverdon (équation du lever, ±3 min ; vérifié avec sunrise-sunset.org, été / hiver / changement d'heure)
+// n = ⌈jour julien − 2451545 + 0,0008⌉ (corrigé le 2026-10-07 : l'ancien arrondi donnait le lever et le coucher de LA VEILLE,
+// date comprise — à quelques minutes près les mêmes heures, mais le décor « Auto » restait en version nuit toute la journée)
 function sunTimes(d, lat = 46.78, lon = 6.64) {
   const R = Math.PI / 180, noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12);
-  const J = Math.round(noon.getTime() / 86400000 + 2440587.5 - 2451545 + 0.0008 - 0.5) - lon / 360;
+  const J = Math.ceil(noon.getTime() / 86400000 + 2440587.5 - 2451545 + 0.0008) - lon / 360;
   const M = (357.5291 + 0.98560028 * J) % 360;
   const L = (M + 1.9148 * Math.sin(M * R) + 0.02 * Math.sin(2 * M * R) + 0.0003 * Math.sin(3 * M * R) + 282.9372) % 360;
   const T = 2451545 + J + 0.0053 * Math.sin(M * R) - 0.0069 * Math.sin(2 * L * R);
@@ -909,19 +1002,21 @@ function sunTimes(d, lat = 46.78, lon = 6.64) {
   return { rise: at(T - w / 360), set: at(T + w / 360) };
 }
 function decorWanted(now = new Date()) {
-  const season = store.get("decorSeason", "auto"), light = store.get("decorLight", "auto"), sun = sunTimes(now);
+  const season = store.get("decorSeason", "auto"), light = store.get("decorLight", "auto"), dl = daylight(now);
   return {
     season: season === "auto" ? seasonOf(now) : season, autoSeason: season === "auto",
-    light: light === "auto" ? (now >= sun.rise && now < sun.set ? "day" : "night") : light, autoLight: light === "auto",
-    layout: portrait.matches ? "phone" : "desktop", sun,
+    light: light === "auto" ? (dl.day ? "day" : "night") : light, autoLight: light === "auto",
+    layout: portrait.matches ? "phone" : "desktop", dl,
   };
 }
+// Le format compte le moins : le dessin de la bonne saison et du bon moment, même fait pour l'autre écran (il est adapté),
+// passe avant une autre saison ou l'autre moment
 function decorPick(w) {
   const order = SEASONS.map((x) => x[0]), i = order.indexOf(w.season);
   const seasons = [0, 1, -1, 2].map((k) => order[(i + k + 4) % 4]); // la saison voulue, la suivante, la précédente, l'opposée
-  for (const layout of [w.layout, w.layout === "phone" ? "desktop" : "phone"])
-    for (const season of seasons)
-      for (const light of [w.light, w.light === "day" ? "night" : "day"]) {
+  for (const season of seasons)
+    for (const light of [w.light, w.light === "day" ? "night" : "day"])
+      for (const layout of [w.layout, w.layout === "phone" ? "desktop" : "phone"]) {
         const d = S.decor.find((x) => x.season === season && x.layout === layout && x.light === light);
         if (d) return d;
       }
@@ -944,22 +1039,49 @@ async function decorUrl(path) {
   if (!decorUrls.has(path)) decorUrls.set(path, URL.createObjectURL(await mediaBlob(path)));
   return decorUrls.get(path);
 }
-// Montre l'image choisie ; se refait tout seul au lever / coucher du soleil (au plus tard toutes les 30 min)
+// Dessin de téléphone (en hauteur) sur un écran en largeur : posé au centre à la hauteur de l'image (la plage et la mer
+// restent à la même hauteur que sur le modèle « ordinateur »), les côtés remplis par le même dessin étiré en largeur et très
+// flou (réduit à 32 × 18 puis agrandi : ctx.filter n'est pas fiable sur iPhone), bords du dessin fondus. Fait une fois par
+// image. (Dessin d'ordinateur sur un téléphone : `cover` suffit — la plage reste en haut, on voit le milieu.)
+const decorWide = new Map(); // fichier → adresse de l'image adaptée
+async function decorWideUrl(path) {
+  if (decorWide.has(path)) return decorWide.get(path);
+  const img = await loadImg(await decorUrl(path));
+  const [W, H] = DECOR_SIZE.desktop, canvas = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+  const out = canvas(W, H), g = out.getContext("2d");
+  let blur = img;
+  for (const [w, h] of [[256, 144], [64, 36], [32, 18]]) { const c = canvas(w, h); c.getContext("2d").drawImage(blur, 0, 0, w, h); blur = c; } // par paliers : pas de crénelage
+  g.imageSmoothingEnabled = true;
+  g.drawImage(blur, 0, 0, W, H);
+  const w = Math.round(H * img.naturalWidth / img.naturalHeight), x = Math.round((W - w) / 2), sharp = canvas(w, H), s = sharp.getContext("2d");
+  s.drawImage(img, 0, 0, w, H);
+  const fade = s.createLinearGradient(0, 0, w, 0), f = Math.min(0.08, 60 / w);
+  fade.addColorStop(0, "rgba(0,0,0,0)"); fade.addColorStop(f, "#000"); fade.addColorStop(1 - f, "#000"); fade.addColorStop(1, "rgba(0,0,0,0)");
+  s.globalCompositeOperation = "destination-in";
+  s.fillStyle = fade; s.fillRect(0, 0, w, H);
+  g.drawImage(sharp, x, 0);
+  const blob = await new Promise((ok) => out.toBlob(ok, "image/jpeg", 0.86));
+  if (!blob) throw new Error("couldn't adapt the picture");
+  const url = URL.createObjectURL(blob);
+  decorWide.set(path, url);
+  return url;
+}
+// Montre l'image choisie ; se refait tout seul au passage jour / nuit (au plus tard toutes les 30 min)
 async function applyDecor() {
   clearTimeout(decorTimer);
   const w = decorWanted(), d = S.user ? decorPick(w) : null;
-  const next = [w.sun.rise, w.sun.set].map((t) => t - Date.now()).filter((ms) => ms > 0);
-  decorTimer = setTimeout(applyDecor, Math.min(30 * 60000, ...next.map((ms) => ms + 2000)));
+  decorTimer = setTimeout(applyDecor, Math.max(1000, Math.min(30 * 60000, w.dl.next - Date.now() + 2000)));
+  const wide = !!d && d.layout === "phone" && w.layout === "desktop"; // à adapter (voir decorWideUrl)
   const was = S.decorNow;
   S.decorNow = d ? { ...d, wanted: w } : null;
   const box = document.querySelector(".mp-decor"); // carte ouverte : « On screen » à jour (sauf pendant un envoi)
   if (box && !box.querySelector(".mp-busy") && JSON.stringify(was) !== JSON.stringify(S.decorNow)) fillDecor(box);
-  const key = d?.path ?? "";
+  const key = d ? d.path + (wide ? "|wide" : "") : ""; // (même dessin, écran tourné : l'autre version)
   if (key === decorShown) return;
   decorShown = key;
   if (!d) { document.body.classList.remove("mp-decor-on"); document.body.style.removeProperty("--mp-decor"); return; }
   try {
-    const url = await decorUrl(d.path);
+    const url = wide ? await decorWideUrl(d.path) : await decorUrl(d.path);
     await Promise.race([loadImg(url).catch(() => {}), new Promise((ok) => setTimeout(ok, 4000))]); // prête avant d'être posée (pas d'écran vide)
     if (decorShown !== key) return; // une autre image a été choisie entre-temps
     document.body.style.setProperty("--mp-decor", `url("${url}")`);
@@ -969,7 +1091,7 @@ async function applyDecor() {
 // Images qui n'existent plus : retirées de l'appareil (seulement après une liste fraîche)
 async function pruneDecor() {
   const keep = new Set(S.decor.map((d) => d.path));
-  for (const [p, u] of decorUrls) if (!keep.has(p)) { URL.revokeObjectURL(u); decorUrls.delete(p); }
+  for (const m of [decorUrls, decorWide]) for (const [p, u] of m) if (!keep.has(p)) { URL.revokeObjectURL(u); m.delete(p); }
   if (!("caches" in window)) return;
   const cache = await caches.open(MEDIA).catch(() => null);
   for (const r of (await cache?.keys()) ?? []) { const m = r.url.match(/__media\/(decor\/.+)$/); if (m && !keep.has(m[1])) await cache.delete(r); }
@@ -1032,16 +1154,17 @@ function fillDecor(box) {
   const why = !now ? "" : [
     now.season !== now.wanted.season ? `no ${decorLabel(SEASONS, now.wanted.season).split(" ")[1]} drawing yet` : "",
     now.light !== now.wanted.light ? `no ${now.wanted.light} version yet` : "",
-    now.layout !== now.wanted.layout ? `no ${now.wanted.layout === "phone" ? "phone" : "computer"} version yet` : "",
+    now.layout !== now.wanted.layout ? (now.layout === "phone" ? "the 📱 phone picture, adapted to this wide screen" : "the 💻 computer picture — a phone shows its middle") : "",
   ].filter(Boolean).join(", ");
-  box.innerHTML = `<div class="pl-legend">Draw the background yourselves on a tablet: download a template, draw on your own layers, <b>hide the template</b>, then export the whole picture (PNG or JPG). One picture per season, for the day ☀️ and the night 🌙 — tall for phones, wide for computers. Shared: ${esc(P?.mark ?? "")} ${esc(P?.label ?? "the other")} sees the same decor.</div>
+  box.innerHTML = `<div class="pl-legend">Draw the background yourselves on a tablet: download a template, draw on your own layers, <b>hide the template</b>, then export the whole picture (PNG or JPG). One picture per season, for the day ☀️ and the night 🌙 — tall for phones, wide for computers. <b>One of the two is enough</b>: a phone picture is adapted to computers (centred, blurred sides), and a phone shows the middle of a computer picture. Shared: ${esc(P?.mark ?? "")} ${esc(P?.label ?? "the other")} sees the same decor.</div>
     <span class="mp-row"><button type="button" data-tpl="phone">⬇ Phone template</button><button type="button" data-tpl="desktop">⬇ Computer template</button></span>
     <span class="mp-seg mp-decor-seasons">${SEASONS.map(([k, l]) => `<button type="button" data-season="${k}" aria-pressed="${k === sel}">${l}${S.decor.some((d) => d.season === k) ? " ●" : ""}</button>`).join("")}</span>
     <div class="mp-decor-grid">${LAYOUTS.map(([lay]) => LIGHTS.map(([li]) => tile(lay, li)).join("")).join("")}</div>
     <div class="pl-legend mp-dstatus"></div>
     <div class="mp-decor-device"><b>On this device</b>
       <label>Season <select name="dseason"><option value="auto">Auto (now: ${decorLabel(SEASONS, seasonOf(new Date()))})</option>${SEASONS.map(([k, l]) => `<option value="${k}">Always ${l}</option>`).join("")}</select></label>
-      <label>Day / night <select name="dlight"><option value="auto">Auto (☀️ ${hhmm(w.sun.rise)} – 🌙 ${hhmm(w.sun.set)})</option><option value="day">Always ☀️ day</option><option value="night">Always 🌙 night</option></select></label>
+      <label>Day / night <select name="dlight"><option value="auto">Auto (${dayHours(w.dl)})</option><option value="day">Always ☀️ day</option><option value="night">Always 🌙 night</option></select></label>
+      <div class="pl-legend">Auto uses the same day hours as the light / dark theme: <a href="#settings">⚙ Settings → Appearance</a>.</div>
       <div class="pl-legend">${now ? `On screen: ${decorLabel(SEASONS, now.season)} · ${decorLabel(LIGHTS, now.light)} · ${decorLabel(LAYOUTS, now.layout)}${why ? ` (${why})` : ""}` : "On screen: the original background (no drawing yet)"}</div></div>`;
   box.querySelector("[name=dseason]").value = store.get("decorSeason", "auto");
   box.querySelector("[name=dlight]").value = store.get("decorLight", "auto");
@@ -1375,6 +1498,7 @@ function showTab() {
   else if (t === "tino") renderTinoPane(panes.tino);
   else renderSettings(panes.settings);
   scrollTo(0, 0);
+  if (t !== "calendar") mascots?.refresh(); // Tino vient dans Notes, disparaît dans Tino et Settings (au calendrier : align())
 }
 
 // ---------- Onglet 🎣 Tino : tout ce qui le personnalise (le jeu viendra ici) ----------
@@ -1389,10 +1513,11 @@ function renderTinoPane(pane) {
   fillDecor(pane.querySelector(".mp-decor"));
 }
 
-// ---------- Onglet ⚙ Settings : compte, notifications, widget, mot de passe ----------
+// ---------- Onglet ⚙ Settings : apparence (cet appareil), compte, notifications, widget, mot de passe ----------
 function renderSettings(pane) {
   const P = S.partner;
-  pane.innerHTML = `<form class="pl-editor-card mp-pane-card"><h4>${esc(S.me.mark)} ${esc(S.me.label)}</h4>
+  pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><h4>🎨 Appearance</h4><div class="mp-look"></div></div>
+    <form class="pl-editor-card mp-pane-card"><h4>${esc(S.me.mark)} ${esc(S.me.label)}</h4>
     <p class="mp-sub">Signed in as ${esc(S.user.email)}</p>
     <h4>🔔 Notifications</h4>
     <div class="mp-notif">Checking…</div>
@@ -1411,6 +1536,7 @@ function renderSettings(pane) {
     if (await guard(() => db.changePassword(f.pw.value), "Couldn't change the password")) { f.pw.value = f.pw2.value = ""; toast("Password changed"); }
   });
   f.querySelector("[data-act=logout]").addEventListener("click", async () => { location.hash = ""; await logout(); });
+  fillLook(pane.querySelector(".mp-look"));
   fillNotif(f.querySelector(".mp-notif"));
   fillWidgets(f.querySelector(".mp-widgets"));
   f.notify?.addEventListener("change", async (ev) => {

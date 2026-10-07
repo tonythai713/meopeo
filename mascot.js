@@ -1,12 +1,15 @@
-// Petits personnages qui se promènent sur le calendrier : les bords des semaines leur servent de plateformes.
-// Indépendant du reste de l'app : app.js fournit un calque (position absolue au-dessus du calendrier) et la liste
-// des plateformes ; ce fichier dessine, anime et fait « réfléchir » chaque personnage.
+// Petits personnages qui se promènent sur la page : les bords des semaines du calendrier, le haut des cartes et des tâches
+// leur servent de plateformes. Indépendant du reste de l'app : app.js fournit un calque (posé sur la page), la liste des
+// plateformes (chacune avec une clé stable) et la partie visible de l'écran ; ce fichier dessine, anime et fait « réfléchir »
+// chaque personnage. Il ne va que sur des plateformes visibles, et si la page défile sans lui, il revient (action « drop »).
 // Chaque personnage = une entrée de KINDS (nom + dessin + taille) ; chaque mouvement = une entrée de ACTIONS.
+// Gestes : appui = petit saut + cœur ; 5 appuis = il s'énerve ; appui long = assis / debout ; frotter (glisser le doigt
+// ou la souris bouton enfoncé sur lui) = sa tête s'aplatit, puis rebondit quand on le lâche.
 
 const STYLE = `
 .ms-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .ms { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; will-change: transform;
-  -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+  -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; }
 .ms[hidden], .ms-bubble[hidden], .ms-bed[hidden], .ms-blanket[hidden] { display: none; }
 .ms-in { width: 100%; height: 100%; transform-origin: 50% 100%; }
 .ms svg { width: 100%; height: 100%; overflow: visible; display: block; }
@@ -25,6 +28,11 @@ const STYLE = `
 .ms-sleep .ms-zzz { animation: ms-zzz 2.6s ease-in-out infinite; }
 .ms-love .ms-heart { animation: ms-heart 1.1s ease-out; }
 @keyframes ms-zzz { 0% { opacity: 0; transform: translate(0, 4px); } 30%, 70% { opacity: 1; } 100% { opacity: 0; transform: translate(6px, -8px); } }
+.ms-bub circle { opacity: 0; }
+.ms-swim .ms-bub circle { animation: ms-bub 1.7s ease-in infinite; }
+.ms-swim .ms-bub circle:nth-child(2) { animation-delay: 0.6s; }
+.ms-swim .ms-bub circle:nth-child(3) { animation-delay: 1.1s; }
+@keyframes ms-bub { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 0.95; } 60% { transform: translate(3px, -16px); } 100% { opacity: 0; transform: translate(-1px, -28px); } }
 @keyframes ms-heart { 0% { opacity: 0; transform: translate(0, 6px) scale(0.6); } 25% { opacity: 1; transform: translate(0, -4px) scale(1.1); } 100% { opacity: 0; transform: translate(0, -18px) scale(1); } }
 .ms-bubble { position: absolute; left: 0; top: 0; max-width: 210px; padding: 6px 10px; border-radius: 12px; pointer-events: auto; cursor: pointer;
   background: #fffdf6; color: #1b1f45; font: 500 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; white-space: pre-wrap; overflow-wrap: anywhere;
@@ -70,8 +78,7 @@ function sealSvg() {
     <ellipse cx="50" cy="36" rx="32" ry="28.5" fill="${fur}" stroke="${line}" stroke-width="1.4"/>
     <path d="M30 13Q33 9 36 12M46 8Q50 5 54 8M64 12Q67 9 70 13" fill="none" stroke="#e3e7f1" stroke-width="1.2" stroke-linecap="round"/>
     <g class="ms-face">
-      <ellipse cx="27" cy="48" rx="5" ry="2.8" fill="#ffb8ca" opacity="0.45"/>
-      <ellipse cx="73" cy="48" rx="5" ry="2.8" fill="#ffb8ca" opacity="0.45"/>
+      <g class="ms-cheeks" opacity="0.45"><ellipse cx="27" cy="48" rx="5" ry="2.8" fill="#ffb8ca"/><ellipse cx="73" cy="48" rx="5" ry="2.8" fill="#ffb8ca"/></g>
       <path d="M29 41Q33.5 44 38 41M62 41Q66.5 44 71 41" fill="none" stroke="#2f3038" stroke-width="2.4" stroke-linecap="round"/>
       <path class="ms-brows" d="M28 33.5L38 37M72 33.5L62 37" fill="none" stroke="#2f3038" stroke-width="2.3" stroke-linecap="round"/>
       <ellipse cx="45" cy="48" rx="6.3" ry="5.3" fill="#5b5d68"/>
@@ -129,8 +136,9 @@ const BLANKET = `<svg viewBox="0 0 100 110" aria-hidden="true">
   ${[[20, 52], [42, 30], [60, 46], [32, 78], [56, 72], [68, 98], [14, 96], [42, 102]].map(([x, y]) => star(x, y, 4.6, "#ffe8a3")).join("")}
 </svg>`;
 
-// « z » et cœur : à part du corps, pour rester droits pendant une roulade ou couché sur le côté
+// « z », cœur, « 💢 » et bulles d'eau : à part du corps, pour rester droits pendant une roulade, couché ou en nageant
 const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
+  <g class="ms-bub-at"><g class="ms-bub" fill="rgba(200, 232, 255, 0.35)" stroke="#e6f5ff" stroke-width="1.1"><circle r="2.8"/><circle cx="4" cy="-1" r="1.9"/><circle cx="-2.5" cy="-2" r="1.5"/></g></g>
   <g class="ms-zzz-at"><g class="ms-zzz" fill="#d6e2ff" font-family="system-ui, sans-serif" font-weight="700"><text x="78" y="14" font-size="13">z</text><text x="88" y="3" font-size="10">z</text></g></g>
   <g class="ms-heart-at"><path class="ms-heart" d="M50 -2C47 -7 40 -5 41 0C42 4 50 9 50 9C50 9 58 4 59 0C60 -5 53 -7 50 -2Z" fill="#ff8fb3"/></g>
   <g class="ms-anger-at"><g class="ms-anger" style="transform-box: fill-box; transform-origin: center"><path d="M-7 -2Q-2 -2 -2 -7M2 -7Q2 -2 7 -2M7 2Q2 2 2 7M-2 7Q-2 2 -7 2" fill="none" stroke="#ff4d5e" stroke-width="2.6" stroke-linecap="round"/></g></g>
@@ -164,6 +172,13 @@ const SINK = 12;  // assis : il descend sur la ligne, les pieds pendent en desso
 const LIE = 85;   // couché sur le côté (degrés)
 const HOLD = 550; // appui long (ms) : il s'assoit et reste assis / il se relève
 const TEASE_TAPS = 5, TEASE_MS = 3000; // 5 appuis en 3 s : il s'énerve
+const RUB_MIN = 10;     // frotter : le doigt s'est éloigné d'au moins 10 px de son point de départ (sinon c'est un appui :
+                        // un doigt immobile « tremble » de 1 ou 2 px, on ne compte donc pas le chemin parcouru)
+const RUB_FULL = 3;     // … et de 3 fois sa taille (4 ou 5 petits allers-retours) pour que la tête soit toute plate
+const SWIM_IN = 0.75, SWIM_OUT = 0.7, SWIM_TILT = 75; // nage : plongeon, sortie (s) ; corps presque à l'horizontale (degrés)
+const REACH = 200;      // saut : au plus 200 px plus haut ou plus bas, sur une plateforme qui est au-dessus / au-dessous de lui
+const FOLLOW_MS = 200;  // la page a défilé et il n'est plus à l'écran : il revient 0,2 s après la fin du défilement
+const GRAVITY = 2600;   // il tombe du haut de l'écran (px/s²)
 
 // ---------- Les actions ----------
 // Une action = une entrée de ACTIONS ; en ajouter une = ajouter une entrée. Champs (tous facultatifs) :
@@ -209,14 +224,14 @@ const ACTIONS = {
       p.footL = -Math.max(0, Math.sin(ph)) * 3; p.footR = -Math.max(0, -Math.sin(ph)) * 3; // un pied puis l'autre
     },
   },
-  // Il saute sur la ligne de la semaine du dessus ou du dessous
+  // Il saute sur une plateforme proche, au-dessus ou au-dessous (ligne du calendrier, haut d'une carte ou d'une tâche)
   hop: {
-    weight: (m, ctx) => (ctx.plats.length > 1 ? 18 : 0),
+    weight: (m) => (m.reach().length ? 18 : 0),
     make(m) {
-      const P = m.eng.plats, up = m.p > 0 && (m.p === P.length - 1 || Math.random() < 0.5), p1 = m.p + (up ? -1 : 1);
-      return [{ type: "hop", p1, x1: clamp(m.x + rand(-50, 50), P[p1].x0, P[p1].x1) }];
+      const near = m.reach().sort((a, b) => Math.abs(a.y - m.y) - Math.abs(b.y - m.y)).slice(0, 3), P1 = pick(near);
+      return [{ type: "hop", p1: P1.key, x1: clamp(m.x + rand(-50, 50), P1.x0, P1.x1) }];
     },
-    start(m, a) { a.p0 = m.p; a.x0 = m.x; if (a.x1 !== a.x0) m.dir = a.x1 < a.x0 ? -1 : 1; },
+    start(m, a) { a.p0 = m.k; a.x0 = m.x; if (a.x1 !== a.x0) m.dir = a.x1 < a.x0 ? -1 : 1; },
     step(m, a) {
       const p0 = m.plat(a.p0), p1 = m.plat(a.p1);
       if (!p0 || !p1) return true;
@@ -225,7 +240,7 @@ const ACTIONS = {
       const s = Math.min(1, (a.t - CROUCH) / air);
       m.x = lerp(a.x0, a.x1, s);
       m.y = lerp(p0.y, p1.y, s) - 4 * (22 + Math.abs(p1.y - p0.y) * 0.35) * s * (1 - s);
-      if (s >= 1) { m.p = a.p1; m.y = p1.y; }
+      if (s >= 1) { m.k = a.p1; m.y = p1.y; }
       return a.t >= CROUCH + air + LAND;
     },
     look: facing,
@@ -258,9 +273,76 @@ const ACTIONS = {
     },
     busy: true,
   },
-  // Il va s'asseoir dans la case d'aujourd'hui
+  // Il nage dans une rangée du calendrier (tout le calendrier est « sous la mer » du décor) : petit plongeon, le corps presque
+  // à l'horizontale, il ondule en battant des nageoires (parfois une culbute), des bulles montent ; puis il se pose sur la ligne
+  // d'en dessous ou remonte sur celle du dessus. Rangée = celle juste au-dessus de sa ligne, ou celle d'en dessous tout en haut.
+  // Seulement sur les lignes du calendrier (champ `cal` des plateformes), et si la rangée est à l'écran.
+  // m.y = le point le plus bas de son corps (comme partout : render() le garde posé sur m.y quand il est tourné).
+  swim: {
+    weight: (m) => (!m.eng.night() && m.swimRow() ? 9 : 0),
+    make(m, me) {
+      const { top, bot } = m.swimRow(), dist = rand(70, 170) * (m.size / 40);
+      const room = { 1: me.x1 - m.x, "-1": m.x - me.x0 };
+      const dir = room[m.dir] >= dist * 0.6 || room[m.dir] >= room[-m.dir] ? m.dir : -m.dir;
+      return [{ type: "swim", top: top.key, bot: bot.key, dir, x1: clamp(m.x + dir * dist, me.x0, me.x1), land: Math.random() < 0.35 ? top.key : bot.key, flip: Math.random() < 0.3 }];
+    },
+    start(m, a) { a.p0 = m.k; a.x0 = m.x; m.dir = a.dir; a.T = Math.max(1.4, Math.abs(a.x1 - a.x0) / (38 * m.size / 40)); a.out = SWIM_IN + a.T; },
+    step(m, a) {
+      const P0 = m.plat(a.p0), Pt = m.plat(a.top), Pb = m.plat(a.bot), PL = m.plat(a.land), W = m.size;
+      if (!P0 || !Pt || !Pb || !PL) { a.wet = false; return true; }
+      const hi = Pt.y + 0.9 * W, lo = Pb.y - 2, mid = (hi + lo) / 2, amp = clamp((lo - hi) / 2, 0, 0.12 * W); // reste dans la rangée
+      const xs = clamp(a.x0 + a.dir * 0.3 * W, P0.x0, P0.x1);
+      if (a.leave && a.t < a.out) a.out = Math.max(a.t, SWIM_IN); // on l'appelle (message, appui long, sa case touchée…) : il sort
+      if (a.t < a.out) {
+        if (a.t < CROUCH) { m.y = P0.y; a.spin = 0; }
+        else if (a.t < SWIM_IN) { // plongeon : petit bond, il se met à l'horizontale
+          const s = (a.t - CROUCH) / (SWIM_IN - CROUCH), e = smooth(s);
+          m.x = lerp(a.x0, xs, e);
+          m.y = lerp(P0.y, mid, e) - 4 * (P0 === Pb ? 0.15 : 0.35) * W * s * (1 - s);
+          a.spin = a.dir * SWIM_TILT * e; a.wet = s > 0.5;
+        } else { // il nage en ondulant
+          const u = clamp((a.t - SWIM_IN) / a.T, 0, 1), w = a.t - SWIM_IN;
+          m.x = lerp(xs, a.x1, u * 0.85 + smooth(u) * 0.15);
+          m.y = mid + amp * Math.sin(w * 4.2) * Math.min(1, w / 0.5);
+          a.spin = a.dir * (SWIM_TILT + 8 * Math.sin(w * 4.2 + 1)) + (a.flip ? a.dir * 360 * smooth(clamp((u - 0.4) / 0.25, 0, 1)) : 0);
+          a.wet = true;
+        }
+        a.xo = m.x; a.yo = m.y; a.so = a.spin; // point de départ de la sortie
+        return false;
+      }
+      // Sortie : il se redresse et se pose sur la ligne d'en dessous, ou saute sur celle du dessus
+      const k = clamp((a.t - a.out) / SWIM_OUT, 0, 1), e = smooth(k), so = ((a.so % 360) + 540) % 360 - 180;
+      a.spin = lerp(so, 0, e);
+      m.x = clamp(a.xo + a.dir * 0.25 * W * e, PL.x0, PL.x1);
+      m.y = lerp(a.yo, PL.y, e) - (PL.y < a.yo ? 0.8 * W * Math.sin(Math.PI * k) : 0);
+      a.wet = k < 0.5;
+      if (k >= 1) { m.k = a.land; m.y = PL.y; }
+      return a.t >= a.out + SWIM_OUT + LAND;
+    },
+    look: (m, a) => (a.t < CROUCH || a.t > a.out + SWIM_OUT ? m.dir * LOOK : 0),
+    pose(m, a, p) {
+      p.spin = a.spin ?? 0;
+      if (a.t < CROUCH) { const k = a.t / CROUCH; p.sy = 1 - 0.16 * k; p.sx = 1 + 0.1 * k; p.armL = p.armR = -10; return; }
+      if (a.t < a.out + SWIM_OUT) { // brasse : une nageoire monte quand l'autre descend, les pieds battent
+        const c = m.clock, k = a.t < SWIM_IN ? smooth((a.t - CROUCH) / (SWIM_IN - CROUCH)) : a.t > a.out ? 1 - smooth((a.t - a.out) / SWIM_OUT) : 1;
+        p.armL = p.armR = 38 * Math.sin(c * 7) * k;
+        p.footL = 2.5 * Math.sin(c * 9) * k; p.footR = -p.footL;
+        p.head = 5 * Math.sin(c * 3.5) * k;
+        p.sy = 1 + 0.035 * Math.sin(c * 7) * k; p.sx = 1 - 0.02 * Math.sin(c * 7) * k;
+        return;
+      }
+      const k = 1 - Math.min(1, (a.t - a.out - SWIM_OUT) / LAND); p.sy = 1 - 0.16 * k; p.sx = 1 + 0.12 * k; // réception
+    },
+    busy: true,
+  },
+  // On lui frotte la tête : il s'arrête, savoure, les nageoires un peu levées (la tête aplatie est dans render())
+  pet: {
+    step: (m) => !m.rubbing() && m.clock - m.rubT > 0.8,
+    pose(m, a, p) { const c = m.clock; p.armL = 22 + 8 * Math.sin(c * 5); p.armR = -(22 + 8 * Math.sin(c * 5 + 1)); p.rot = 3 * Math.sin(c * 2.5); },
+  },
+  // Il va s'asseoir dans la case d'aujourd'hui (si elle est à l'écran)
   today: {
-    weight: (m, ctx) => (ctx.today ? 10 : 0),
+    weight: (m, ctx) => (ctx.today && m.eng.visible(m.plat(ctx.today.k)) ? 10 : 0),
     make: (m, me, ctx) => [...m.pathTo(ctx.today), { type: "sit", dur: rand(5, 9) }],
   },
   // Assis sur la ligne, les pieds qui pendent
@@ -303,7 +385,7 @@ const ACTIONS = {
   nap: {
     weight: () => 6,
     make: () => [{ type: "nap", dur: rand(6, 11) }],
-    start(m, a) { m.side = a.side ?? pick([-1, 1]); if (a.bed) m.bedAt = { p: m.p, x: m.x }; },
+    start(m, a) { m.side = a.side ?? pick([-1, 1]); if (a.bed) m.bedAt = { k: m.k, x: m.x }; },
     step: untilMorning,
     lie: true, zzz: true,
   },
@@ -336,17 +418,18 @@ const ACTIONS = {
   fly: {
     start(m, a) {
       const p0 = m.plat(), p1 = m.plat(a.p1) ?? p0, d = Math.hypot(a.x1 - m.x, p1.y - p0.y);
-      a.p0 = m.p; a.x0 = m.x; a.F = 0.9 + d / 500; a.h = 90 + d * 0.3;
+      a.p0 = m.k; a.x0 = m.x; a.F = 0.9 + d / 500; a.h = 90 + d * 0.3;
       if (a.x1 !== a.x0) m.dir = a.x1 < a.x0 ? -1 : 1;
     },
     step(m, a) {
       const p0 = m.plat(a.p0), p1 = m.plat(a.p1);
       if (!p0 || !p1) return true;
       if (a.t < TAKEOFF) { m.y = p0.y; return false; }
-      const s = smooth(Math.min(1, (a.t - TAKEOFF) / a.F)), cx = (a.x0 + a.x1) / 2, cy = Math.min(p0.y, p1.y) - a.h;
+      const low = Math.min(p0.y, p1.y), cy = Math.min(low - 20, Math.max(low - a.h, m.eng.v.top + m.size * 1.6)); // sans sortir de l'écran par le haut
+      const s = smooth(Math.min(1, (a.t - TAKEOFF) / a.F)), cx = (a.x0 + a.x1) / 2;
       m.x = (1 - s) * (1 - s) * a.x0 + 2 * (1 - s) * s * cx + s * s * a.x1;
       m.y = (1 - s) * (1 - s) * p0.y + 2 * (1 - s) * s * cy + s * s * p1.y;
-      if (s >= 1) { m.p = a.p1; m.y = p1.y; }
+      if (s >= 1) { m.k = a.p1; m.y = p1.y; }
       return a.t >= TAKEOFF + a.F + LAND;
     },
     look: facing,
@@ -361,8 +444,44 @@ const ACTIONS = {
     },
     busy: true,
   },
+  // De temps en temps, il s'envole vers un autre endroit de l'écran (sur ordinateur : l'autre colonne, sinon inatteignable)
+  travel: {
+    weight: (m) => (m.eng.plats.filter((q) => q.key !== m.k && m.eng.visible(q)).length ? 6 : 0),
+    make: (m) => [{ type: "fly", ...m.flyTarget() }],
+  },
+  // La page a défilé et il n'était plus à l'écran : il revient — il tombe du haut de l'écran (on est descendu dans la page)
+  // ou saute depuis le bas (on est remonté), sur une plateforme visible. dropIn() le lance (il était invisible : on coupe tout).
+  drop: {
+    start(m, a) {
+      const P = m.plat(a.p1), v = m.eng.v;
+      if (!P) { a.T = 0; return; }
+      m.k = a.p1; m.x = a.x1;
+      a.y0 = a.from === "top" ? Math.min(v.top - 2, P.y - m.size) : Math.max(v.bottom + m.size * 1.1, P.y + m.size);
+      a.T = a.from === "top" ? Math.sqrt((2 * (P.y - a.y0)) / GRAVITY) : 0.55 + (a.y0 - P.y) / 1800;
+      a.h = m.size * 0.7; // en sautant depuis le bas : il monte un peu plus haut que la plateforme, puis s'y pose
+    },
+    step(m, a) {
+      const P = m.plat(a.p1);
+      if (!P) return true;
+      const s = a.T ? clamp(a.t / a.T, 0, 1) : 1;
+      if (a.from === "top") m.y = lerp(a.y0, P.y, s * s); // chute qui accélère
+      else if (s < 0.72) { const u = s / 0.72; m.y = lerp(a.y0, P.y - a.h, 1 - (1 - u) * (1 - u)); }
+      else { const u = (s - 0.72) / 0.28; m.y = lerp(P.y - a.h, P.y, u * u); }
+      return a.t >= a.T + LAND;
+    },
+    look: () => 0,
+    pose(m, a, p) {
+      if (a.t < a.T) { // en l'air : nageoires en haut qui battent, pieds qui pendent
+        const c = m.clock;
+        p.armL = 75 + 25 * Math.sin(c * 22); p.armR = -(75 + 25 * Math.sin(c * 22 + 0.6)); p.footL = p.footR = 2.5; p.sy = 1.06; p.sx = 0.95;
+        return;
+      }
+      const k = 1 - Math.min(1, (a.t - a.T) / LAND); p.sy = 1 - 0.22 * k; p.sx = 1 + 0.15 * k; // réception
+    },
+    busy: true,
+  },
 };
-const CALM = ["idle", "sit", "wave"]; // quand il a un message à dire, il reste là pour qu'on puisse le lire
+const CALM =["idle", "sit", "wave"]; // quand il a un message à dire, il reste là pour qu'on puisse le lire
 
 class Mascot {
   constructor(eng, def) {
@@ -372,11 +491,12 @@ class Mascot {
     this.el = document.createElement("div");
     this.el.className = "ms";
     this.el.style.width = this.el.style.height = def.size + "px";
-    this.el.title = `${def.name} · tap to pet, hold to make ${def.name} sit or stand`;
+    this.el.title = `${def.name} · tap to pet, rub to squish his head, hold to make ${def.name} sit or stand`;
     this.el.setAttribute("aria-label", def.name);
+    this.el.mascot = this; // (pour les essais depuis la console : document.querySelector(".ms").mascot)
     this.el.innerHTML = `<div class="ms-in">${def.svg()}</div>${FX}`;
     this.inner = this.el.firstChild;
-    for (const k of ["head", "face", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    for (const k of ["head", "face", "cheeks", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "bub-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
     this.taps = [];
     if (eng.outfit) this.wear(eng.outfit);
     // Lit (derrière lui) et couverture (devant lui) : seulement la nuit, quand il dort dans la case d'aujourd'hui
@@ -386,35 +506,89 @@ class Mascot {
     this.blanketEl = document.createElement("div");
     this.blanketEl.className = "ms-blanket";
     this.blanketEl.innerHTML = BLANKET;
-    this.p = 0; this.x = 0; this.y = 0; this.dir = 1; this.side = 1; this.clock = rand(0, 10);
+    this.k = null; this.x = 0; this.y = 0; this.dir = 1; // k : la clé de la plateforme où il est (voir mountMascots) this.side = 1; this.clock = rand(0, 10);
     this.look = 0; this.gaze = 0; this.sink = 0; this.lie = 0; this.stay = false; this.bubble = null; this.bedK = 0; this.bedAt = null;
     this.act = null; this.plan = [];
+    // tête aplatie : flat (0 = normale, 1 = toute plate, < 0 = étirée en rebondissant), press = ce que le frottement demande
+    this.flat = 0; this.flatV = 0; this.press = 0; this.rubT = -9; this.rubbed = false; this.down = null; this.petT = 0; this.cheekK = -1;
     this.el.addEventListener("click", (ev) => this.tap(ev));
     // appui long → assis / debout (sans menu « copier l'image » du téléphone)
     this.el.addEventListener("contextmenu", (ev) => ev.preventDefault());
-    this.el.addEventListener("pointerdown", () => {
+    this.el.addEventListener("pointerdown", (ev) => {
       clearTimeout(this.hold);
       this.held = false;
+      this.rubbed = false;
+      this.down = { id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, x: ev.clientX, y: ev.clientY };
+      try { this.el.setPointerCapture(ev.pointerId); } catch {} // le frottement continue même si le doigt sort de lui
       this.hold = setTimeout(() => { this.hold = 0; this.held = true; this.toggleStay(); }, HOLD);
     });
-    for (const t of ["pointerup", "pointerleave", "pointercancel"]) this.el.addEventListener(t, () => clearTimeout(this.hold));
+    this.el.addEventListener("pointermove", (ev) => this.rub(ev));
+    for (const t of ["pointerup", "pointerleave", "pointercancel", "lostpointercapture"]) this.el.addEventListener(t, () => { clearTimeout(this.hold); this.down = null; });
   }
 
-  plat(i = this.p) { return this.eng.plats[i]; }
+  plat(k = this.k) { return this.eng.byKey.get(k); }
+  // Plateformes où il peut sauter d'ici : à l'écran, au-dessus ou au-dessous de lui (elles se chevauchent en largeur), pas trop loin
+  reach(k = this.k) {
+    const a = this.plat(k);
+    if (!a) return [];
+    return this.eng.plats.filter((b) => b !== a && this.eng.visible(b) && Math.abs(b.y - a.y) > 8 && Math.abs(b.y - a.y) <= REACH && b.x0 <= a.x1 + 30 && b.x1 >= a.x0 - 30);
+  }
+  // Nage : la rangée du calendrier entre deux lignes (celle au-dessus de sa ligne, ou en dessous tout en haut), à l'écran
+  swimRow() {
+    const P = this.plat();
+    if (P?.cal == null) return null;
+    const c = P.cal > 0 ? P.cal - 1 : 0, line = (n) => this.eng.plats.find((q) => q.cal === n), top = line(c), bot = line(c + 1);
+    return top && bot && top.y >= this.eng.v.top && this.eng.visible(bot) ? { top, bot } : null;
+  }
+  // Où s'envoler : une plateforme à l'écran, plutôt loin d'ici
+  flyTarget() {
+    const V = this.eng.plats.filter((q) => this.eng.visible(q));
+    if (!V.length) return { p1: this.k, x1: this.x };
+    let best = null;
+    for (let i = 0; i < 8; i++) {
+      const P = pick(V), x1 = rand(P.x0, P.x1), d = Math.hypot(x1 - this.x, P.y - this.y);
+      if (!best || d > best.d) best = { p1: P.key, x1, d };
+      if (d > 120 && P.key !== this.k) break;
+    }
+    return { p1: best.p1, x1: best.x1 };
+  }
+  // Il n'est plus à l'écran (la page a défilé) : il revient sur la plateforme visible la plus proche du bord d'où il arrive
+  dropIn(from) {
+    const V = this.eng.plats.filter((q) => this.eng.visible(q));
+    if (!V.length) return false;
+    const P = from === "top" ? V[0] : V[V.length - 1];
+    this.act = { type: "drop", p1: P.key, x1: clamp(this.x, P.x0, P.x1), from };
+    this.plan = []; this.bedAt = null; this.sink = this.lie = 0;
+    return true;
+  }
+  // Première apparition (ou autre onglet) : dans la case d'aujourd'hui si elle est à l'écran, sinon il tombe du haut de l'écran
+  place(i = 0) {
+    const eng = this.eng, t = eng.today, T = t && this.plat(t.k);
+    this.act = null; this.plan = []; this.placed = true; this.bedAt = null;
+    if (T && eng.visible(T)) { this.k = t.k; this.x = clamp(t.x + i * 30, T.x0, T.x1); this.y = T.y; this.greet(); return; }
+    const P = eng.plats[0];
+    this.k = P.key; this.x = rand(P.x0, P.x1); this.y = P.y;
+    if (this.dropIn("top")) this.x = this.act.x1;
+  }
   rollDist() { return Math.PI * 0.72 * this.size; } // distance d'un tour complet (il roule sans glisser)
   busy() { return !!ACTIONS[this.act?.type]?.busy; }
-  // Fait faire une action tout de suite (ou juste après celle en cours si elle ne s'interrompt pas)
-  now(steps) { if (this.busy()) this.plan = steps; else { this.plan = steps.slice(1); this.act = steps[0]; } }
+  // Fait faire une action tout de suite (ou juste après celle en cours si elle ne s'interrompt pas ; s'il nage, il sort de l'eau)
+  now(steps) {
+    if (!this.busy()) { this.plan = steps.slice(1); this.act = steps[0]; return; }
+    this.plan = steps;
+    if (this.act.type === "swim") this.act.leave = true;
+  }
 
   // Touché : il saute de joie (et ferme son message)… et le toucher passe quand même au calendrier en dessous
   tap(ev) {
     ev.stopPropagation();
     if (this.held) { this.held = false; return; } // c'était un appui long
+    if (this.rubbed) { this.rubbed = false; return; } // on l'a frotté (la souris envoie quand même un « clic »)
     if (this.bubble?.sticky) this.hush();
     const t = performance.now();
     this.taps = [...this.taps.filter((x) => t - x < TEASE_MS), t];
     if (this.taps.length >= TEASE_TAPS) { this.taps = []; this.grumble(); } // trop c'est trop
-    else { this.now([{ type: "react" }]); this.love(); }
+    else { if (this.act?.type !== "swim") this.now([{ type: "react" }]); this.love(); } // dans l'eau : juste un cœur, il continue
     this.el.style.pointerEvents = "none";
     const under = document.elementFromPoint(ev.clientX, ev.clientY);
     this.el.style.pointerEvents = "";
@@ -430,6 +604,26 @@ class Mascot {
     this.flower.style.display = o.head && o.hideFlower ? "none" : ""; // un chapeau peut remplacer la fleur
   }
 
+  // Le doigt (ou la souris, bouton enfoncé) glisse sur lui : on lui frotte la tête, elle s'aplatit petit à petit
+  rub(ev) {
+    const d = this.down;
+    if (!d || d.id !== ev.pointerId) return;
+    const step = Math.hypot(ev.clientX - d.x, ev.clientY - d.y);
+    d.x = ev.clientX; d.y = ev.clientY;
+    if (!this.rubbed && Math.hypot(d.x - d.x0, d.y - d.y0) < RUB_MIN) return; // le doigt qui tremble pendant un appui
+    if (!this.rubbed) {
+      this.rubbed = true;
+      clearTimeout(this.hold); // pas d'appui long pendant qu'on le frotte
+      this.press = Math.max(0, this.flat);
+      this.petT = 0.7; // premier cœur bientôt
+      // il s'arrête pour en profiter (pas s'il saute, roule, vole ou nage : seule sa tête s'aplatit ; assis ou endormi, il le reste)
+      if (!this.busy() && !this.stay && !["sit", "sleep", "nap", "pet"].includes(this.act?.type)) this.now([{ type: "pet" }]);
+    }
+    this.press = Math.min(1, this.press + step / (this.size * RUB_FULL));
+    this.rubT = this.clock;
+  }
+  rubbing() { return this.rubbed && !!this.down; }
+
   love() {
     this.el.classList.remove("ms-love");
     void this.el.offsetWidth;
@@ -444,8 +638,10 @@ class Mascot {
       this.lastGrumble = pick(pool);
       this.say(this.lastGrumble, { ms: 3800 });
     }
+    const after = this.stay ? [{ type: "sit", dur: Infinity }] : [];
+    if (this.act?.type === "swim") { this.act.leave = true; this.plan = [{ type: "angry", dur: 2.6 }, ...after]; return; } // il sort de l'eau, puis râle
     this.act = { type: "angry", dur: 2.6 }; // tout de suite, même s'il était occupé
-    this.plan = this.stay ? [{ type: "sit", dur: Infinity }] : [];
+    this.plan = after;
   }
 
   toggleStay() {
@@ -460,17 +656,10 @@ class Mascot {
     this.now([{ type: "wave", dur: rand(1.6, 2.2) }]);
   }
 
-  // S'envole vers un autre endroit, plutôt loin et sur une autre semaine
+  // S'envole vers un autre endroit de l'écran, plutôt loin
   flyAway() {
-    const P = this.eng.plats;
-    if (!P.length || this.act?.type === "fly") return;
-    let best = null;
-    for (let i = 0; i < 8; i++) {
-      const p1 = Math.floor(Math.random() * P.length), x1 = rand(P[p1].x0, P[p1].x1), d = Math.hypot(x1 - this.x, P[p1].y - this.y);
-      if (!best || d > best.d) best = { p1, x1, d };
-      if (d > 120 && p1 !== this.p) break;
-    }
-    this.now([{ type: "fly", p1: best.p1, x1: best.x1 }]);
+    if (!this.eng.plats.length || this.act?.type === "fly") return;
+    this.now([{ type: "fly", ...this.flyTarget() }]);
   }
 
   // Bulle de parole au-dessus de lui. sticky : reste jusqu'à ce qu'on la touche (ou qu'on touche Tino) → onClose()
@@ -504,9 +693,9 @@ class Mascot {
     if (this.stay) return this.eng.night() && !this.bubble ? { type: "sleep", dur: Infinity } : { type: "sit", dur: Infinity };
     let name;
     if (this.bubble?.sticky) name = pick(CALM);
-    else if (this.eng.night()) { // la nuit : il va dans la case d'aujourd'hui et dort couché sur le côté
-      const t = ctx.today;
-      if (t && (t.p !== this.p || Math.abs(t.x - this.x) > 4)) { this.plan = this.pathTo(t); return this.plan.shift(); }
+    else if (this.eng.night()) { // la nuit : dans la case d'aujourd'hui si elle est à l'écran, sinon là où il est ; couché, dans son lit
+      const t = ctx.today, T = t && this.plat(t.k);
+      if (T && this.eng.visible(T) && (t.k !== this.k || Math.abs(t.x - this.x) > 4)) { this.plan = this.pathTo(t); return this.plan.shift(); }
       return { type: "nap", dur: Infinity, bed: true };
     } else name = weighted(Object.keys(ACTIONS).map((n) => [ACTIONS[n].weight?.(this, ctx) ?? 0, n]));
     const steps = (ACTIONS[name].make ?? (() => [{ type: name }]))(this, me, ctx);
@@ -514,15 +703,23 @@ class Mascot {
     return steps[0];
   }
 
-  // Trajet jusqu'à un point : un saut par semaine, puis la marche
+  // Trajet jusqu'à un point { k, x } : le moins de sauts possible d'une plateforme visible à l'autre, puis la marche ;
+  // s'il n'y a pas de chemin (autre colonne…), il y va en volant
   pathTo(target) {
+    const prev = new Map([[this.k, null]]), queue = [this.k];
+    while (queue.length && !prev.has(target.k)) {
+      const k = queue.shift();
+      for (const b of this.reach(k)) if (!prev.has(b.key)) { prev.set(b.key, k); queue.push(b.key); }
+    }
+    if (!prev.has(target.k)) return [{ type: "fly", p1: target.k, x1: target.x }];
+    const chain = [];
+    for (let k = target.k; k !== this.k; k = prev.get(k)) chain.unshift(k);
     const steps = [];
-    let p = this.p, x = this.x;
-    while (p !== target.p) {
-      const np = p + Math.sign(target.p - p), t = this.eng.plats[np];
+    let x = this.x;
+    for (const k of chain) {
+      const t = this.plat(k);
       x = clamp(x + clamp(target.x - x, -60, 60), t.x0, t.x1);
-      steps.push({ type: "hop", p1: np, x1: x }, { type: "idle", dur: 0.25 });
-      p = np;
+      steps.push({ type: "hop", p1: k, x1: x }, { type: "idle", dur: 0.25 });
     }
     steps.push({ type: "walk", x: target.x });
     return steps;
@@ -531,6 +728,7 @@ class Mascot {
   update(dt) {
     this.clock += dt;
     if (this.bubble && this.clock >= this.bubble.until) this.hush(true);
+    if (this.rubbing() && (this.petT += dt) > 1.1) { this.petT = 0; this.love(); } // un cœur de temps en temps quand on le frotte
     if (!this.act) this.act = this.plan.shift() ?? this.think();
     const a = this.act, A = ACTIONS[a.type] ?? ACTIONS.idle;
     if (a.t === undefined) { a.t = 0; A.start?.(this, a); }
@@ -549,15 +747,23 @@ class Mascot {
     this.look += ((A?.look ? A.look(this, a) : 0) - this.look) * Math.min(1, dt * 7);
     this.sink += ((A?.sit ? 1 : 0) - this.sink) * Math.min(1, dt * 6);
     this.lie += ((A?.lie ? 1 : 0) - this.lie) * Math.min(1, dt * (A?.lie ? 3 : 6));
+    // Tête aplatie : suit le frottement ; quand on le lâche, elle revient comme un ressort (s'étire un peu : « boing »)
+    if (this.rubbing()) { this.flat += (this.press - this.flat) * Math.min(1, dt * 14); this.flatV = 0; }
+    else {
+      this.press = 0;
+      this.flatV += (-180 * this.flat - 9 * this.flatV) * dt;
+      this.flat = Math.max(-0.5, this.flat + this.flatV * dt);
+      if (Math.abs(this.flat) < 0.002 && Math.abs(this.flatV) < 0.02) this.flat = this.flatV = 0;
+    }
     // Le lit reste tant qu'il est dessus la nuit (un petit saut quand on le touche ne le fait pas disparaître)
-    const moving = a && ["walk", "hop", "fly", "roll"].includes(a.type);
-    const onBed = this.eng.night() && !!this.bedAt && this.bedAt.p === this.p && Math.abs(this.bedAt.x - this.x) < 4 && !moving;
+    const moving = a && ["walk", "hop", "fly", "roll", "swim", "drop"].includes(a.type);
+    const onBed = this.eng.night() && !!this.bedAt && this.bedAt.k === this.k && Math.abs(this.bedAt.x - this.x) < 4 && !moving;
     this.bedK += ((onBed ? 1 : 0) - this.bedK) * Math.min(1, dt * 3);
     if (!onBed && this.bedK < 0.01) { this.bedK = 0; if (!this.eng.night()) this.bedAt = null; }
   }
 
   // Largeur du lit : un peu plus long que Tino, sans dépasser de la case du jour
-  bedWidth() { const P = this.plat(this.bedAt?.p); return Math.min(this.size * 1.3, (P?.cell ?? Infinity) - 4); }
+  bedWidth() { const P = this.plat(this.bedAt?.k); return Math.min(this.size * 1.3, (P?.cell ?? Infinity) - 4); }
 
   render() {
     const W = this.size, a = this.act ?? { type: "idle", t: 0 }, A = ACTIONS[a.type] ?? ACTIONS.idle, c = this.clock, u = W / 100, B = this.def.body;
@@ -577,6 +783,9 @@ class Mascot {
       p.footL = lerp(p.footL, 4 + swing * Math.sin(c * 3.2), this.sink);
       p.footR = lerp(p.footR, 4 + swing * Math.sin(c * 3.2 + Math.PI), this.sink);
     }
+    // Tête aplatie (on la frotte) : elle s'écrase sur son cou (la tenue et la fleur avec), le corps se tasse un peu
+    const f = this.flat;
+    p.sx *= 1 + 0.04 * f; p.sy *= 1 - 0.07 * f;
     // En tournant (roulade, couché) le corps pivote autour de son centre et reste posé sur la ligne
     const th = p.spin * Math.PI / 180, sup = B.support, k = (((p.spin % 360) + 360) % 360) / 15, i = Math.floor(k);
     const bw = this.bedK > 0.001 ? this.bedWidth() : 0, onMattress = this.bedK * bw * (BED_H - MATTRESS) / BED_W; // dans son lit : posé sur le matelas
@@ -584,19 +793,23 @@ class Mascot {
     const look = this.look;
     this.el.classList.toggle("ms-sleep", !!A.zzz);
     this.el.classList.toggle("ms-mad", a.type === "angry");
+    this.el.classList.toggle("ms-swim", a.type === "swim" && !!a.wet);
     this.el.style.transform = `translate3d(${(this.x - W / 2).toFixed(1)}px, ${(this.y - W * 0.98).toFixed(1)}px, 0)`;
     this.inner.style.transform = `translateY(${down.toFixed(2)}px)` + (p.spin ? ` translateY(${pivot.toFixed(2)}px) rotate(${p.spin.toFixed(1)}deg) translateY(${(-pivot).toFixed(2)}px)` : "")
       + ` rotate(${p.rot.toFixed(2)}deg) scale(${p.sx.toFixed(3)}, ${p.sy.toFixed(3)})`;
-    this.head.style.transform = `rotate(${(p.head + look * 0.4).toFixed(2)}deg)`;
+    this.head.style.transform = `rotate(${(p.head + look * 0.4).toFixed(2)}deg)` + (f ? ` scale(${(1 + 0.24 * f).toFixed(3)}, ${(1 - 0.42 * f).toFixed(3)})` : "");
+    const ck = Math.round(clamp(f, 0, 1) * 20); // il rougit quand on le frotte
+    if (ck !== this.cheekK) { this.cheekK = ck; this.cheeks.setAttribute("opacity", (0.45 + 0.02 * ck).toFixed(2)); }
     this.face.style.transform = `translateX(${look.toFixed(2)}px) scaleX(${(1 - Math.abs(look) / 90).toFixed(3)})`;
     this.flower.style.transform = `translate(${(-look * 0.5).toFixed(2)}px, ${(Math.abs(look) * 0.15).toFixed(2)}px)`;
     this.arm_l.style.transform = `translateX(${(look * 0.2).toFixed(2)}px) rotate(${p.armL.toFixed(1)}deg)`;
     this.arm_r.style.transform = `translateX(${(look * 0.2).toFixed(2)}px) rotate(${p.armR.toFixed(1)}deg)`;
     this.foot_l.style.transform = `translate(${(look * 0.35).toFixed(2)}px, ${p.footL.toFixed(2)}px)`;
     this.foot_r.style.transform = `translate(${(look * 0.35).toFixed(2)}px, ${p.footR.toFixed(2)}px)`;
-    // « z », cœur et bulle suivent la tête (même couché), sans tourner
-    const [hx, hy] = this.def.head, rx = hx - 50, ry = hy - B.cy;
-    const nx = 50 + rx * Math.cos(th) - ry * Math.sin(th), ny = B.cy + rx * Math.sin(th) + ry * Math.cos(th) + down / u;
+    // « z », cœur et bulle suivent la tête (même couché, même aplatie), sans tourner
+    const [hx, hy] = this.def.head, rx = hx - 50, ry = hy - B.cy, drop = 23 * f; // tête aplatie : son sommet descend
+    const nx = 50 + rx * Math.cos(th) - (ry + drop) * Math.sin(th), ny = B.cy + rx * Math.sin(th) + (ry + drop) * Math.cos(th) + down / u;
+    this.bub_at.style.transform = `translate(${(nx + 8 * this.dir).toFixed(1)}px, ${(ny - 18).toFixed(1)}px)`; // bulles d'eau
     const zx = nx + lerp(28, 12, this.lie) - 78, zy = ny + lerp(-22, -40, this.lie) - 14;
     this.zzz_at.style.transform = `translate(${zx.toFixed(1)}px, ${zy.toFixed(1)}px)`;
     this.heart_at.style.transform = `translate(${(nx - hx).toFixed(1)}px, ${(ny - hy).toFixed(1)}px)`;
@@ -607,7 +820,7 @@ class Mascot {
 
   // Lit centré sur sa place de la nuit, tête de lit du côté de sa tête ; couverture de ses pieds jusqu'au cou
   placeBed(bw) {
-    const P = this.bedAt && this.plat(this.bedAt.p), show = this.bedK > 0.01 && !!P;
+    const P = this.bedAt && this.plat(this.bedAt.k), show = this.bedK > 0.01 && !!P;
     this.bedEl.style.visibility = this.blanketEl.style.visibility = show ? "visible" : "hidden";
     if (!show) return;
     const bh = bw * BED_H / BED_W, x = this.bedAt.x, s = this.side, W = this.size;
@@ -625,13 +838,13 @@ class Mascot {
     this.blanketEl.style.transform = `translate3d(${(x - s * W * 0.3 - kw / 2).toFixed(1)}px, ${top.toFixed(1)}px, 0) scaleX(${s})`;
   }
 
-  // La bulle se place au-dessus de la tête, sans sortir du calendrier ; sa pointe vise Tino
+  // La bulle se place au-dessus de la tête, sans sortir de l'écran sur les côtés ; sa pointe vise Tino
   placeBubble(dx, headTop) {
     const b = this.bubble;
     if (!b) return;
     if (!b.w) { b.w = b.el.offsetWidth; b.h = b.el.offsetHeight; }
-    const P = this.plat(), W = this.size, cx = this.x + dx;
-    const l = P ? P.x0 - 14 : cx - 105, r = P ? P.x1 + 14 : cx + 105;
+    const v = this.eng.v, W = this.size, cx = this.x + dx;
+    const l = Math.max(v.left, cx - 140), r = Math.min(v.right, cx + 140);
     const left = clamp(cx - b.w / 2, l, Math.max(l, r - b.w)), top = this.y - W * 0.98 + headTop - b.h - 8;
     b.el.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0)`;
     b.el.style.setProperty("--tail", clamp(cx - left, 12, b.w - 12).toFixed(1) + "px");
@@ -646,34 +859,53 @@ function injectStyle() {
   document.head.append(s);
 }
 
-// layer : calque positionné au-dessus du calendrier (les coordonnées sont relatives à lui)
-// platforms() : [{ y, x0, x1 }] triées de haut en bas ; today() : { p, x } (où s'asseoir) ou null
+// La plateforme la plus proche d'une hauteur (de préférence au-dessus / au-dessous de x) : quand la sienne a disparu
+function nearestPlat(list, y, x) {
+  let best = null, bd = Infinity;
+  for (const q of list) { const d = Math.abs(q.y - y) + (x >= q.x0 - 30 && x <= q.x1 + 30 ? 0 : 400); if (d < bd) { bd = d; best = q; } }
+  return best;
+}
+const pageView = () => ({ top: scrollY, bottom: scrollY + innerHeight, left: scrollX, right: scrollX + innerWidth });
+
+// layer : calque posé sur la page (coordonnées de page : il défile avec elle, Tino reste sur sa plateforme)
+// platforms() : [{ key, y, x0, x1, cell?, cal? }] — key : la même d'un affichage à l'autre (« cal:2 », une carte, une tâche),
+//   c'est elle que Tino retient (pas la position dans la liste, qui change quand on ajoute une tâche) ; cal : numéro de la ligne
+//   du calendrier (la nage n'a lieu qu'entre deux lignes du calendrier) ; cell : largeur d'une case (le lit n'en dépasse pas).
+//   La liste peut porter .section (l'onglet) : si elle change, Tino réapparaît (case d'aujourd'hui, ou il tombe du haut).
+// today() : { key, x } (où s'asseoir / dormir) ou null
+// view() : { top, bottom, left, right } = la partie visible de la page (sous la barre d'état, au-dessus de la barre d'onglets) :
+//   Tino ne va que sur des plateformes visibles, et si la page défile sans lui, il revient (action « drop »)
 // tapThrough(el) : l'appui sur un personnage est-il aussi transmis à cet élément en dessous ?
 // lines() : les petites phrases que Tino dit de temps en temps (⚙ → Tino), [] s'il n'y en a pas ;
 // grumbles() : ses phrases râleuses quand on le touche 5 fois de suite
-export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, night = isNight, tapThrough = () => true, lines = () => [], grumbles = () => [] }) {
+export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, tapThrough = () => true, lines = () => [], grumbles = () => [] }) {
   injectStyle();
   layer.classList.add("ms-layer");
-  const eng = { plats: [], today: null, night, tapThrough, layer, tapping: null, lines, grumbles };
+  const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night, tapThrough, layer, tapping: null, lines, grumbles };
   const list = kinds.map((k) => new Mascot(eng, KINDS[k] ?? KINDS.tino));
+  const room = Math.max(...list.map((m) => m.size)) * 1.05; // place au-dessus d'une plateforme pour qu'il y tienne
+  eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
   list.forEach((m) => layer.append(m.bedEl, m.el, m.blanketEl));
   const reduce = matchMedia("(prefers-reduced-motion: reduce)");
   let raf = 0, last = 0;
+  const inView = (m) => m.y <= eng.v.bottom + 2 && m.y - m.size * 1.05 >= eng.v.top - 2;
 
-  // Plateformes relues après chaque dessin du calendrier (et toutes les 0,5 s : bandeau, police, rotation…) ;
-  // le personnage reste sur « sa » semaine
+  // Plateformes relues après chaque affichage (et toutes les 0,5 s : bandeau, police, rotation…) ; Tino reste sur « sa »
+  // plateforme (même clé), ou va sur la plus proche si elle a disparu
   function measure() {
-    eng.plats = platforms() ?? [];
-    eng.today = today();
+    const got = platforms() ?? [], prev = eng.byKey, section = got.section ?? null, moved = section !== eng.section;
+    eng.v = view();
+    eng.section = section;
+    eng.plats = [...got].sort((a, b) => a.y - b.y);
+    eng.byKey = new Map(eng.plats.map((q) => [q.key, q]));
+    const t = today();
+    eng.today = t && eng.byKey.has(t.key) ? { k: t.key, x: t.x } : null;
     list.forEach((m, i) => {
       m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = !eng.plats.length;
       if (m.bubble) m.bubble.el.hidden = !eng.plats.length;
       if (!eng.plats.length) return;
-      if (!m.placed || m.p >= eng.plats.length) {
-        const start = eng.today ?? { p: 0, x: rand(eng.plats[0].x0, eng.plats[0].x1) };
-        m.p = start.p; m.x = start.x + i * 30; m.act = null; m.plan = []; m.placed = true;
-        m.greet();
-      }
+      if (!m.placed || moved) { m.place(i); return; }
+      if (!eng.byKey.has(m.k)) m.k = nearestPlat(eng.plats, prev.get(m.k)?.y ?? m.y, m.x).key;
       const P = m.plat();
       m.x = clamp(m.x, P.x0, P.x1);
       if (!m.busy()) m.y = P.y;
@@ -684,9 +916,18 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     measure();
     list.forEach((m) => {
       if (!eng.plats.length) return;
-      if (reduce.matches) { m.act = { type: "sit", t: 0, dur: Infinity }; m.sink = 1; m.lie = 0; }
+      if (reduce.matches) {
+        if (m.act?.type === "drop") { m.k = m.act.p1; m.x = m.act.x1; m.y = m.plat()?.y ?? m.y; } // sans animation : il est déjà là
+        m.act = { type: "sit", t: 0, dur: Infinity }; m.sink = 1; m.lie = 0;
+      }
       m.render();
     });
+  }
+
+  // Il n'est plus à l'écran (la page a défilé) et le défilement est fini : il revient (pas au milieu d'un saut ou d'un vol)
+  function follow(m) {
+    if (m.el.hidden || ["drop", "fly", "hop"].includes(m.act?.type) || performance.now() - eng.scrollT < FOLLOW_MS || inView(m)) return;
+    m.dropIn(m.y > eng.v.bottom ? "bottom" : "top");
   }
 
   let since = 0;
@@ -697,10 +938,29 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       since = 0;
       measure();
       if (!eng.plats.length) { raf = 0; return; }
-    }
-    list.forEach((m) => { m.update(dt); m.render(); });
+    } else eng.v = view();
+    list.forEach((m) => { follow(m); m.update(dt); m.render(); });
     raf = requestAnimationFrame(frame);
   }
+
+  // Défilement : on note quand il a eu lieu (follow attend qu'il soit fini) ; sans animations, Tino est reposé tout de suite
+  let scrollEnd = 0;
+  const onScroll = () => {
+    eng.scrollT = performance.now();
+    clearTimeout(scrollEnd);
+    scrollEnd = setTimeout(() => {
+      eng.v = view();
+      if (!reduce.matches || !eng.plats.length) return;
+      list.forEach((m) => {
+        if (inView(m)) return;
+        const V = eng.plats.filter((q) => eng.visible(q)), P = m.y > eng.v.bottom ? V[V.length - 1] : V[0];
+        if (!P) return;
+        m.k = P.key; m.x = clamp(m.x, P.x0, P.x1); m.y = P.y; m.bedAt = null;
+        m.render();
+      });
+    }, FOLLOW_MS + 20);
+  };
+  addEventListener("scroll", onScroll, { passive: true });
 
   // Animation coupée quand l'app est en arrière-plan ou si le téléphone demande moins d'animations
   function run() {
@@ -733,7 +993,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     wear(o) { eng.outfit = o; list.forEach((m) => m.wear(o)); },
     hush() { tino?.hush(true); },
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
-    destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); }); },
+    destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); }); },
   };
 }
 
@@ -742,21 +1002,33 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
 export function demoPose(box, kind, type, size, dir = 1, cell = Infinity) {
   injectStyle();
   const lines = ["Drink some water 💧", "You've got this!"];
-  const eng = { plats: [{ y: size, x0: size / 2, x1: size / 2, cell }], today: null, night: () => ["sleep", "nap", "bed"].includes(type), tapThrough: () => false, layer: box, lines: () => (type === "chat" ? lines : []), grumbles: () => ["Stop poking me! 😤"] };
+  const plat = { key: "demo", y: size, x0: size / 2, x1: size / 2, cell };
+  const eng = { plats: [plat], byKey: new Map([["demo", plat]]), v: { top: -Infinity, bottom: Infinity, left: -Infinity, right: Infinity }, visible: () => true, today: null, night: () => ["sleep", "nap", "bed"].includes(type), tapThrough: () => false, layer: box, lines: () => (type === "chat" ? lines : []), grumbles: () => ["Stop poking me! 😤"] };
   const m = new Mascot(eng, { ...KINDS[kind], size });
   box.style.position = "relative";
   box.style.width = box.style.height = size + "px";
   box.append(m.bedEl, m.el, m.blanketEl);
-  m.x = size / 2; m.y = size; m.dir = dir;
+  m.k = "demo"; m.x = size / 2; m.y = size; m.dir = dir;
   if (type === "walk") m.update = function (dt) { this.clock += dt; this.act ??= { type: "walk", t: 0, x: this.x }; this.dir = dir; this.ease(dt); }; // marche sur place
+  if (type === "swim") m.update = function (dt) { // nage sur place, en ondulant
+    this.clock += dt;
+    const w = this.clock;
+    this.act = { type: "swim", t: SWIM_IN + 1, out: Infinity, wet: true, spin: dir * (SWIM_TILT + 8 * Math.sin(w * 4.2 + 1)) };
+    this.dir = dir; this.y = size * (0.8 + 0.05 * Math.sin(w * 4.2)); this.ease(dt);
+  };
+  if (type === "pet") { // on le frotte 1,4 s, on le lâche (boing), et ainsi de suite
+    m.rubbing = function () { return this.clock % 2.6 < 1.4; };
+    m.update = function (dt) { if (this.rubbing()) { this.press = 1; this.rubT = this.clock; } Mascot.prototype.update.call(this, dt); };
+  }
   m.think = () => ({
-    hop: { type: "hop", p1: 0, x1: m.x + dir * 0.01 },
+    hop: { type: "hop", p1: "demo", x1: m.x + dir * 0.01 },
     roll: { type: "roll", dir, n: 1 },
-    fly: { type: "fly", p1: 0, x1: m.x + dir * 0.01 },
+    fly: { type: "fly", p1: "demo", x1: m.x + dir * 0.01 },
     bed: { type: "nap", dur: Infinity, bed: true, side: dir },
     chat: { type: "chat", dur: 4 },
     angry: { type: "angry", dur: 2.6 },
-  }[type] ?? { type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
+    pet: { type: "pet" },
+  }[type] ??{ type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
   let last = performance.now();
   const loop = (t) => { m.update(Math.min(0.05, (t - last) / 1000)); last = t; m.render(); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
