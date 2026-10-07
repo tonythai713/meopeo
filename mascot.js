@@ -506,7 +506,8 @@ class Mascot {
     this.blanketEl = document.createElement("div");
     this.blanketEl.className = "ms-blanket";
     this.blanketEl.innerHTML = BLANKET;
-    this.k = null; this.x = 0; this.y = 0; this.dir = 1; // k : la clé de la plateforme où il est (voir mountMascots) this.side = 1; this.clock = rand(0, 10);
+    // k : la clé de la plateforme où il est (voir mountMascots)
+    this.k = null; this.x = 0; this.y = 0; this.dir = 1; this.side = 1; this.clock = rand(0, 10);
     this.look = 0; this.gaze = 0; this.sink = 0; this.lie = 0; this.stay = false; this.bubble = null; this.bedK = 0; this.bedAt = null;
     this.act = null; this.plan = [];
     // tête aplatie : flat (0 = normale, 1 = toute plate, < 0 = étirée en rebondissant), press = ce que le frottement demande
