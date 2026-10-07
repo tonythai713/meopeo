@@ -64,7 +64,7 @@ const upcomingOf = (list) => [
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -90,7 +90,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("focus", wake);
   window.addEventListener("online", wake);
@@ -140,6 +140,7 @@ async function boot(user) {
   loadTino();
   loadExtras();
   loadOutfits();
+  loadGrumbles();
   resubscribe();
   ensurePush();
 }
@@ -148,6 +149,7 @@ function resubscribe() {
   unsubTino?.(); unsubTino = S.user ? db.subscribeTino(() => loadTino()) : null;
   unsubExtras?.(); unsubExtras = S.user ? db.subscribeTinoExtras(() => loadExtras()) : null;
   unsubOutfits?.(); unsubOutfits = S.user ? db.subscribeOutfits(() => loadOutfits()) : null; // canal à part (sans 12, rien d'autre ne casse)
+  unsubGrumbles?.(); unsubGrumbles = S.user ? db.subscribeGrumbles(() => loadGrumbles()) : null; // idem (13)
 }
 function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 250); } // plusieurs événements d'affilée = un seul rechargement
 
@@ -217,6 +219,7 @@ function showLogin() {
   unsubTino?.(); unsubTino = null;
   unsubExtras?.(); unsubExtras = null; S.lines = []; S.extrasOk = null;
   unsubOutfits?.(); unsubOutfits = null; S.outfits = []; S.worn = { head: null, body: null }; S.outfitsOk = null; applyOutfit();
+  unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
   root.innerHTML = `<div class="mp-login pl-card"><h1>MeoPeo</h1><p class="mp-sub">💗 MeoMeo · 💜 PeoPeo</p>
     <form><input type="email" name="email" placeholder="E-mail" autocomplete="username" required>
       <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
@@ -262,7 +265,7 @@ function render() {
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); resubscribe(); });
   root.querySelector("[data-act=menu]").addEventListener("click", openMenu);
   root.style.minHeight = "";
   placeBigTino();
@@ -483,7 +486,7 @@ function refreshMascots() {
   const layer = document.createElement("div");
   document.body.append(layer);
   // un appui sur un personnage passe au calendrier en dessous, jamais aux boutons du mois ni à l'interrupteur
-  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, tapThrough: (el) => !!el.closest(".pl-cal"), lines: () => S.lines.map((l) => l.body) });
+  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, tapThrough: (el) => !!el.closest(".pl-cal"), lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines });
   syncTinoBubble();
   applyOutfit();
 }
@@ -684,6 +687,40 @@ function fillTinoSettings(box) {
   };
   box.querySelector("[data-act=lineadd]").addEventListener("click", add);
   box.querySelector("[name=newline]").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); add(); } });
+}
+
+// ---------- Phrases râleuses : 5 appuis rapides sur Tino (supabase/13_tino_grumbles.sql) ----------
+// Liste commune aux deux ; vide (ou base sans 13) : quelques phrases par défaut.
+let unsubGrumbles = null;
+const DEFAULT_GRUMBLES = (P) => ["Stop poking me! 😤", "Hey!! Go do your tasks instead 🙄", "-_-", "What do you even want? 😑", "Leave me alone, I'm busy! 💢", `I'm telling ${P?.label ?? "on you"}! 😤`];
+const grumbleLines = () => (S.grumbles.length ? S.grumbles.map((g) => g.body) : DEFAULT_GRUMBLES(S.partner));
+async function loadGrumbles() {
+  if (!S.user) return;
+  try { S.grumbles = await db.listGrumbles(); S.grumblesOk = true; store.set("grumbles." + S.user.id, S.grumbles); }
+  catch (err) {
+    if (/does not exist|schema cache|tino_grumbles/i.test(err.message)) { S.grumblesOk = false; S.grumbles = []; }
+    else S.grumbles = store.get("grumbles." + S.user.id, S.grumbles); // hors ligne
+  }
+  const box = document.querySelector(".mp-grumbles");
+  if (box) fillGrumbles(box);
+}
+function fillGrumbles(box) {
+  const head = `<div class="pl-sub">Grumpy lines <span class="pl-legend">— tap Tino 5 times quickly and he snaps one at you (both screens)</span></div>`;
+  if (S.grumblesOk === false) { box.innerHTML = head + `<div class="pl-legend">Your own grumpy lines aren't available yet — Tony needs to run <code>supabase/13_tino_grumbles.sql</code>. Tino uses his default ones meanwhile.</div>`; return; }
+  const who = (g) => (g.by === S.user.id ? S.me : S.partner);
+  box.innerHTML = head + `<div class="mp-lines">${S.grumbles.length ? S.grumbles.map((g) => `<div class="mp-line"><span class="mp-line-who" title="${esc(who(g)?.label ?? "")}">${esc(who(g)?.mark ?? "•")}</span><span class="mp-line-text">${esc(g.body)}</span><button type="button" data-grumble="${g.id}" title="Remove this line">✕</button></div>`).join("")
+      : `<div class="pl-legend">None yet — Tino uses his default ones: ${DEFAULT_GRUMBLES(S.partner).map(esc).join(" · ")}</div>`}</div>
+    <div class="mp-row mp-lineadd"><input type="text" name="newgrumble" maxlength="120" placeholder="Something Tino snaps when he's annoyed…" enterkeyhint="done"><button type="button" data-act="grumbleadd">Add</button></div>`;
+  box.querySelectorAll("[data-grumble]").forEach((b) => b.addEventListener("click", async () => {
+    if (await guard(() => db.deleteGrumble(+b.dataset.grumble), "Couldn't remove the line")) loadGrumbles();
+  }));
+  const add = async () => {
+    const field = box.querySelector("[name=newgrumble]"), text = field.value.trim();
+    if (!text) return;
+    if (await guard(() => db.addGrumble(text), "Couldn't add the line")) { field.value = ""; await loadGrumbles(); box.querySelector("[name=newgrumble]")?.focus(); }
+  };
+  box.querySelector("[data-act=grumbleadd]").addEventListener("click", add);
+  box.querySelector("[name=newgrumble]").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); add(); } });
 }
 
 // ---------- Garde-robe du petit Tino (supabase/12_tino_outfits.sql) ----------
@@ -1020,6 +1057,7 @@ function openMenu() {
     ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}
     <h4>🦭 Tino</h4>
     <div class="mp-tinoset"></div>
+    <div class="mp-grumbles"></div>
     <h4>👒 Tino's wardrobe</h4>
     <div class="mp-wardrobe"></div>
     <h4>📱 Home-screen widget</h4>
@@ -1038,6 +1076,7 @@ function openMenu() {
   f.querySelector("[data-act=logout]").addEventListener("click", async () => { ov.remove(); await logout(); });
   fillNotif(f.querySelector(".mp-notif"));
   fillTinoSettings(f.querySelector(".mp-tinoset"));
+  fillGrumbles(f.querySelector(".mp-grumbles"));
   fillWardrobe(f.querySelector(".mp-wardrobe"));
   fillWidgets(f.querySelector(".mp-widgets"));
   f.notify?.addEventListener("change", async (ev) => {

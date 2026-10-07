@@ -18,7 +18,10 @@ const STYLE = `
 .ms-arm-r { transform-origin: 75px 59px; }
 .ms-foot-l { transform-origin: 38px 90px; }
 .ms-foot-r { transform-origin: 62px 90px; }
-.ms-zzz, .ms-heart { opacity: 0; }
+.ms-zzz, .ms-heart, .ms-anger, .ms-brows { opacity: 0; }
+.ms-mad .ms-brows { opacity: 1; }
+.ms-mad .ms-anger { animation: ms-anger 0.45s ease-in-out infinite alternate; }
+@keyframes ms-anger { from { opacity: 0.75; transform: scale(0.85); } to { opacity: 1; transform: scale(1.15); } }
 .ms-sleep .ms-zzz { animation: ms-zzz 2.6s ease-in-out infinite; }
 .ms-love .ms-heart { animation: ms-heart 1.1s ease-out; }
 @keyframes ms-zzz { 0% { opacity: 0; transform: translate(0, 4px); } 30%, 70% { opacity: 1; } 100% { opacity: 0; transform: translate(6px, -8px); } }
@@ -70,6 +73,7 @@ function sealSvg() {
       <ellipse cx="27" cy="48" rx="5" ry="2.8" fill="#ffb8ca" opacity="0.45"/>
       <ellipse cx="73" cy="48" rx="5" ry="2.8" fill="#ffb8ca" opacity="0.45"/>
       <path d="M29 41Q33.5 44 38 41M62 41Q66.5 44 71 41" fill="none" stroke="#2f3038" stroke-width="2.4" stroke-linecap="round"/>
+      <path class="ms-brows" d="M28 33.5L38 37M72 33.5L62 37" fill="none" stroke="#2f3038" stroke-width="2.3" stroke-linecap="round"/>
       <ellipse cx="45" cy="48" rx="6.3" ry="5.3" fill="#5b5d68"/>
       <ellipse cx="55" cy="48" rx="6.3" ry="5.3" fill="#5b5d68"/>
       <ellipse cx="43.5" cy="46" rx="1.7" ry="1.1" fill="#8e919d"/>
@@ -129,6 +133,7 @@ const BLANKET = `<svg viewBox="0 0 100 110" aria-hidden="true">
 const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
   <g class="ms-zzz-at"><g class="ms-zzz" fill="#d6e2ff" font-family="system-ui, sans-serif" font-weight="700"><text x="78" y="14" font-size="13">z</text><text x="88" y="3" font-size="10">z</text></g></g>
   <g class="ms-heart-at"><path class="ms-heart" d="M50 -2C47 -7 40 -5 41 0C42 4 50 9 50 9C50 9 58 4 59 0C60 -5 53 -7 50 -2Z" fill="#ff8fb3"/></g>
+  <g class="ms-anger-at"><g class="ms-anger" style="transform-box: fill-box; transform-origin: center"><path d="M-7 -2Q-2 -2 -2 -7M2 -7Q2 -2 7 -2M7 2Q2 2 2 7M-2 7Q-2 2 -7 2" fill="none" stroke="#ff4d5e" stroke-width="2.6" stroke-linecap="round"/></g></g>
 </svg>`;
 
 // body.cy : centre du corps (pivot des roulades) ; body.support : distance du centre au point le plus bas quand il
@@ -158,6 +163,7 @@ const LOOK = 8;   // décalage du visage quand il regarde de côté (repère 100
 const SINK = 12;  // assis : il descend sur la ligne, les pieds pendent en dessous (repère 100)
 const LIE = 85;   // couché sur le côté (degrés)
 const HOLD = 550; // appui long (ms) : il s'assoit et reste assis / il se relève
+const TEASE_TAPS = 5, TEASE_MS = 3000; // 5 appuis en 3 s : il s'énerve
 
 // ---------- Les actions ----------
 // Une action = une entrée de ACTIONS ; en ajouter une = ajouter une entrée. Champs (tous facultatifs) :
@@ -309,6 +315,18 @@ const ACTIONS = {
     sit: true, zzz: true,
     pose(m, a, p) { p.sy = 0.95 + 0.025 * Math.sin(m.clock * 1.6); p.sx = 1.03; p.armL = -28; p.armR = 28; p.head = 12; },
   },
+  // Embêté (touché 5 fois de suite) : sourcils froncés, « 💢 », il trépigne et agite les nageoires
+  angry: {
+    look: () => 0,
+    pose(m, a, p) {
+      const c = m.clock, k = smooth(clamp(Math.min(a.t, a.dur - a.t) / 0.15, 0, 1));
+      p.sy = 1 - 0.07 * Math.abs(Math.sin(c * 14)) * k; p.sx = 1 + 0.05 * Math.abs(Math.sin(c * 14)) * k;
+      p.rot = 4 * Math.sin(c * 26) * k; p.head = 7 * Math.sin(c * 21) * k;
+      p.armL = (70 + 18 * Math.sin(c * 19)) * k; p.armR = -(70 + 18 * Math.sin(c * 19 + 1)) * k;
+      p.footL = -3.5 * Math.max(0, Math.sin(c * 14)) * k; p.footR = -3.5 * Math.max(0, -Math.sin(c * 14)) * k;
+    },
+    busy: true,
+  },
   // Touché : petit saut de joie (avec un cœur)
   react: {
     step(m, a, dt, me) { const s = clamp((a.t - 0.08) / 0.4, 0, 1); m.y = me.y - 48 * s * (1 - s); return a.t >= 0.6; },
@@ -358,7 +376,8 @@ class Mascot {
     this.el.setAttribute("aria-label", def.name);
     this.el.innerHTML = `<div class="ms-in">${def.svg()}</div>${FX}`;
     this.inner = this.el.firstChild;
-    for (const k of ["head", "face", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    for (const k of ["head", "face", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    this.taps = [];
     if (eng.outfit) this.wear(eng.outfit);
     // Lit (derrière lui) et couverture (devant lui) : seulement la nuit, quand il dort dans la case d'aujourd'hui
     this.bedEl = document.createElement("div");
@@ -392,8 +411,10 @@ class Mascot {
     ev.stopPropagation();
     if (this.held) { this.held = false; return; } // c'était un appui long
     if (this.bubble?.sticky) this.hush();
-    this.now([{ type: "react" }]);
-    this.love();
+    const t = performance.now();
+    this.taps = [...this.taps.filter((x) => t - x < TEASE_MS), t];
+    if (this.taps.length >= TEASE_TAPS) { this.taps = []; this.grumble(); } // trop c'est trop
+    else { this.now([{ type: "react" }]); this.love(); }
     this.el.style.pointerEvents = "none";
     const under = document.elementFromPoint(ev.clientX, ev.clientY);
     this.el.style.pointerEvents = "";
@@ -413,6 +434,18 @@ class Mascot {
     this.el.classList.remove("ms-love");
     void this.el.offsetWidth;
     this.el.classList.add("ms-love");
+  }
+
+  // Touché trop de fois : il s'énerve et lance une de ses phrases râleuses (⚙ → Tino), pas deux fois de suite la même
+  grumble() {
+    const lines = this.eng.grumbles();
+    if (lines.length) {
+      const pool = lines.length > 1 ? lines.filter((l) => l !== this.lastGrumble) : lines;
+      this.lastGrumble = pick(pool);
+      this.say(this.lastGrumble, { ms: 3800 });
+    }
+    this.act = { type: "angry", dur: 2.6 }; // tout de suite, même s'il était occupé
+    this.plan = this.stay ? [{ type: "sit", dur: Infinity }] : [];
   }
 
   toggleStay() {
@@ -550,6 +583,7 @@ class Mascot {
     const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * SINK * u + lift - onMattress;
     const look = this.look;
     this.el.classList.toggle("ms-sleep", !!A.zzz);
+    this.el.classList.toggle("ms-mad", a.type === "angry");
     this.el.style.transform = `translate3d(${(this.x - W / 2).toFixed(1)}px, ${(this.y - W * 0.98).toFixed(1)}px, 0)`;
     this.inner.style.transform = `translateY(${down.toFixed(2)}px)` + (p.spin ? ` translateY(${pivot.toFixed(2)}px) rotate(${p.spin.toFixed(1)}deg) translateY(${(-pivot).toFixed(2)}px)` : "")
       + ` rotate(${p.rot.toFixed(2)}deg) scale(${p.sx.toFixed(3)}, ${p.sy.toFixed(3)})`;
@@ -566,6 +600,7 @@ class Mascot {
     const zx = nx + lerp(28, 12, this.lie) - 78, zy = ny + lerp(-22, -40, this.lie) - 14;
     this.zzz_at.style.transform = `translate(${zx.toFixed(1)}px, ${zy.toFixed(1)}px)`;
     this.heart_at.style.transform = `translate(${(nx - hx).toFixed(1)}px, ${(ny - hy).toFixed(1)}px)`;
+    this.anger_at.style.transform = `translate(${(nx + 24).toFixed(1)}px, ${(ny - 23).toFixed(1)}px)`; // « 💢 » en haut de la tête
     this.placeBubble((nx - 50) * u, (ny - 30) * u);
     this.placeBed(bw);
   }
@@ -614,11 +649,12 @@ function injectStyle() {
 // layer : calque positionné au-dessus du calendrier (les coordonnées sont relatives à lui)
 // platforms() : [{ y, x0, x1 }] triées de haut en bas ; today() : { p, x } (où s'asseoir) ou null
 // tapThrough(el) : l'appui sur un personnage est-il aussi transmis à cet élément en dessous ?
-// lines() : les petites phrases que Tino dit de temps en temps (⚙ → Tino), [] s'il n'y en a pas
-export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, night = isNight, tapThrough = () => true, lines = () => [] }) {
+// lines() : les petites phrases que Tino dit de temps en temps (⚙ → Tino), [] s'il n'y en a pas ;
+// grumbles() : ses phrases râleuses quand on le touche 5 fois de suite
+export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, night = isNight, tapThrough = () => true, lines = () => [], grumbles = () => [] }) {
   injectStyle();
   layer.classList.add("ms-layer");
-  const eng = { plats: [], today: null, night, tapThrough, layer, tapping: null, lines };
+  const eng = { plats: [], today: null, night, tapThrough, layer, tapping: null, lines, grumbles };
   const list = kinds.map((k) => new Mascot(eng, KINDS[k] ?? KINDS.tino));
   list.forEach((m) => layer.append(m.bedEl, m.el, m.blanketEl));
   const reduce = matchMedia("(prefers-reduced-motion: reduce)");
@@ -706,7 +742,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
 export function demoPose(box, kind, type, size, dir = 1, cell = Infinity) {
   injectStyle();
   const lines = ["Drink some water 💧", "You've got this!"];
-  const eng = { plats: [{ y: size, x0: size / 2, x1: size / 2, cell }], today: null, night: () => ["sleep", "nap", "bed"].includes(type), tapThrough: () => false, layer: box, lines: () => (type === "chat" ? lines : []) };
+  const eng = { plats: [{ y: size, x0: size / 2, x1: size / 2, cell }], today: null, night: () => ["sleep", "nap", "bed"].includes(type), tapThrough: () => false, layer: box, lines: () => (type === "chat" ? lines : []), grumbles: () => ["Stop poking me! 😤"] };
   const m = new Mascot(eng, { ...KINDS[kind], size });
   box.style.position = "relative";
   box.style.width = box.style.height = size + "px";
@@ -719,6 +755,7 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity) {
     fly: { type: "fly", p1: 0, x1: m.x + dir * 0.01 },
     bed: { type: "nap", dur: Infinity, bed: true, side: dir },
     chat: { type: "chat", dur: 4 },
+    angry: { type: "angry", dur: 2.6 },
   }[type] ?? { type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
   let last = performance.now();
   const loop = (t) => { m.update(Math.min(0.05, (t - last) / 1000)); last = t; m.render(); requestAnimationFrame(loop); };

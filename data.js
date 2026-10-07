@@ -18,6 +18,7 @@
 //   tinoFile(path), subscribeTinoExtras(onChange) → phrases de Tino et grand Tino (supabase/08_tino_extras.sql)
 //   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id),
 //   subscribeOutfits(onChange) → garde-robe du petit Tino (supabase/12_tino_outfits.sql)
+//   listGrumbles(), addGrumble(body), deleteGrumble(id), subscribeGrumbles(onChange) → phrases râleuses (13_tino_grumbles.sql)
 //
 // Format d'une tâche dans l'app : { id, owner, date: "AAAA-MM-JJ", end: "AAAA-MM-JJ" | null, time: "HH:MM" | null,
 //   course: nom de catégorie | null, label, done, moon: "full" | "crescent" | null, private, source }
@@ -160,6 +161,20 @@ export function createBackend() {
       if (old?.path) await sb.storage.from("tino").remove([old.path]);
     },
     async tinoFile(path) { return must(await sb.storage.from("tino").download(path)); }, // → Blob
+    // Phrases râleuses de Tino, quand on le touche 5 fois (supabase/13_tino_grumbles.sql) ; canal temps réel à part
+    async listGrumbles() {
+      const rows = must(await sb.from("tino_grumbles").select("id, author, body, created_at").order("id"));
+      return rows.map((r) => ({ id: r.id, by: r.author, body: r.body, at: r.created_at }));
+    },
+    async addGrumble(body) { must(await sb.from("tino_grumbles").insert({ body })); },
+    async deleteGrumble(id) { must(await sb.from("tino_grumbles").delete().eq("id", id)); },
+    subscribeGrumbles(onChange) {
+      const ch = sb.channel("tinog-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "tino_grumbles" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+
     // Garde-robe du petit Tino (supabase/12_tino_outfits.sql) : tenues dessinées + ce qu'il porte (réglage commun)
     async listOutfits() {
       const [rows, worn] = (await Promise.all([
