@@ -159,7 +159,7 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, s) => a + (b - a) * s;
 const smooth = (s) => s * s * (3 - 2 * s);
-const isNight = () => { const h = new Date().getHours(); return h >= 22 || h < 7; };
+const isNight = () => { const h = new Date().getHours(); return h >= 22 || h < 7; }; // par défaut (l'app donne les heures choisies dans 🎣 Tino)
 // Tirage pondéré : [[poids, valeur], …]
 const weighted = (list) => { let r = Math.random() * list.reduce((s, [w]) => s + w, 0); return list.find(([w]) => (r -= w) < 0)?.[1] ?? list[0][1]; };
 
@@ -917,12 +917,22 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     measure();
     list.forEach((m) => {
       if (!eng.plats.length) return;
-      if (reduce.matches) {
-        if (m.act?.type === "drop") { m.k = m.act.p1; m.x = m.act.x1; m.y = m.plat()?.y ?? m.y; } // sans animation : il est déjà là
-        m.act = { type: "sit", t: 0, dur: Infinity }; m.sink = 1; m.lie = 0;
-      }
+      if (reduce.matches) still(m);
       m.render();
     });
+  }
+
+  // « Réduire les animations » : une pose fixe — la nuit, couché dans son lit (dans la case d'aujourd'hui si elle est à
+  // l'écran, sinon là où il est), le jour assis ; avec un message à lire, assis aussi (pour qu'on voie la bulle)
+  function still(m) {
+    if (m.act?.type === "drop") { m.k = m.act.p1; m.x = m.act.x1; } // sans animation : il est déjà là
+    const P = m.plat();
+    if (P) m.y = P.y;
+    if (eng.night() && !m.bubble?.sticky) {
+      const t = eng.today, T = t && m.plat(t.k);
+      if (T && eng.visible(T)) { m.k = t.k; m.x = clamp(t.x, T.x0, T.x1); m.y = T.y; }
+      m.act = { type: "nap", t: 0, dur: Infinity, bed: true }; m.lie = 1; m.sink = 0; m.bedAt = { k: m.k, x: m.x }; m.bedK = 1;
+    } else { m.act = { type: "sit", t: 0, dur: Infinity }; m.sink = 1; m.lie = 0; m.bedAt = null; m.bedK = 0; }
   }
 
   // Il n'est plus à l'écran (la page a défilé) et le défilement est fini : il revient (pas au milieu d'un saut ou d'un vol)
@@ -957,6 +967,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
         const V = eng.plats.filter((q) => eng.visible(q)), P = m.y > eng.v.bottom ? V[V.length - 1] : V[0];
         if (!P) return;
         m.k = P.key; m.x = clamp(m.x, P.x0, P.x1); m.y = P.y; m.bedAt = null;
+        still(m);
         m.render();
       });
     }, FOLLOW_MS + 20);

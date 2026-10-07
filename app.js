@@ -553,11 +553,19 @@ function mascotView() {
 // Un appui sur Tino passe aussi au jour du calendrier qu'il cache (ça ne fait que le choisir) — pas ailleurs : une tâche
 // ou une note s'ouvrirait par-dessus lui à chaque caresse (et les 5 appuis n'arriveraient plus jusqu'à lui) ; on touche à côté
 const mascotTapThrough = (el) => !el.closest("input, select, textarea, label, .pl-nav, .pl-hello, .mp-nav") && !!el.closest(".pl-cal");
+// Heures de sommeil du petit Tino (cet appareil ; 🎣 Tino → 🦭 Tino) : il dort dans son lit de « from » à « to » (peut
+// passer minuit). Lu à chaque image par mascot.js : gardé en mémoire, relu quand on le change.
+let tinoSleepCache = null;
+const tinoSleep = () => (tinoSleepCache ??= { from: store.get("tinoSleepFrom", "22:00"), to: store.get("tinoSleepTo", "07:00") });
+function tinoNight(now = new Date()) {
+  const { from, to } = tinoSleep(), a = minutesOf(from), b = minutesOf(to), t = now.getHours() * 60 + now.getMinutes();
+  return a !== b && (a < b ? t >= a && t < b : t >= a || t < b);
+}
 function refreshMascots() {
   if (mascots) return mascots.refresh();
   const layer = document.createElement("div");
   document.body.append(layer);
-  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines });
+  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines });
   syncTinoBubble();
   applyOutfit();
 }
@@ -718,7 +726,11 @@ const lineWho = (l) => (l.by === S.user?.id ? S.me : S.partner);
 function fillTinoSettings(box) {
   const ok = S.extrasOk !== false, P = S.partner;
   const big = S.big, who = big && (big.by === S.user.id ? "you" : esc(P?.label ?? "the other"));
+  const sl = tinoSleep();
   box.innerHTML = `<label class="mp-check"><input type="checkbox" name="bigtino" ${showBig() ? "checked" : ""}> Big Tino above the calendar <span class="pl-legend">(this device)</span></label>
+    <div class="pl-sub">😴 Bedtime <span class="pl-legend">— this device only</span></div>
+    <span class="mp-row mp-dayhours"><label>Sleeps at <input type="time" name="sleepfrom" value="${sl.from}"></label><label>wakes up at <input type="time" name="sleepto" value="${sl.to}"></label></span>
+    <div class="pl-legend">At night Tino goes to bed in today's square (or wherever he is, if it's off screen).</div>
     ${ok ? `<div class="mp-row mp-anim"><span>Animation: <b>${big ? `new one, from ${who} (${shortDate(big.at)})` : "the original"}</b></span></div>
     <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/gif,image/webp,image/png,image/jpeg,video/*" hidden> Change… (GIF or video)</label>${big ? `<button type="button" data-act="bigreset">Back to the original</button>` : ""}</span>
     <div class="pl-legend mp-animstatus">Shared: ${esc(P?.label ?? "the other")} sees the same animation. A video becomes a looping animation (10 s max); files up to 10 MB.</div>
@@ -727,6 +739,14 @@ function fillTinoSettings(box) {
     <div class="mp-row mp-lineadd"><input type="text" name="newline" maxlength="120" placeholder="Something Tino should say…" enterkeyhint="done"><button type="button" data-act="lineadd">Add</button></div>`
     : `<div class="pl-legend">Tino's lines and changing the animation aren't available yet — Tony needs to run <code>supabase/08_tino_extras.sql</code>.</div>`}`;
   box.querySelector("[name=bigtino]").addEventListener("change", (ev) => { store.set("bigTino", ev.target.checked); placeBigTino(); align(); });
+  for (const name of ["sleepfrom", "sleepto"]) box.querySelector(`[name=${name}]`).addEventListener("change", () => {
+    const from = box.querySelector("[name=sleepfrom]").value, to = box.querySelector("[name=sleepto]").value;
+    if (!/^\d\d:\d\d$/.test(from) || !/^\d\d:\d\d$/.test(to)) return;
+    if (from === to) { toast("😴 Pick two different times"); fillTinoSettings(box); return; }
+    store.set("tinoSleepFrom", from); store.set("tinoSleepTo", to); tinoSleepCache = null;
+    mascots?.refresh();
+    toast(`😴 Tino sleeps from ${from} to ${to}`);
+  });
   if (!ok) return;
   const status = (t) => { box.querySelector(".mp-animstatus").textContent = t; };
   const input = box.querySelector("input[type=file]");
@@ -1513,12 +1533,24 @@ function renderTinoPane(pane) {
   fillDecor(pane.querySelector(".mp-decor"));
 }
 
+// Version qui tourne sur cet appareil = celle du cache du service worker (« meopeo-2026-10-07.8 », voir sw.js) : pour savoir
+// si un téléphone a bien reçu une nouvelle version. Sans service worker (PC de test) : « test (no offline copy) ».
+// Une nouvelle version installée pendant que la page tourne ne s'affiche qu'après un rechargement : on le dit.
+let swUpdated = false;
+navigator.serviceWorker?.addEventListener("controllerchange", () => { swUpdated = true; });
+async function appVersion() {
+  try {
+    const v = (await caches.keys()).filter((k) => k.startsWith("meopeo-")).map((k) => k.slice(7)).sort().pop();
+    return v ? v + (swUpdated ? " — just installed: close and reopen MeoPeo to use it" : "") : "test (no offline copy)";
+  } catch { return "?"; }
+}
+
 // ---------- Onglet ⚙ Settings : apparence (cet appareil), compte, notifications, widget, mot de passe ----------
 function renderSettings(pane) {
   const P = S.partner;
   pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><h4>🎨 Appearance</h4><div class="mp-look"></div></div>
     <form class="pl-editor-card mp-pane-card"><h4>${esc(S.me.mark)} ${esc(S.me.label)}</h4>
-    <p class="mp-sub">Signed in as ${esc(S.user.email)}</p>
+    <p class="mp-sub">Signed in as ${esc(S.user.email)}<br><span class="pl-legend mp-version">MeoPeo version …</span></p>
     <h4>🔔 Notifications</h4>
     <div class="mp-notif">Checking…</div>
     ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}
@@ -1537,6 +1569,7 @@ function renderSettings(pane) {
   });
   f.querySelector("[data-act=logout]").addEventListener("click", async () => { location.hash = ""; await logout(); });
   fillLook(pane.querySelector(".mp-look"));
+  appVersion().then((v) => { pane.querySelector(".mp-version").textContent = `MeoPeo version ${v}`; });
   fillNotif(f.querySelector(".mp-notif"));
   fillWidgets(f.querySelector(".mp-widgets"));
   f.notify?.addEventListener("change", async (ev) => {
