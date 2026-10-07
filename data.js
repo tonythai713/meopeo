@@ -19,6 +19,8 @@
 //   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id),
 //   subscribeOutfits(onChange) → garde-robe du petit Tino (supabase/12_tino_outfits.sql)
 //   listGrumbles(), addGrumble(body), deleteGrumble(id), subscribeGrumbles(onChange) → phrases râleuses (13_tino_grumbles.sql)
+//   listNotes(), addNote({ title, body, private }), saveNote(id, patch, version) → note | null (conflit), getNote(id),
+//   deleteNote(id), subscribeNotes(onChange) → notes partagées (14_notes.sql) ; une note : { id, by, title, body, private, at, updated, updatedBy }
 //
 // Format d'une tâche dans l'app : { id, owner, date: "AAAA-MM-JJ", end: "AAAA-MM-JJ" | null, time: "HH:MM" | null,
 //   course: nom de catégorie | null, label, done, moon: "full" | "crescent" | null, private, source }
@@ -26,6 +28,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_KEY, VAPID_PUBLIC_KEY } from "./config.js";
 
 const TASK_COLS = "id, owner, date, end_date, time, category, label, done, moon, private, source, remind_at";
+const NOTE_COLS = "id, author, title, body, private, created_at, updated_at, updated_by";
+const toNote = (r) => ({ id: r.id, by: r.author, title: r.title, body: r.body, private: !!r.private, at: r.created_at, updated: r.updated_at, updatedBy: r.updated_by });
 
 // Rappel : « AAAA-MM-JJ HH:MM » en heure locale dans l'app, instant absolu (UTC) dans la base
 const pad = (n) => String(n).padStart(2, "0");
@@ -161,6 +165,26 @@ export function createBackend() {
       if (old?.path) await sb.storage.from("tino").remove([old.path]);
     },
     async tinoFile(path) { return must(await sb.storage.from("tino").download(path)); }, // → Blob
+    // Notes partagées (supabase/14_notes.sql). saveNote vérifie la version : null = l'autre l'a modifiée (ou supprimée) entre-temps
+    async listNotes() {
+      return must(await sb.from("notes").select(NOTE_COLS).order("updated_at", { ascending: false })).map(toNote);
+    },
+    async addNote({ title, body, private: priv }) {
+      return toNote(must(await sb.from("notes").insert({ title, body, private: !!priv }).select(NOTE_COLS).single()));
+    },
+    async saveNote(id, patch, version) {
+      const rows = must(await sb.from("notes").update(patch).eq("id", id).eq("updated_at", version).select(NOTE_COLS));
+      return rows.length ? toNote(rows[0]) : null;
+    },
+    async getNote(id) { const r = must(await sb.from("notes").select(NOTE_COLS).eq("id", id).maybeSingle()); return r ? toNote(r) : null; },
+    async deleteNote(id) { must(await sb.from("notes").delete().eq("id", id)); },
+    subscribeNotes(onChange) {
+      const ch = sb.channel("notes-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "notes" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+
     // Phrases râleuses de Tino, quand on le touche 5 fois (supabase/13_tino_grumbles.sql) ; canal temps réel à part
     async listGrumbles() {
       const rows = must(await sb.from("tino_grumbles").select("id, author, body, created_at").order("id"));

@@ -64,7 +64,7 @@ const upcomingOf = (list) => [
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -83,6 +83,7 @@ export async function start(backend) {
   tick();
   root = document.getElementById("app");
   toastBox = document.getElementById("toasts");
+  setupTabs();
   UI.day = today;
   UI.showPartner = store.get("showPartner", true);
   db.onAuthChange((u) => { if ((u?.id ?? null) !== (S.user?.id ?? null)) (u ? boot(u) : showLogin()); });
@@ -90,7 +91,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("focus", wake);
   window.addEventListener("online", wake);
@@ -129,7 +130,7 @@ async function ensurePush() {
 function remindNotice(r) {
   if (!r) return;
   if (new Date(r.replace(" ", "T")) < new Date()) { toast(`⚠️ ${BELL} ${remindLabel(r)} is already past — no notification will be sent`); return; }
-  pushState().then((st) => toast(`${BELL} Reminder set: ${remindLabel(r)}${st === "on" ? "" : " — turn on notifications in ⚙ to receive it"}`));
+  pushState().then((st) => toast(`${BELL} Reminder set: ${remindLabel(r)}${st === "on" ? "" : " — turn on notifications in Settings to receive it"}`));
 }
 
 async function boot(user) {
@@ -141,6 +142,7 @@ async function boot(user) {
   loadExtras();
   loadOutfits();
   loadGrumbles();
+  loadNotes();
   resubscribe();
   ensurePush();
 }
@@ -150,6 +152,7 @@ function resubscribe() {
   unsubExtras?.(); unsubExtras = S.user ? db.subscribeTinoExtras(() => loadExtras()) : null;
   unsubOutfits?.(); unsubOutfits = S.user ? db.subscribeOutfits(() => loadOutfits()) : null; // canal à part (sans 12, rien d'autre ne casse)
   unsubGrumbles?.(); unsubGrumbles = S.user ? db.subscribeGrumbles(() => loadGrumbles()) : null; // idem (13)
+  unsubNotes?.(); unsubNotes = S.user ? db.subscribeNotes(() => loadNotes()) : null; // idem (14)
 }
 function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 250); } // plusieurs événements d'affilée = un seul rechargement
 
@@ -220,6 +223,8 @@ function showLogin() {
   unsubExtras?.(); unsubExtras = null; S.lines = []; S.extrasOk = null;
   unsubOutfits?.(); unsubOutfits = null; S.outfits = []; S.worn = { head: null, body: null }; S.outfitsOk = null; applyOutfit();
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
+  unsubNotes?.(); unsubNotes = null; S.notes = []; S.notesOk = null;
+  showTab(); // plus de barre d'onglets sur l'écran de connexion
   root.innerHTML = `<div class="mp-login pl-card"><h1>MeoPeo</h1><p class="mp-sub">💗 MeoMeo · 💜 PeoPeo</p>
     <form><input type="email" name="email" placeholder="E-mail" autocomplete="username" required>
       <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
@@ -259,18 +264,18 @@ function render() {
   const off = S.offline ? new Date(S.offline) : null;
   root.innerHTML = `${off ? `<div class="mp-offline">📴 Offline — showing your tasks as of ${off.getDate()}.${pad(off.getMonth() + 1)} at ${pad(off.getHours())}:${pad(off.getMinutes())}. Changes can't be saved until you're back online.</div>` : ""}<header class="pl-hello"><span class="mp-date">${dayTitle(now)}, ${now.getFullYear()}</span>
       <span class="mp-who">${esc(S.me.mark)} ${esc(S.me.label)}</span>
-      <button class="pl-refresh" data-act="refresh" title="Reload">⟳</button><button class="pl-refresh" data-act="menu" title="Account">⚙</button></header>
+      <button class="pl-refresh" data-act="refresh" title="Reload">⟳</button></header>
     <div class="pl-split"><div class="pl-left"></div><div class="pl-right"></div></div>
     <div class="pl-bottom"><div class="mp-partner"></div></div>`;
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); resubscribe(); });
-  root.querySelector("[data-act=menu]").addEventListener("click", openMenu);
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
   align();
+  if (!document.body.classList.contains("mp-logged")) showTab(); // première page après la connexion : barre d'onglets
 }
 
 function itemHtml(e) {
@@ -855,14 +860,15 @@ function renderPartner(el, P) {
 }
 
 // ---------- Fenêtres (édition, compte) — posées sur <body> pour survivre aux mises à jour en temps réel ----------
-function overlay(html) {
+function overlay(html, { onClose = null } = {}) {
   document.querySelector(".pl-editor")?.remove();
   const ov = document.createElement("div");
   ov.className = "pl-editor";
   ov.innerHTML = html;
   document.body.appendChild(ov);
-  ov.addEventListener("click", (ev) => { if (ev.target === ov) ov.remove(); });
-  ov.querySelector("[data-act=cancel]")?.addEventListener("click", () => ov.remove());
+  const close = () => (onClose ? onClose() : ov.remove());
+  ov.addEventListener("click", (ev) => { if (ev.target === ov) close(); });
+  ov.querySelector("[data-act=cancel]")?.addEventListener("click", close);
   return ov;
 }
 
@@ -976,7 +982,7 @@ async function newWidgetKey() {
 }
 // Petit script à coller dans Scriptable : il télécharge le vrai widget (widget/scriptable.js) et garde une copie hors connexion
 const scriptableLoader = (token) => `// MeoPeo widget for Scriptable — paste ALL of this into a new script named "MeoPeo".
-// KEY = your personal widget key: don't share it. Lost phone? Remove this widget in MeoPeo (⚙ → Home-screen widget).
+// KEY = your personal widget key: don't share it. Lost phone? Remove this widget in MeoPeo (Settings → Home-screen widget).
 const KEY = "${token}";
 const CODE_URL = "${WIDGET_CODE_URL}";
 const fm = FileManager.local();
@@ -1048,40 +1054,213 @@ function showWidgetSetup(box, label, token) {
   div.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-function openMenu() {
+// ---------- Onglets : barre de 4 boutons en bas (téléphone et ordinateur) ----------
+// Calendar = la page de toujours (#app + carte des messages Tino) ; Notes, Tino et Settings = sections à part, remplies
+// à chaque ouverture. L'onglet est dans l'adresse (#notes…) : le bouton « retour » et un rechargement y restent.
+const TABS = [["calendar", "📅", "Calendar"], ["notes", "📝", "Notes"], ["tino", "🎣", "Tino"], ["settings", "⚙", "Settings"]];
+let nav = null;
+const panes = {};
+const currentTab = () => { const t = location.hash.replace("#", ""); return TABS.some(([id]) => id === t) ? t : "calendar"; };
+function setupTabs() {
+  nav = document.createElement("nav");
+  nav.className = "mp-nav";
+  nav.setAttribute("aria-label", "MeoPeo");
+  nav.innerHTML = TABS.map(([id, icon, label]) => `<button type="button" data-tab="${id}"><span class="mp-nav-i" aria-hidden="true">${icon}</span>${label}</button>`).join("");
+  document.body.append(nav);
+  nav.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.tab === currentTab()) { scrollTo({ top: 0, behavior: "smooth" }); return; }
+    location.hash = b.dataset.tab === "calendar" ? "" : b.dataset.tab; // → hashchange → showTab
+  }));
+  for (const [id] of TABS.slice(1)) {
+    const p = document.createElement("section");
+    p.className = "mp-pane";
+    p.hidden = true;
+    toastBox.before(p);
+    panes[id] = p;
+  }
+  addEventListener("hashchange", () => showTab());
+}
+function showTab() {
+  const t = currentTab(), logged = !!(S.user && S.me);
+  document.body.classList.toggle("mp-logged", logged);
+  document.body.classList.toggle("mp-on-calendar", !logged || t === "calendar");
+  nav?.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === t ? "page" : "false"));
+  for (const [id, p] of Object.entries(panes)) p.hidden = !logged || id !== t;
+  if (!logged) return;
+  if (t === "calendar") { placeBigTino(); align(); } // de retour : Tino, son lit, le grand Tino et les colonnes se remettent en place
+  else if (t === "notes") renderNotes(panes.notes);
+  else if (t === "tino") renderTinoPane(panes.tino);
+  else renderSettings(panes.settings);
+  scrollTo(0, 0);
+}
+
+// ---------- Onglet 🎣 Tino : tout ce qui le personnalise (le jeu viendra ici) ----------
+function renderTinoPane(pane) {
+  pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><h4>🦭 Tino</h4><div class="mp-tinoset"></div><div class="mp-grumbles"></div></div>
+    <div class="pl-editor-card mp-pane-card"><h4>👒 Tino's wardrobe</h4><div class="mp-wardrobe"></div></div>
+    <div class="pl-editor-card mp-pane-card mp-soon"><h4>🎣 Coming soon</h4><p>Take care of Tino 🍼 and go fishing with him 🎣 — and win things to dress him up.</p></div>`;
+  fillTinoSettings(pane.querySelector(".mp-tinoset"));
+  fillGrumbles(pane.querySelector(".mp-grumbles"));
+  fillWardrobe(pane.querySelector(".mp-wardrobe"));
+}
+
+// ---------- Onglet ⚙ Settings : compte, notifications, widget, mot de passe ----------
+function renderSettings(pane) {
   const P = S.partner;
-  const ov = overlay(`<form class="pl-editor-card"><h4>${esc(S.me.mark)} ${esc(S.me.label)}</h4>
+  pane.innerHTML = `<form class="pl-editor-card mp-pane-card"><h4>${esc(S.me.mark)} ${esc(S.me.label)}</h4>
     <p class="mp-sub">Signed in as ${esc(S.user.email)}</p>
     <h4>🔔 Notifications</h4>
     <div class="mp-notif">Checking…</div>
     ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}
-    <h4>🦭 Tino</h4>
-    <div class="mp-tinoset"></div>
-    <div class="mp-grumbles"></div>
-    <h4>👒 Tino's wardrobe</h4>
-    <div class="mp-wardrobe"></div>
     <h4>📱 Home-screen widget</h4>
     <div class="mp-widgets">Checking…</div>
     <h4>🔑 Password</h4>
     <label>New password<input type="password" name="pw" autocomplete="new-password" minlength="6"></label>
     <label>Repeat it<input type="password" name="pw2" autocomplete="new-password" minlength="6"></label>
-    <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button><span class="mp-grow"></span><button type="button" data-act="cancel">Close</button><button type="submit" class="mp-cta">Change password</button></div></form>`);
-  const f = ov.querySelector("form");
+    <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button><span class="mp-grow"></span><button type="submit" class="mp-cta">Change password</button></div></form>`;
+  const f = pane.querySelector("form");
   f.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     if (!f.pw.value) return;
     if (f.pw.value !== f.pw2.value) { toast("The two passwords are different"); return; }
-    if (await guard(() => db.changePassword(f.pw.value), "Couldn't change the password")) { ov.remove(); toast("Password changed"); }
+    if (await guard(() => db.changePassword(f.pw.value), "Couldn't change the password")) { f.pw.value = f.pw2.value = ""; toast("Password changed"); }
   });
-  f.querySelector("[data-act=logout]").addEventListener("click", async () => { ov.remove(); await logout(); });
+  f.querySelector("[data-act=logout]").addEventListener("click", async () => { location.hash = ""; await logout(); });
   fillNotif(f.querySelector(".mp-notif"));
-  fillTinoSettings(f.querySelector(".mp-tinoset"));
-  fillGrumbles(f.querySelector(".mp-grumbles"));
-  fillWardrobe(f.querySelector(".mp-wardrobe"));
   fillWidgets(f.querySelector(".mp-widgets"));
   f.notify?.addEventListener("change", async (ev) => {
     const on = ev.target.checked;
     if (await guard(() => db.updateMyProfile({ notify_partner: on }))) { S.me.notify_partner = on; toast(on ? `You'll be told when ${P.label} adds a task` : `No more notifications for ${P.label}'s new tasks`); }
     else ev.target.checked = !on;
   });
+}
+
+// ---------- Onglet 📝 Notes partagées (supabase/14_notes.sql) ----------
+// Les deux lisent, écrivent et suppriment les notes partagées ; 🔒 = seulement l'auteur. L'éditeur enregistre tout seul
+// (1,5 s après la dernière frappe, et en fermant) en vérifiant la version : si l'autre a modifié la note entre-temps,
+// on demande laquelle garder au lieu d'écraser. Le temps réel rafraîchit la liste, jamais l'éditeur ouvert.
+// Hors ligne : le texte est gardé sur l'appareil (brouillon) et enregistré à la prochaine ouverture de la note.
+let unsubNotes = null, noteOpen = null;
+const draftKey = (id) => "draft." + S.user.id + "." + (id ?? "new");
+async function loadNotes() {
+  if (!S.user) return;
+  try { S.notes = await db.listNotes(); S.notesOk = true; store.set("notes." + S.user.id, S.notes); }
+  catch (err) {
+    if (/does not exist|schema cache/i.test(err.message)) { S.notesOk = false; S.notes = []; }
+    else S.notes = store.get("notes." + S.user.id, S.notes); // hors ligne : la dernière liste
+  }
+  noteOpen?.refreshed();
+  if (currentTab() === "notes" && document.body.classList.contains("mp-logged")) renderNotes(panes.notes);
+}
+function renderNotes(pane) {
+  const P = S.partner;
+  if (S.notesOk === false) {
+    pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><h4>📝 Notes</h4><div class="pl-legend">Shared notes aren't available yet — Tony needs to run <code>supabase/14_notes.sql</code>.</div></div>`;
+    return;
+  }
+  const who = (id) => (id === S.user.id ? S.me : P);
+  const preview = (n) => n.body.replace(/\s*\n\s*/g, " · ").slice(0, 140);
+  const newDraft = store.get(draftKey(null), null);
+  const card = (n) => `<button type="button" class="mp-note" data-note="${n.id}">
+      <span class="mp-note-title">${n.private ? "🔒 " : ""}${esc(n.title || "Untitled")}${store.get(draftKey(n.id), null) ? ` <span class="mp-src">not saved yet</span>` : ""}</span>
+      ${n.body.trim() ? `<span class="mp-note-preview">${esc(preview(n))}</span>` : ""}
+      <span class="pl-legend">${esc(who(n.updatedBy)?.mark ?? "")} ${tinoWhen(n.updated)}</span></button>`;
+  pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><div class="mp-notes-head"><h4>📝 Notes</h4><button type="button" class="mp-cta" data-act="newnote">＋ New note</button></div>
+    ${newDraft ? `<button type="button" class="mp-note" data-note="new"><span class="mp-note-title">${esc(newDraft.title || "Untitled")} <span class="mp-src">new · not saved yet</span></span></button>` : ""}
+    <div class="mp-notes">${S.notes.length ? S.notes.map(card).join("") : newDraft ? "" : `<div class="pl-empty">No notes yet — shopping lists, ideas, plans… anything you both want to keep.</div>`}</div>
+    <div class="pl-legend">Shared with ${esc(P?.mark ?? "")} ${esc(P?.label ?? "the other")}: you can both edit and delete shared notes. 🔒 = only you.</div></div>`;
+  pane.querySelector("[data-act=newnote]").addEventListener("click", () => openNote(null));
+  pane.querySelectorAll("[data-note]").forEach((b) => b.addEventListener("click", () => openNote(b.dataset.note === "new" ? null : S.notes.find((n) => n.id === b.dataset.note) ?? null)));
+}
+function openNote(note) {
+  const P = S.partner?.label ?? "the other";
+  const mine = !note || note.by === S.user.id;
+  let cur = note ? { ...note } : null, dirty = false, timer = 0, busy = null;
+  const draft = store.get(draftKey(cur?.id ?? null), null); // texte pas encore enregistré, gardé sur cet appareil
+  const start = draft ?? cur ?? { title: "", body: "", private: false };
+  const ov = overlay(`<form class="pl-editor-card mp-note-editor">
+    <input type="text" name="title" maxlength="120" placeholder="Title" value="${esc(start.title)}">
+    <textarea name="body" maxlength="20000" rows="12" placeholder="Write here…">${esc(start.body)}</textarea>
+    <div class="mp-note-conflict" hidden></div>
+    <div class="pl-editor-row"><label class="mp-check"${mine ? "" : " hidden"}><input type="checkbox" name="private" ${start.private ? "checked" : ""}> 🔒 Only me</label><span class="mp-grow"></span><span class="pl-legend mp-note-state"></span></div>
+    <div class="pl-editor-actions">${cur ? `<button type="button" data-act="delete" class="mp-danger">🗑 Delete</button>` : ""}<span class="mp-grow"></span><button type="submit" class="mp-cta">Done</button></div></form>`, { onClose: () => close() });
+  const f = ov.querySelector("form"), conflictBox = f.querySelector(".mp-note-conflict");
+  const state = (t) => { f.querySelector(".mp-note-state").textContent = t; };
+  const values = () => ({ title: f.title.value.trim(), body: f.body.value, private: mine ? f.private.checked : !!cur?.private });
+  if (draft) { dirty = true; state("Not saved yet (kept on this phone)"); }
+  else if (cur) state(`${S.user.id === cur.updatedBy ? "You" : P} · ${tinoWhen(cur.updated)}`);
+
+  async function save() {
+    if (!dirty) return true;
+    const v = values();
+    if (!cur && !v.title && !v.body.trim()) { dirty = false; store.del(draftKey(null)); return true; } // note vide : jamais créée
+    store.set(draftKey(cur?.id ?? null), v);
+    if (!navigator.onLine) { state("📴 Offline — kept on this phone"); return false; }
+    state("Saving…");
+    try {
+      if (!cur) { cur = await db.addNote(v); store.del(draftKey(null)); }
+      else {
+        const saved = await db.saveNote(cur.id, mine ? v : { title: v.title, body: v.body }, cur.updated);
+        if (!saved) { await conflict(v); return false; }
+        cur = saved;
+      }
+      store.del(draftKey(cur.id));
+      if (values().title === v.title && values().body === v.body && values().private === v.private) dirty = false; // (rien tapé pendant l'envoi)
+      state(dirty ? "…" : `Saved ${tinoWhen(cur.updated)}`);
+      if (!f.querySelector("[data-act=delete]")) addDelete();
+      loadNotes();
+      return !dirty;
+    } catch (err) { state(`⚠️ Not saved (${err.message})`); return false; }
+  }
+  const saveOnce = () => (busy ??= save().finally(() => { busy = null; }));
+  // L'autre a modifié (ou supprimé) la note pendant qu'on écrivait : on demande au lieu d'écraser
+  async function conflict(v) {
+    const latest = await db.getNote(cur.id).catch(() => undefined);
+    conflictBox.hidden = false;
+    if (latest === null) {
+      conflictBox.innerHTML = `${esc(P)} deleted this note while you were writing. <span class="mp-row"><button type="button" data-c="new">Keep my text as a new note</button></span>`;
+      conflictBox.querySelector("[data-c=new]").addEventListener("click", () => { store.del(draftKey(cur.id)); cur = null; conflictBox.hidden = true; dirty = true; saveOnce(); });
+      state("⚠️ Not saved");
+      return;
+    }
+    if (!latest) { state("⚠️ Not saved (connection)"); conflictBox.hidden = true; return; }
+    conflictBox.innerHTML = `${esc(P)} changed this note while you were writing. <span class="mp-row"><button type="button" data-c="mine">Keep mine</button><button type="button" data-c="theirs">Show theirs</button></span>`;
+    conflictBox.querySelector("[data-c=mine]").addEventListener("click", () => { cur = latest; conflictBox.hidden = true; dirty = true; saveOnce(); });
+    conflictBox.querySelector("[data-c=theirs]").addEventListener("click", () => {
+      cur = latest; f.title.value = latest.title; f.body.value = latest.body; if (mine) f.private.checked = latest.private;
+      store.del(draftKey(cur.id)); dirty = false; conflictBox.hidden = true; state(`${P}'s version · ${tinoWhen(latest.updated)}`);
+    });
+    state("⚠️ Not saved");
+  }
+  f.addEventListener("input", () => { dirty = true; state("…"); clearTimeout(timer); timer = setTimeout(saveOnce, 1500); });
+  async function close() {
+    clearTimeout(timer);
+    let ok = await saveOnce();
+    if (!ok && dirty && conflictBox.hidden && navigator.onLine) ok = await saveOnce(); // (tapé pendant l'envoi)
+    if (!ok && !conflictBox.hidden) return; // une question est posée : on reste
+    if (!ok && dirty) toast(navigator.onLine ? "⚠️ The note wasn't saved — it's kept on this phone, open it again to retry" : "📴 Kept on this phone — open the note again when you're online to save it");
+    noteOpen = null;
+    ov.remove();
+    if (currentTab() === "notes") renderNotes(panes.notes);
+  }
+  f.addEventListener("submit", (ev) => { ev.preventDefault(); close(); });
+  function addDelete() {
+    const actions = f.querySelector(".pl-editor-actions");
+    actions.insertAdjacentHTML("afterbegin", `<button type="button" data-act="delete" class="mp-danger">🗑 Delete</button>`);
+    const del = actions.querySelector("[data-act=delete]");
+    del.addEventListener("click", async () => {
+      if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = cur.private ? "Sure? 🗑" : `Sure? ${P} loses it too 🗑`; return; } // 2e appui pour confirmer
+      clearTimeout(timer);
+      if (await guard(() => db.deleteNote(cur.id), "Couldn't delete the note")) { store.del(draftKey(cur.id)); noteOpen = null; ov.remove(); toast(`Deleted: ${cur.title || "Untitled"}`); loadNotes(); }
+    });
+  }
+  if (cur) { f.querySelector("[data-act=delete]").remove(); addDelete(); }
+  // Liste rechargée (temps réel) : on prévient seulement, l'éditeur n'est jamais réécrit
+  noteOpen = {
+    refreshed() {
+      const n = cur && S.notes.find((x) => x.id === cur.id);
+      if (n && n.updated !== cur.updated && n.updatedBy !== S.user.id) state(`✏️ ${P} just edited this note — when you save, you'll choose which version to keep`);
+    },
+  };
+  if (!cur) f.title.focus({ preventScroll: true });
 }
