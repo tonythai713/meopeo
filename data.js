@@ -19,6 +19,8 @@
 //   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id),
 //   subscribeOutfits(onChange) → garde-robe du petit Tino (supabase/12_tino_outfits.sql)
 //   listGrumbles(), addGrumble(body), deleteGrumble(id), subscribeGrumbles(onChange) → phrases râleuses (13_tino_grumbles.sql)
+//   listSeries(), createSeries(task, rule, today), topUpSeries(today), splitSeries(id, task, shift), endSeries(id),
+//   subscribeSeries(onChange) → tâches récurrentes (15_recurring.sql) ; une tâche a aussi « series » (id de sa série ou null)
 //   listNotes(), addNote({ title, body, private }), saveNote(id, patch, version) → note | null (conflit), getNote(id),
 //   deleteNote(id), subscribeNotes(onChange) → notes partagées (14_notes.sql) ; une note : { id, by, title, body, private, at, updated, updatedBy }
 //
@@ -27,7 +29,8 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm";
 import { SUPABASE_URL, SUPABASE_KEY, VAPID_PUBLIC_KEY } from "./config.js";
 
-const TASK_COLS = "id, owner, date, end_date, time, category, label, done, moon, private, source, remind_at";
+// « * » : marche avant et après 15_recurring.sql (colonne series) — une colonne inconnue ferait échouer tout le chargement
+const TASK_COLS = "*";
 const NOTE_COLS = "id, author, title, body, private, created_at, updated_at, updated_by";
 const toNote = (r) => ({ id: r.id, by: r.author, title: r.title, body: r.body, private: !!r.private, at: r.created_at, updated: r.updated_at, updatedBy: r.updated_by });
 
@@ -39,8 +42,12 @@ const localStamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.g
 const toTask = (r) => ({
   id: r.id, owner: r.owner, date: r.date, end: r.end_date ?? null, time: r.time ? r.time.slice(0, 5) : null,
   course: r.category ?? null, label: r.label, done: !!r.done, moon: r.moon ?? null, private: !!r.private, source: r.source,
-  remind: r.remind_at ? localStamp(new Date(r.remind_at)) : null,
+  remind: r.remind_at ? localStamp(new Date(r.remind_at)) : null, series: r.series ?? null,
 });
+// Séries : fuseau du téléphone, et rappel découpé en « jour relatif à l'occurrence » + « heure »
+const TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Zurich"; } catch { return "Europe/Zurich"; } })();
+const dayDiff = (a, b) => Math.round((Date.UTC(...b.split("-").map((n, i) => n - (i === 1))) - Date.UTC(...a.split("-").map((n, i) => n - (i === 1)))) / 86400000);
+const remindParts = (date, remind) => (remind ? { days: dayDiff(date, remind.slice(0, 10)), time: remind.slice(11) } : { days: null, time: null });
 // Tâche de l'app → colonnes de la base (seulement les champs fournis)
 const toRow = (t) => {
   const r = {};
@@ -165,6 +172,36 @@ export function createBackend() {
       if (old?.path) await sb.storage.from("tino").remove([old.path]);
     },
     async tinoFile(path) { return must(await sb.storage.from("tino").download(path)); }, // → Blob
+    // Tâches récurrentes (supabase/15_recurring.sql) : chaque occurrence est une vraie tâche (colonne series).
+    // rule = { freq: "daily" | "weekly" | "monthly" | "yearly", every, until }. Rappel : jour relatif + heure, fuseau du téléphone.
+    async listSeries() {
+      return must(await sb.from("task_series").select("id, owner, freq, every, anchor, until, label, private"));
+    },
+    async createSeries(t, rule, today) {
+      const r = remindParts(t.date, t.remind);
+      return must(await sb.rpc("create_series", {
+        p_freq: rule.freq, p_every: rule.every ?? 1, p_anchor: t.date, p_until: rule.until || null, p_span: t.end ? dayDiff(t.date, t.end) : 0,
+        p_time: t.time || null, p_category: t.course || null, p_label: t.label, p_moon: t.moon || null, p_private: !!t.private,
+        p_remind_days: r.days, p_remind_time: r.time, p_tz: TZ, p_today: today,
+      }));
+    },
+    async topUpSeries(today) { return must(await sb.rpc("top_up_my_series", { p_today: today })); },
+    // « Cette occurrence et les suivantes » : shift = nombre de jours de décalage (nouvelle date − ancienne)
+    async splitSeries(id, t, shift) {
+      const r = remindParts(t.date, t.remind);
+      return must(await sb.rpc("split_series", {
+        p_task: id, p_shift: shift, p_time: t.time || null, p_category: t.course || null, p_label: t.label, p_moon: t.moon || null,
+        p_private: !!t.private, p_remind_days: r.days, p_remind_time: r.time, p_tz: TZ,
+      }));
+    },
+    async endSeries(id) { return must(await sb.rpc("end_series", { p_task: id })); },
+    subscribeSeries(onChange) {
+      const ch = sb.channel("series-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "task_series" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+
     // Notes partagées (supabase/14_notes.sql). saveNote vérifie la version : null = l'autre l'a modifiée (ou supprimée) entre-temps
     async listNotes() {
       return must(await sb.from("notes").select(NOTE_COLS).order("updated_at", { ascending: false })).map(toNote);

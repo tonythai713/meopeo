@@ -310,3 +310,29 @@ textarea { font: inherit; font-size: 16px; color: var(--text-normal); background
 .mp-note-editor input[name=title] { font-weight: 700; }
 .mp-note-editor textarea { min-height: 40vh; resize: vertical; line-height: 1.45; }
 .mp-note-conflict { padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 232, 163, 0.6); background: rgba(255, 232, 163, 0.08); font-size: 0.92em; }
+
+/* Tâches récurrentes : 🔁 dans les formulaires et les listes ; occurrence passée = estompée (jamais « en retard ») */
+.mp-repeat { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; color: #d9dcff; }
+.mp-rend { display: inline-flex; align-items: center; gap: 4px; font-size: 0.9em; }
+.mp-rep { border-color: rgba(200, 210, 255, 0.45); color: #d9dcff; }
+.mp-repeat-info { font-size: 0.9em; color: #d9dcff; }
+.mp-scope { padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 232, 163, 0.6); background: rgba(255, 232, 163, 0.08); font-size: 0.92em; }
+.pl-item.past, .pl-chip.past { opacity: 0.55; }
+
+/* Notes : lecture (cases à cocher, puces) / écriture */
+.mp-note-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mp-seg { display: inline-flex; border: 1px solid var(--pl-line); border-radius: 10px; overflow: hidden; }
+.mp-seg button { border: 0; border-radius: 0; min-height: 34px; background: transparent; }
+.mp-seg button[aria-pressed="true"] { background: rgba(255, 232, 163, 0.18); color: #ffe8a3; }
+.mp-note-ins { display: inline-flex; gap: 6px; }
+.mp-note-ins[hidden] { display: none; }
+.mp-note-view { min-height: 30vh; padding: 6px 2px; line-height: 1.45; cursor: text; overflow-wrap: anywhere; }
+.mp-nl { padding: 1px 0; }
+.mp-nl-gap { height: 0.7em; }
+.mp-nl-head { font-weight: 700; color: #ffe8a3; margin-top: 6px; }
+.mp-nl-bullet { position: relative; padding-left: 18px; }
+.mp-nl-bullet::before { content: "•"; position: absolute; left: 4px; color: #ffe8a3; }
+.mp-nl-check { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; cursor: pointer; }
+.mp-nl-check input { width: 22px; height: 22px; flex: none; margin-top: 1px; }
+.mp-nl-check.done span { text-decoration: line-through; color: var(--text-muted); }
+.mp-note-editor [hidden] { display: none !important; }

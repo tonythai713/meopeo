@@ -40,7 +40,7 @@ const rangeInfo = (e) => {
 function urgency(e) {
   if (e.done) return "done";
   if (ongoing(e)) return "u1";
-  if (diffDays(today, lastDay(e)) < 0) return "late";
+  if (diffDays(today, lastDay(e)) < 0) return e.series ? "past" : "late"; // tâche récurrente : jamais « en retard »
   const d = diffDays(today, e.date);
   return d <= 1 ? "u1" : d <= 3 ? "u3" : d <= 7 ? "u7" : d <= 14 ? "u14" : "far";
 }
@@ -57,14 +57,27 @@ const moonRadios = (pre = "") => `<span class="pl-moon">${[["", "No glow"], ["fu
   .map(([v, l]) => `<label><input type="radio" name="moon" value="${v}" ${v === (pre ?? "") ? "checked" : ""}> ${l}</label>`).join("")}</span>`;
 const SRC = { devoir: "PC", excel: "Excel", echeance: "deadline", phone: "📱 planner" }; // tâches venues du tableau de bord Obsidian
 const byDate = (a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? ""));
-const upcomingOf = (list) => [
-  ...list.filter((e) => urgency(e) === "late"),
-  ...list.filter((e) => !e.done && lastDay(e) >= today).slice(0, UPCOMING_COUNT),
-];
+// Liste : les tâches en retard, puis les prochaines — pour une tâche récurrente, seulement sa prochaine occurrence
+const upcomingOf = (list) => {
+  const seen = new Set();
+  return [
+    ...list.filter((e) => urgency(e) === "late"),
+    ...list.filter((e) => !e.done && lastDay(e) >= today && (!e.series || (!seen.has(e.series) && seen.add(e.series)))).slice(0, UPCOMING_COUNT),
+  ];
+};
+// Répétition : choix du formulaire → règle { freq, every, until } ; texte « every week · until 20.12 »
+const REPEATS = [["", "Doesn't repeat"], ["daily", "Every day"], ["weekly", "Every week"], ["weekly2", "Every 2 weeks"], ["monthly", "Every month"], ["yearly", "Every year"]];
+const ruleOf = (f) => { const v = f.get("repeat"); return v ? { freq: v === "weekly2" ? "weekly" : v, every: v === "weekly2" ? 2 : 1, until: f.get("rend") || null } : null; };
+const ruleText = (r) => (r ? `every ${r.freq === "daily" ? "day" : r.freq === "weekly" ? (r.every === 2 ? "2 weeks" : "week") : r.freq === "monthly" ? "month" : "year"}${r.until ? " · until " + dm(r.until) : ""}` : "repeats");
+const seriesOf = (e) => S.series.find((x) => x.id === e.series);
+const repeatPill = (e) => (e.series ? ` <span class="pl-bell mp-rep" title="Repeats ${esc(ruleText(seriesOf(e)))}">🔁</span>` : "");
+const repeatInputs = () => `<span class="mp-repeat"${S.seriesOk === false ? " hidden" : ""} title="Repeat this task">🔁 <select name="repeat">${REPEATS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>
+  <label class="mp-rend" hidden>ends <input type="date" name="rend" title="Last possible day (optional)"></label></span>`;
+const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); sel?.addEventListener("change", () => { form.querySelector(".mp-rend").hidden = !sel.value; }); };
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, series: [], seriesOk: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -91,7 +104,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("focus", wake);
   window.addEventListener("online", wake);
@@ -143,6 +156,7 @@ async function boot(user) {
   loadOutfits();
   loadGrumbles();
   loadNotes();
+  loadSeries();
   resubscribe();
   ensurePush();
 }
@@ -153,6 +167,7 @@ function resubscribe() {
   unsubOutfits?.(); unsubOutfits = S.user ? db.subscribeOutfits(() => loadOutfits()) : null; // canal à part (sans 12, rien d'autre ne casse)
   unsubGrumbles?.(); unsubGrumbles = S.user ? db.subscribeGrumbles(() => loadGrumbles()) : null; // idem (13)
   unsubNotes?.(); unsubNotes = S.user ? db.subscribeNotes(() => loadNotes()) : null; // idem (14)
+  unsubSeries?.(); unsubSeries = S.user ? db.subscribeSeries(() => loadSeries()) : null; // idem (15)
 }
 function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 250); } // plusieurs événements d'affilée = un seul rechargement
 
@@ -224,6 +239,7 @@ function showLogin() {
   unsubOutfits?.(); unsubOutfits = null; S.outfits = []; S.worn = { head: null, body: null }; S.outfitsOk = null; applyOutfit();
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
   unsubNotes?.(); unsubNotes = null; S.notes = []; S.notesOk = null;
+  unsubSeries?.(); unsubSeries = null; S.series = []; S.seriesOk = null; toppedUp = 0;
   showTab(); // plus de barre d'onglets sur l'écran de connexion
   root.innerHTML = `<div class="mp-login pl-card"><h1>MeoPeo</h1><p class="mp-sub">💗 MeoMeo · 💜 PeoPeo</p>
     <form><input type="email" name="email" placeholder="E-mail" autocomplete="username" required>
@@ -270,7 +286,7 @@ function render() {
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
@@ -285,7 +301,7 @@ function itemHtml(e) {
   const when = ongoing(e) && !e.done;
   return `<div class="pl-item ${urgency(e)}${glowClass(e)}" style="--c:${e.color}">${box}
     <span class="pl-when">${when ? "now" : relDay(e.date)}<small>${dm(when ? today : e.date)}</small></span>
-    <span class="pl-what"${e.tickable ? ` data-edit="${e.id}"` : ""}>${tag}${hourPill(e)}${esc(e.label)}${SRC[e.source] ? ` <span class="mp-src" title="From Tony's Obsidian dashboard">${SRC[e.source]}</span>` : ""}${e.private ? ` <span class="mp-priv" title="Private: only you can see it">🔒</span>` : ""}${rangeInfo(e)}${bellPill(e)}</span>${e.editable ? `<button class="pl-edit" data-edit="${e.id}" title="Edit this task">✏️</button>` : ""}</div>`;
+    <span class="pl-what"${e.tickable ? ` data-edit="${e.id}"` : ""}>${tag}${hourPill(e)}${esc(e.label)}${SRC[e.source] ? ` <span class="mp-src" title="From Tony's Obsidian dashboard">${SRC[e.source]}</span>` : ""}${e.private ? ` <span class="mp-priv" title="Private: only you can see it">🔒</span>` : ""}${rangeInfo(e)}${repeatPill(e)}${bellPill(e)}</span>${e.editable ? `<button class="pl-edit" data-edit="${e.id}" title="Edit this task">✏️</button>` : ""}</div>`;
 }
 function bindItems(el) {
   el.querySelectorAll("[data-tick]").forEach((cb) => cb.addEventListener("change", () => toggleDone(findTask(cb.dataset.tick), cb.checked)));
@@ -320,12 +336,14 @@ function renderMine(el) {
       ${moonRadios()}
       <label class="mp-check" title="Private: ${esc(S.partner?.label ?? "the other")} won't see it"><input type="checkbox" name="private"> 🔒 Private</label>
       ${remindInputs()}
+      ${repeatInputs()}
       <button type="submit" class="mp-cta">Add</button></form></details></div>`;
   bindItems(el);
   const form = el.querySelector("form");
   const details = el.querySelector(".pl-add");
   details.addEventListener("toggle", () => { UI.addOpen = details.open; });
   if (UI.focusAdd) { UI.focusAdd = false; form.text.focus({ preventScroll: true }); }
+  bindRepeat(form);
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const f = new FormData(form);
@@ -334,10 +352,13 @@ function renderMine(el) {
     const end = endOf(f.get("date"), f.get("end"));
     if (f.get("end") && !end) toast("“until” must be after the start date — saved as a one-day task");
     form.querySelector("button[type=submit]").disabled = true;
-    const ok = await guard(() => db.insertTask({ date: f.get("date"), end, time: f.get("time") || null, course: f.get("course") || null,
-      label, moon: f.get("moon") || null, private: f.get("private") === "on", remind: remindOf(f) }), "Couldn't add the task");
+    const task = { date: f.get("date"), end, time: f.get("time") || null, course: f.get("course") || null,
+      label, moon: f.get("moon") || null, private: f.get("private") === "on", remind: remindOf(f) };
+    const rule = ruleOf(f);
+    const ok = await guard(() => (rule ? db.createSeries(task, rule, today) : db.insertTask(task)), "Couldn't add the task");
     UI.addCat = f.get("course") || ""; UI.focusAdd = ok;
-    if (ok) { toast(`Added: ${label}`); remindNotice(remindOf(f)); }
+    if (ok) { toast(`Added: ${label}${rule ? " — 🔁 " + ruleText(rule) : ""}`); remindNotice(remindOf(f)); }
+    if (rule) loadSeries();
     await load(); // la tâche apparaît tout de suite (l'autre la reçoit en temps réel)
   });
   // Nouvelle catégorie
@@ -401,13 +422,13 @@ function renderCalendar(el) {
     if (c === 0) lanes = weekLanes(spans, k);
     const cls = [d.getMonth() !== first.getMonth() && "out", k === today && "today", k === UI.day && "sel", dow(d) >= 6 && "we"].filter(Boolean).join(" ");
     html += `<div class="pl-day ${cls}" data-day="${k}" style="grid-row:${w + 2};grid-column:${c + 1}"><div class="pl-num">${d.getDate()}</div>${lanes.n ? `<div class="pl-lanes" style="--n:${lanes.n}"></div>` : ""}`;
-    html += list.slice(0, CAL_PER_DAY).map((e) => `<div class="pl-chip ${urgency(e)}${glowClass(e)}"${e.tickable ? ` data-edit="${e.id}"` : ""} style="--c:${e.color}" title="${chipTitle(e)}${e.time ? " (" + e.time + ")" : ""}">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${hourPill(e)}${esc(e.label)}${bellMark(e)}</div>`).join("");
+    html += list.slice(0, CAL_PER_DAY).map((e) => `<div class="pl-chip ${urgency(e)}${glowClass(e)}"${e.tickable ? ` data-edit="${e.id}"` : ""} style="--c:${e.color}" title="${chipTitle(e)}${e.time ? " (" + e.time + ")" : ""}">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${hourPill(e)}${esc(e.label)}${e.series ? " 🔁" : ""}${bellMark(e)}</div>`).join("");
     if (list.length > CAL_PER_DAY) html += `<div class="pl-more">+${list.length - CAL_PER_DAY}</div>`;
     html += `</div>`;
     if (c === 6) html += lanes.segs.map((g) => {
       const e = g.e;
       return `<div class="pl-chip pl-span ${urgency(e)}${glowClass(e)}${g.head ? " head" : ""}${g.tail ? " tail" : ""}"${e.tickable ? ` data-edit="${e.id}"` : ` data-goto="${g.first}"`}
-        style="--c:${e.color};--lane:${g.lane};grid-row:${w + 2};grid-column:${g.c0 + 1} / ${g.c1 + 2}" title="${chipTitle(e)} (${dm(e.date)} → ${dm(e.end)})">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${g.head ? hourPill(e) : "↪ "}${esc(e.label)}${bellMark(e)}</div>`;
+        style="--c:${e.color};--lane:${g.lane};grid-row:${w + 2};grid-column:${g.c0 + 1} / ${g.c1 + 2}" title="${chipTitle(e)} (${dm(e.date)} → ${dm(e.end)})">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${g.head ? hourPill(e) : "↪ "}${esc(e.label)}${e.series ? " 🔁" : ""}${bellMark(e)}</div>`;
     }).join("");
   }
   html += `</div><div class="pl-legend"><span class="pl-dot" style="--c:${S.me.color}"></span> ${esc(S.me.label)}${S.partner ? ` · <span class="pl-dot" style="--c:${S.partner.color}"></span> ${esc(S.partner.label)}` : ""} · categories in their own colours · tap a day for details · struck through = done</div>
@@ -881,9 +902,11 @@ function openNewTask(date) {
     <label>Category<select name="course"><option value="">— no category —</option>${cats.map((c) => `<option ${c.name === UI.addCat ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
     ${moonRadios()}
     <div class="pl-editor-row">${remindInputs()}</div>
+    <div class="pl-editor-row">${repeatInputs()}</div>
     <div class="pl-editor-row"><label class="mp-check" title="Private: ${esc(S.partner?.label ?? "the other")} won't see it"><input type="checkbox" name="private"> 🔒 Private</label></div>
     <div class="pl-editor-actions"><span class="mp-grow"></span><button type="button" data-act="cancel">Cancel</button><button type="submit" class="mp-cta">Add</button></div></form>`);
   const f = ov.querySelector("form");
+  bindRepeat(f);
   f.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const d = new FormData(f);
@@ -892,12 +915,15 @@ function openNewTask(date) {
     const end = endOf(d.get("date"), d.get("end"));
     if (d.get("end") && !end) toast("“until” must be after the start date — saved as a one-day task");
     f.querySelector("button[type=submit]").disabled = true;
-    const ok = await guard(() => db.insertTask({ date: d.get("date"), end, time: d.get("time") || null, course: d.get("course") || null,
-      label, moon: d.get("moon") || null, private: d.get("private") === "on", remind: remindOf(d) }), "Couldn't add the task");
+    const task = { date: d.get("date"), end, time: d.get("time") || null, course: d.get("course") || null,
+      label, moon: d.get("moon") || null, private: d.get("private") === "on", remind: remindOf(d) };
+    const rule = ruleOf(d);
+    const ok = await guard(() => (rule ? db.createSeries(task, rule, today) : db.insertTask(task)), "Couldn't add the task");
     if (!ok) { f.querySelector("button[type=submit]").disabled = false; return; }
     ov.remove();
     UI.day = d.get("date"); UI.addCat = d.get("course") || "";
-    toast(`Added: ${label}`);
+    toast(`Added: ${label}${rule ? " — 🔁 " + ruleText(rule) : ""}`);
+    if (rule) loadSeries();
     remindNotice(remindOf(d));
     load();
   });
@@ -916,8 +942,22 @@ function openEditor(e) {
     <div class="pl-editor-row">${remindInputs(e)}</div>
     <div class="pl-editor-row"><label class="mp-check"><input type="checkbox" name="private" ${e.private ? "checked" : ""}> 🔒 Private</label>
       <label class="mp-check" title="Untick to put the task back in your to-do list"><input type="checkbox" name="done" ${e.done ? "checked" : ""}> ✓ Done</label></div>
+    ${e.series ? `<div class="mp-repeat-info">🔁 Repeats ${esc(ruleText(seriesOf(e)))}</div><div class="mp-scope" hidden></div>` : ""}
     <div class="pl-editor-actions"><button type="button" data-act="delete" class="mp-danger">🗑 Delete</button><span class="mp-grow"></span><button type="button" data-act="cancel">Cancel</button><button type="submit" class="mp-cta">Save</button></div></form>`);
-  const f = ov.querySelector("form");
+  const f = ov.querySelector("form"), scopeBox = f.querySelector(".mp-scope");
+  // Tâche récurrente : on demande à quoi s'applique le changement
+  const askScope = (what, run) => {
+    scopeBox.innerHTML = `${what} <span class="mp-row"><button type="button" data-s="one">Only this one</button><button type="button" class="mp-cta" data-s="following">This and the following ones</button></span>`;
+    scopeBox.hidden = false;
+    scopeBox.querySelectorAll("[data-s]").forEach((b) => b.addEventListener("click", () => run(b.dataset.s)));
+    scopeBox.scrollIntoView({ block: "nearest" });
+  };
+  const saveOne = async (patch) => {
+    if (!navigator.onLine) { toast("📴 You're offline — this change can't be saved yet."); return false; }
+    try { await db.updateTask(e.id, patch); return true; }
+    catch (err) { toast(/tasks_series_date/.test(err.message) ? "⚠️ This repeating task already happens on that day — pick another day" : `⚠️ Couldn't save (${err.message})`); return false; }
+  };
+  const saved = (patch) => { ov.remove(); toast("Task updated"); if (patch.remind !== e.remind) remindNotice(patch.remind); load(); };
   f.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const d = new FormData(f);
@@ -926,10 +966,26 @@ function openEditor(e) {
     const end = endOf(d.get("date"), d.get("end"));
     if (d.get("end") && !end) toast("“until” must be after the start date — saved as a one-day task");
     const patch = { label, date: d.get("date"), end, time: d.get("time") || null, course: d.get("course") || null, moon: d.get("moon") || null, remind: remindOf(d), private: d.get("private") === "on", done: d.get("done") === "on" };
-    if (await guard(() => db.updateTask(e.id, patch))) { ov.remove(); toast("Task updated"); if (patch.remind !== e.remind) remindNotice(patch.remind); load(); }
+    const changed = ["label", "date", "end", "time", "course", "moon", "remind", "private"].some((k) => (patch[k] ?? null) !== (e[k] ?? null));
+    if (!e.series || !changed) { if (await saveOne(patch)) saved(patch); return; }
+    askScope("Change", async (scope) => {
+      if (scope === "one") { if (await saveOne(patch)) saved(patch); return; }
+      const ok = await guard(async () => {
+        if (patch.done !== e.done) await db.updateTask(e.id, { done: patch.done });
+        await db.splitSeries(e.id, patch, diffDays(e.date, patch.date));
+      }, "Couldn't change the repeating task");
+      if (ok) { saved(patch); loadSeries(); }
+    });
   });
   const del = f.querySelector("[data-act=delete]");
   del.addEventListener("click", async () => {
+    if (e.series) {
+      askScope("Delete", async (scope) => {
+        const ok = await guard(() => (scope === "one" ? db.deleteTask(e.id) : db.endSeries(e.id)), "Couldn't delete");
+        if (ok) { ov.remove(); toast(scope === "one" ? `Deleted: ${e.label} (${dm(e.date)})` : `Deleted: ${e.label} from ${dm(e.date)} on`); load(); loadSeries(); }
+      });
+      return;
+    }
     if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "Sure? 🗑"; return; } // 2e appui pour confirmer
     if (await guard(() => db.deleteTask(e.id), "Couldn't delete")) { ov.remove(); toast(`Deleted: ${e.label}`); load(); }
   });
@@ -1054,6 +1110,25 @@ function showWidgetSetup(box, label, token) {
   div.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+// ---------- Tâches récurrentes (supabase/15_recurring.sql) ----------
+// Chaque occurrence est une vraie tâche (colonne series) ; la série garde la règle. À l'ouverture (en ligne, au plus une
+// fois toutes les 10 min) : complétion de mes séries sans fin. Sans 15 : le choix « 🔁 » est caché, rien d'autre ne change.
+let unsubSeries = null, toppedUp = 0;
+async function loadSeries() {
+  if (!S.user) return;
+  const before = S.seriesOk;
+  try { S.series = await db.listSeries(); S.seriesOk = true; store.set("series." + S.user.id, S.series); }
+  catch (err) {
+    if (/does not exist|schema cache/i.test(err.message)) { S.seriesOk = false; S.series = []; }
+    else S.series = store.get("series." + S.user.id, S.series); // hors ligne
+  }
+  if (S.seriesOk && navigator.onLine && Date.now() - toppedUp > 10 * 60 * 1000) {
+    toppedUp = Date.now();
+    try { if (await db.topUpSeries(today)) reload(); } catch (err) { console.warn("Repeating tasks", err); }
+  }
+  if (S.me && S.seriesOk !== before) render(); // (affiche ou cache le choix « 🔁 », textes des règles)
+}
+
 // ---------- Onglets : barre de 4 boutons en bas (téléphone et ordinateur) ----------
 // Calendar = la page de toujours (#app + carte des messages Tino) ; Notes, Tino et Settings = sections à part, remplies
 // à chaque ouverture. L'onglet est dans l'adresse (#notes…) : le bouton « retour » et un rechargement y restent.
@@ -1152,6 +1227,12 @@ async function loadNotes() {
   noteOpen?.refreshed();
   if (currentTab() === "notes" && document.body.classList.contains("mp-logged")) renderNotes(panes.notes);
 }
+// « - [ ] » / « - [x] » = case à cocher, « - » (ou « * », « • ») = puce, dans le texte des notes
+const CHECK_RE = /^\s*[-*•] \[( |x|X)\] ?(.*)$/;
+const BULLET_RE = /^\s*[-*•] (.*)$/;
+const LIST_RE = /^\s*(?:[-*•] \[(?: |x|X)\] ?|[-*•] )/;
+// Horodatage Supabase (microsecondes) plus récent qu’un autre ; illisible → « différent »
+const newerThan = (a, b) => { const ms = (t) => Date.parse(String(t).replace(/(\.\d{3})\d+/, "$1")), x = ms(a), y = ms(b); return Number.isNaN(x) || Number.isNaN(y) ? a !== b : x > y; };
 function renderNotes(pane) {
   const P = S.partner;
   if (S.notesOk === false) {
@@ -1159,10 +1240,11 @@ function renderNotes(pane) {
     return;
   }
   const who = (id) => (id === S.user.id ? S.me : P);
-  const preview = (n) => n.body.replace(/\s*\n\s*/g, " · ").slice(0, 140);
+  const preview = (n) => n.body.split("\n").map((l) => l.replace(CHECK_RE, (_, x, t) => (x === " " ? "☐ " : "☑ ") + t).replace(BULLET_RE, "• $1").replace(/^#{1,3} /, "")).join("\n").replace(/\s*\n\s*/g, " · ").slice(0, 140);
+  const progress = (n) => { const c = n.body.split("\n").map((l) => l.match(CHECK_RE)).filter(Boolean); return c.length ? ` <span class="mp-src">☑ ${c.filter((m) => m[1] !== " ").length}/${c.length}</span>` : ""; };
   const newDraft = store.get(draftKey(null), null);
   const card = (n) => `<button type="button" class="mp-note" data-note="${n.id}">
-      <span class="mp-note-title">${n.private ? "🔒 " : ""}${esc(n.title || "Untitled")}${store.get(draftKey(n.id), null) ? ` <span class="mp-src">not saved yet</span>` : ""}</span>
+      <span class="mp-note-title">${n.private ? "🔒 " : ""}${esc(n.title || "Untitled")}${progress(n)}${store.get(draftKey(n.id), null) ? ` <span class="mp-src">not saved yet</span>` : ""}</span>
       ${n.body.trim() ? `<span class="mp-note-preview">${esc(preview(n))}</span>` : ""}
       <span class="pl-legend">${esc(who(n.updatedBy)?.mark ?? "")} ${tinoWhen(n.updated)}</span></button>`;
   pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><div class="mp-notes-head"><h4>📝 Notes</h4><button type="button" class="mp-cta" data-act="newnote">＋ New note</button></div>
@@ -1178,9 +1260,14 @@ function openNote(note) {
   let cur = note ? { ...note } : null, dirty = false, timer = 0, busy = null;
   const draft = store.get(draftKey(cur?.id ?? null), null); // texte pas encore enregistré, gardé sur cet appareil
   const start = draft ?? cur ?? { title: "", body: "", private: false };
+  let mode = start.body.trim() ? "read" : "edit", onlyTicks = !draft;
+  const ticks = new Map(); // cases cochées / décochées depuis le dernier enregistrement (texte → coché)
   const ov = overlay(`<form class="pl-editor-card mp-note-editor">
     <input type="text" name="title" maxlength="120" placeholder="Title" value="${esc(start.title)}">
-    <textarea name="body" maxlength="20000" rows="12" placeholder="Write here…">${esc(start.body)}</textarea>
+    <div class="mp-note-tools"><span class="mp-seg"><button type="button" data-mode="read">👁 Read</button><button type="button" data-mode="edit">✏️ Edit</button></span><span class="mp-grow"></span>
+      <span class="mp-note-ins"><button type="button" data-ins="- " title="Bullet point">• Bullet</button><button type="button" data-ins="- [ ] " title="Checkbox">☐ Checkbox</button></span></div>
+    <div class="mp-note-view"></div>
+    <textarea name="body" maxlength="20000" rows="12" placeholder="Write here… (• Bullet and ☐ Checkbox make lists)">${esc(start.body)}</textarea>
     <div class="mp-note-conflict" hidden></div>
     <div class="pl-editor-row"><label class="mp-check"${mine ? "" : " hidden"}><input type="checkbox" name="private" ${start.private ? "checked" : ""}> 🔒 Only me</label><span class="mp-grow"></span><span class="pl-legend mp-note-state"></span></div>
     <div class="pl-editor-actions">${cur ? `<button type="button" data-act="delete" class="mp-danger">🗑 Delete</button>` : ""}<span class="mp-grow"></span><button type="submit" class="mp-cta">Done</button></div></form>`, { onClose: () => close() });
@@ -1189,6 +1276,62 @@ function openNote(note) {
   const values = () => ({ title: f.title.value.trim(), body: f.body.value, private: mine ? f.private.checked : !!cur?.private });
   if (draft) { dirty = true; state("Not saved yet (kept on this phone)"); }
   else if (cur) state(`${S.user.id === cur.updatedBy ? "You" : P} · ${tinoWhen(cur.updated)}`);
+
+  // ---- lecture / écriture, puces, cases à cocher ----
+  const view = f.querySelector(".mp-note-view");
+  const renderView = () => {
+    view.innerHTML = noteHtml(f.body.value) || `<div class="pl-empty">Empty note — tap ✏️ Edit to write.</div>`;
+  };
+  const setMode = (m) => {
+    mode = m;
+    f.body.hidden = m !== "edit"; view.hidden = m !== "read";
+    f.querySelector(".mp-note-ins").hidden = m !== "edit";
+    f.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+    if (m === "read") renderView(); else f.body.focus({ preventScroll: true });
+  };
+  f.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  // Cocher en lecture : la ligne « - [ ] » devient « - [x] », enregistrée vite
+  view.addEventListener("change", (ev) => {
+    const cb = ev.target.closest("[data-line]");
+    if (!cb) return;
+    const lines = f.body.value.split("\n"), i = +cb.dataset.line, m = lines[i]?.match(CHECK_RE);
+    if (!m) return;
+    lines[i] = lines[i].replace(/\[( |x|X)\]/, cb.checked ? "[x]" : "[ ]");
+    ticks.set(m[2].trim(), cb.checked);
+    f.body.value = lines.join("\n");
+    dirty = true; state("…"); clearTimeout(timer); timer = setTimeout(saveOnce, 600);
+    renderView();
+  });
+  view.addEventListener("click", (ev) => { if (!ev.target.closest("label, input, a")) setMode("edit"); }); // toucher le texte = l'écrire
+  // • / ☐ au début de la ligne du curseur (re-appuyer l'enlève)
+  f.querySelectorAll("[data-ins]").forEach((b) => {
+    for (const t of ["pointerdown", "mousedown"]) b.addEventListener(t, (ev) => ev.preventDefault()); // le clavier reste ouvert
+    b.addEventListener("click", () => {
+      const ta = f.body, v = ta.value, at = ta.selectionStart, ls = v.lastIndexOf("\n", at - 1) + 1, le = v.indexOf("\n", at) < 0 ? v.length : v.indexOf("\n", at);
+      const line = v.slice(ls, le), bare = line.replace(LIST_RE, ""), isCheck = CHECK_RE.test(line), isBullet = !isCheck && BULLET_RE.test(line);
+      const next = (b.dataset.ins === "- " ? isBullet : isCheck) ? bare : b.dataset.ins + bare;
+      ta.value = v.slice(0, ls) + next + v.slice(le);
+      const caret = Math.max(ls, at + (next.length - line.length));
+      ta.focus(); ta.setSelectionRange(caret, caret);
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  });
+  // Entrée sur une ligne de liste : la ligne suivante a la même puce (une ligne vide de liste termine la liste)
+  f.body.addEventListener("beforeinput", (ev) => {
+    if (ev.isComposing || (ev.inputType !== "insertLineBreak" && ev.inputType !== "insertParagraph")) return; // (mot en cours de saisie : Entrée normale)
+    const ta = f.body, v = ta.value, at = ta.selectionStart;
+    if (at !== ta.selectionEnd) return;
+    const ls = v.lastIndexOf("\n", at - 1) + 1, line = v.slice(ls, at), m = line.match(LIST_RE);
+    if (!m) return;
+    ev.preventDefault();
+    if (!line.slice(m[0].length).trim() && v.slice(at, v.indexOf("\n", at) < 0 ? v.length : v.indexOf("\n", at)).trim() === "") {
+      ta.value = v.slice(0, ls) + v.slice(at); ta.setSelectionRange(ls, ls); // fin de la liste
+    } else {
+      const pre = m[0].replace(/\[(x|X)\]/, "[ ]");
+      ta.value = v.slice(0, at) + "\n" + pre + v.slice(at); ta.setSelectionRange(at + 1 + pre.length, at + 1 + pre.length);
+    }
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 
   async function save() {
     if (!dirty) return true;
@@ -1201,11 +1344,11 @@ function openNote(note) {
       if (!cur) { cur = await db.addNote(v); store.del(draftKey(null)); }
       else {
         const saved = await db.saveNote(cur.id, mine ? v : { title: v.title, body: v.body }, cur.updated);
-        if (!saved) { await conflict(v); return false; }
+        if (!saved) return await conflict(v);
         cur = saved;
       }
       store.del(draftKey(cur.id));
-      if (values().title === v.title && values().body === v.body && values().private === v.private) dirty = false; // (rien tapé pendant l'envoi)
+      if (values().title === v.title && values().body === v.body && values().private === v.private) { dirty = false; ticks.clear(); onlyTicks = true; } // (rien tapé pendant l'envoi)
       state(dirty ? "…" : `Saved ${tinoWhen(cur.updated)}`);
       if (!f.querySelector("[data-act=delete]")) addDelete();
       loadNotes();
@@ -1221,18 +1364,35 @@ function openNote(note) {
       conflictBox.innerHTML = `${esc(P)} deleted this note while you were writing. <span class="mp-row"><button type="button" data-c="new">Keep my text as a new note</button></span>`;
       conflictBox.querySelector("[data-c=new]").addEventListener("click", () => { store.del(draftKey(cur.id)); cur = null; conflictBox.hidden = true; dirty = true; saveOnce(); });
       state("⚠️ Not saved");
-      return;
+      return false;
     }
-    if (!latest) { state("⚠️ Not saved (connection)"); conflictBox.hidden = true; return; }
+    if (!latest) { state("⚠️ Not saved (connection)"); conflictBox.hidden = true; return false; }
+    if (onlyTicks && ticks.size) {
+      const merged = latest.body.split("\n").map((l) => { const m = l.match(CHECK_RE); return m && ticks.has(m[2].trim()) ? l.replace(/\[( |x|X)\]/, ticks.get(m[2].trim()) ? "[x]" : "[ ]") : l; }).join("\n");
+      const again = await db.saveNote(cur.id, mine ? { title: latest.title, body: merged, private: latest.private } : { title: latest.title, body: merged }, latest.updated).catch(() => null);
+      if (again) {
+        cur = again; f.title.value = again.title; f.body.value = again.body; if (mine) f.private.checked = again.private;
+        conflictBox.hidden = true; ticks.clear(); dirty = false; store.del(draftKey(cur.id));
+        if (mode === "read") renderView();
+        state(`Saved ${tinoWhen(cur.updated)} — with ${P}'s changes too`);
+        loadNotes();
+        return true;
+      }
+    }
     conflictBox.innerHTML = `${esc(P)} changed this note while you were writing. <span class="mp-row"><button type="button" data-c="mine">Keep mine</button><button type="button" data-c="theirs">Show theirs</button></span>`;
     conflictBox.querySelector("[data-c=mine]").addEventListener("click", () => { cur = latest; conflictBox.hidden = true; dirty = true; saveOnce(); });
     conflictBox.querySelector("[data-c=theirs]").addEventListener("click", () => {
       cur = latest; f.title.value = latest.title; f.body.value = latest.body; if (mine) f.private.checked = latest.private;
-      store.del(draftKey(cur.id)); dirty = false; conflictBox.hidden = true; state(`${P}'s version · ${tinoWhen(latest.updated)}`);
+      store.del(draftKey(cur.id)); dirty = false; ticks.clear(); onlyTicks = true; conflictBox.hidden = true; state(`${P}'s version · ${tinoWhen(latest.updated)}`);
+      if (mode === "read") renderView();
     });
     state("⚠️ Not saved");
+    return false;
   }
-  f.addEventListener("input", () => { dirty = true; state("…"); clearTimeout(timer); timer = setTimeout(saveOnce, 1500); });
+  f.addEventListener("input", (ev) => {
+    if (ev.target.closest(".mp-note-view")) return; // (une case cochée en lecture : déjà gérée)
+    dirty = true; onlyTicks = false; state("…"); clearTimeout(timer); timer = setTimeout(saveOnce, 1500);
+  });
   async function close() {
     clearTimeout(timer);
     let ok = await saveOnce();
@@ -1259,8 +1419,27 @@ function openNote(note) {
   noteOpen = {
     refreshed() {
       const n = cur && S.notes.find((x) => x.id === cur.id);
-      if (n && n.updated !== cur.updated && n.updatedBy !== S.user.id) state(`✏️ ${P} just edited this note — when you save, you'll choose which version to keep`);
+      if (!n || !newerThan(n.updated, cur.updated) || n.updatedBy === S.user.id) return; // (une réponse en retard, plus ancienne, est ignorée)
+      if (!dirty && !busy) { // rien à perdre : on affiche sa version
+        const at = f.body.selectionStart;
+        cur = n; f.title.value = n.title; f.body.value = n.body; if (mine) f.private.checked = n.private;
+        if (mode === "read") renderView(); else if (document.activeElement === f.body) f.body.setSelectionRange(Math.min(at, n.body.length), Math.min(at, n.body.length));
+        state(`✏️ Updated by ${P} · ${tinoWhen(n.updated)}`);
+      } else state(`✏️ ${P} just edited this note — when you save, you'll choose which version to keep`);
     },
   };
+  setMode(mode);
   if (!cur) f.title.focus({ preventScroll: true });
+}
+
+// Rendu d'une note en lecture (CHECK_RE / BULLET_RE plus haut), « # » = titre
+function noteHtml(body) {
+  if (!body.trim()) return "";
+  return body.split("\n").map((line, i) => {
+    let m;
+    if ((m = line.match(CHECK_RE))) return `<label class="mp-nl mp-nl-check${m[1] !== " " ? " done" : ""}"><input type="checkbox" data-line="${i}" ${m[1] !== " " ? "checked" : ""}><span>${esc(m[2]) || "&nbsp;"}</span></label>`;
+    if ((m = line.match(BULLET_RE))) return `<div class="mp-nl mp-nl-bullet">${esc(m[1])}</div>`;
+    if ((m = line.match(/^#{1,3} (.*)$/))) return `<div class="mp-nl mp-nl-head">${esc(m[1])}</div>`;
+    return line.trim() ? `<div class="mp-nl">${esc(line)}</div>` : `<div class="mp-nl mp-nl-gap"></div>`;
+  }).join("");
 }
