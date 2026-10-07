@@ -45,9 +45,14 @@
 </style>
 </head>
 <body>
-<div id="w"><div class="msg">Loading…</div></div>
+<div id="w"><noscript><div class="msg"><b>MeoPeo widget</b><br>This widget app doesn't run the page's code, so the calendar can't appear. Try another widget app (e.g. AnyWidget) with the same link.</div></noscript></div>
 <script>
 "use strict";
+// Une erreur dans la page s'affiche dans le widget (au lieu d'un widget vide) : on peut l'envoyer à Claude
+addEventListener("error", (e) => {
+  const w = document.getElementById("w");
+  if (w && !w.querySelector(".grid, .rows")) w.innerHTML = `<div class="msg"><b>MeoPeo widget</b><br>Error: ${String(e.message ?? e).replace(/[<>&]/g, "")}</div>`;
+});
 const SUPABASE_URL = "https://llwbzhlbaygolzuwlbkf.supabase.co";
 const SUPABASE_KEY = "sb_publishable_rMCGFrjzDmhsZ6eJ163B6g_MTA4dQSd"; // clé publique de l'app
 const APP_URL = "./";
@@ -82,25 +87,29 @@ function dates() {
   weeks = Math.ceil((dowIdx(first) + new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) / 7);
 }
 
-async function load() {
+// Le calendrier. La PREMIÈRE fois, la requête est synchrone : la page n'a fini de se charger qu'une fois le calendrier
+// affiché — beaucoup d'apps de widget prennent leur « photo » de la page dès la fin du chargement (sinon : « Loading… »
+// pour toujours). Ensuite (toutes les 15 min, retour à l'écran) : requêtes normales.
+function load(sync = false) {
   dates();
   lastLoad = Date.now();
   const gridEnd = addDays(gridStart, weeks * 7 - 1), weekEnd = addDays(now, 7);
+  const x = new XMLHttpRequest();
+  const done = () => { let json = null; try { json = JSON.parse(x.responseText); } catch { /* pas de JSON */ } use(x.status, json); render(); };
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/widget_feed`, {
-      method: "POST", cache: "no-store",
-      headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ p_token: KEY, p_from: iso(gridStart), p_to: iso(gridEnd > weekEnd ? gridEnd : weekEnd), p_today: today }),
-    });
-    const json = await res.json().catch(() => null);
-    if (!res.ok || !json || !Array.isArray(json.tasks)) throw new Error((json && json.message) || `HTTP ${res.status}`);
-    mem.set({ at: Date.now(), feed: json });
-    result = { feed: json };
-  } catch (e) {
-    if (/unknown widget key/.test(e.message)) { mem.set(null); result = { error: "This widget was removed in MeoPeo. Create a new one: <b>MeoPeo → ⚙ → Home-screen widget</b>." }; }
-    else { const c = mem.get(); result = c?.feed ? { feed: c.feed, staleAt: c.at } : { error: "No connection — the calendar will appear once the phone is online." }; }
-  }
-  render();
+    x.open("POST", `${SUPABASE_URL}/rest/v1/rpc/widget_feed`, !sync);
+    x.setRequestHeader("apikey", SUPABASE_KEY);
+    x.setRequestHeader("Content-Type", "application/json");
+    if (!sync) { x.onload = done; x.onerror = () => { use(0, null); render(); }; }
+    x.send(JSON.stringify({ p_token: KEY, p_from: iso(gridStart), p_to: iso(gridEnd > weekEnd ? gridEnd : weekEnd), p_today: today }));
+    if (sync) done();
+  } catch { use(0, null); render(); } // hors ligne (requête synchrone)
+}
+function use(status, json) {
+  if (status >= 200 && status < 300 && json && Array.isArray(json.tasks)) { mem.set({ at: Date.now(), feed: json }); result = { feed: json }; return; }
+  if (/unknown widget key/.test((json && json.message) || "")) { mem.set(null); result = { error: "This widget was removed in MeoPeo. Create a new one: <b>MeoPeo → ⚙ → Home-screen widget</b>." }; return; }
+  const c = mem.get();
+  result = c?.feed ? { feed: c.feed, staleAt: c.at } : { error: "No connection — the calendar will appear once the phone is online." };
 }
 
 const markOf = (f, t) => esc((t.who === "me" ? f.me : f.partner)?.mark ?? "•");
@@ -169,8 +178,8 @@ function todayView(f) {
 if (!KEY) {
   box.innerHTML = `<div class="msg"><b>MeoPeo widget</b><br>This link has no widget key. Create one in <b>MeoPeo → ⚙ → Home-screen widget → ＋ Android widget</b> and paste that link.</div>`;
 } else {
-  load();
-  setInterval(load, REFRESH_MS);
+  load(true); // calendrier dans la page avant la fin du chargement (voir load)
+  setInterval(() => load(), REFRESH_MS);
   addEventListener("resize", render);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - lastLoad > 60000) load(); });
 }
