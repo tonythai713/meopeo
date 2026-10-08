@@ -364,6 +364,8 @@ a { color: var(--text-accent); }
 .mp-look .pl-sub { margin-top: 8px; }
 .mp-look .mp-seg { flex-wrap: wrap; }
 .mp-dayhours label { display: inline-flex; align-items: center; gap: 6px; }
+.mp-sunplace { display: flex; align-items: center; gap: 6px; margin-top: 8px; white-space: nowrap; }
+.mp-sunplace select { min-width: 0; max-width: 100%; }
 
 /* ===== Thème clair (⚙ Settings → Appearance ; classe mp-light sur <html>) =====
    Verre blanc, texte bleu nuit, or foncé à la place de l'or pâle. Ce qui est posé directement sur le fond (date, mois,

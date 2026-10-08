@@ -938,27 +938,51 @@ function fillWardrobe(box) {
 }
 
 // ---------- Jour / nuit et thème clair / sombre (réglages de CET appareil : ⚙ Settings → 🎨 Appearance) ----------
-// « Le jour » = du lever au coucher du soleil à Yverdon (par défaut), ou les heures choisies (« de 07:00 à 20:00 », peut
-// passer minuit). Il sert au thème « Auto » de l'interface ET au décor « Auto » (image de jour / de nuit) : les deux
-// changent en même temps. Thème forcé (toujours clair / toujours sombre) : le décor, lui, continue de suivre l'heure.
+// « Le jour » = du lever au coucher du soleil du lieu choisi sur cet appareil (par défaut : d'après le fuseau horaire),
+// ou les heures choisies (« de 07:00 à 20:00 », peut passer minuit). Il sert au thème « Auto » de l'interface ET au décor
+// « Auto » (image de jour / de nuit) : les deux changent en même temps. Thème forcé (toujours clair / toujours sombre) :
+// le décor, lui, continue de suivre l'heure.
 // Thème clair = classe mp-light sur <html> (style.css, bloc à la fin ; le thème sombre reste celui de toujours).
 const THEMES = [["auto", "🌗 Auto"], ["light", "☀️ Always light"], ["dark", "🌙 Always dark"]];
+// Lieux du lever / coucher du soleil : [clé, nom, pays, latitude, longitude]
+const PLACES = [
+  ["yverdon", "Yverdon-les-Bains", "Switzerland", 46.78, 6.64],
+  ["hanoi", "Hà Nội", "Vietnam", 21.03, 105.85],
+  ["haiphong", "Hải Phòng", "Vietnam", 20.86, 106.68],
+  ["hue", "Huế", "Vietnam", 16.46, 107.59],
+  ["danang", "Đà Nẵng", "Vietnam", 16.05, 108.21],
+  ["nhatrang", "Nha Trang", "Vietnam", 12.24, 109.19],
+  ["dalat", "Đà Lạt", "Vietnam", 11.94, 108.44],
+  ["hcmc", "Hồ Chí Minh City", "Vietnam", 10.78, 106.70],
+  ["cantho", "Cần Thơ", "Vietnam", 10.04, 105.79],
+];
+// « Auto » = d'après le fuseau horaire de l'appareil (Asia/Saigon : ancien nom, encore donné par certains Android) ;
+// fuseau inconnu → Yverdon, comme avant
+const PLACE_OF_TZ = { "Europe/Zurich": "yverdon", "Asia/Ho_Chi_Minh": "hcmc", "Asia/Saigon": "hcmc" };
+const placeOfTz = (tz) => PLACE_OF_TZ[tz] ?? "yverdon";
+const deviceTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } };
+function sunPlace() {
+  const pref = store.get("sunPlace", "auto"), auto = !PLACES.some((p) => p[0] === pref);
+  const [key, name, country, lat, lon] = PLACES.find((p) => p[0] === (auto ? placeOfTz(deviceTz()) : pref));
+  return { key, name, country, lat, lon, auto };
+}
 const minutesOf = (hm) => { const [h, m] = String(hm).split(":").map(Number); return (h || 0) * 60 + (m || 0); };
 const dayHours = (dl) => (dl.mode === "hours" ? `☀️ ${dl.from} – 🌙 ${dl.to}` : `☀️ ${hhmm(dl.sun.rise)} – 🌙 ${hhmm(dl.sun.set)}`);
 function daylight(now = new Date()) {
-  const mode = store.get("dayMode", "sun"), from = store.get("dayFrom", "07:00"), to = store.get("dayTo", "20:00"), sun = sunTimes(now);
+  const mode = store.get("dayMode", "sun"), from = store.get("dayFrom", "07:00"), to = store.get("dayTo", "20:00");
+  const place = sunPlace(), sun = sunTimes(now, place.lat, place.lon);
   let day, edges; // edges : les prochains passages possibles (aujourd'hui et demain)
   if (mode === "hours") {
     const a = minutesOf(from), b = minutesOf(to), t = now.getHours() * 60 + now.getMinutes();
     day = a === b || (a < b ? t >= a && t < b : t >= a || t < b);
     edges = [0, 1].flatMap((k) => [a, b].map((m) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + k, 0, m)));
   } else {
-    const tmr = sunTimes(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+    const tmr = sunTimes(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1), place.lat, place.lon);
     day = now >= sun.rise && now < sun.set;
     edges = [sun.rise, sun.set, tmr.rise, tmr.set];
   }
   const next = edges.filter((d) => d > now).sort((x, y) => x - y)[0] ?? new Date(+now + 86400000);
-  return { day, next, mode, from, to, sun };
+  return { day, next, mode, from, to, sun, place };
 }
 let themeTimer = 0;
 function applyTheme() {
@@ -977,11 +1001,17 @@ function fillLook(box) {
     <div class="pl-sub">Day time <span class="pl-legend">— Auto is light during the day, dark at night; the decor's day / night pictures follow it too</span></div>
     <span class="mp-seg"><button type="button" data-daymode="sun" aria-pressed="${dl.mode === "sun"}">🌅 Sunrise → sunset</button><button type="button" data-daymode="hours" aria-pressed="${dl.mode === "hours"}">🕒 My hours</button></span>
     ${dl.mode === "hours" ? `<span class="mp-row mp-dayhours"><label>☀️ Day from <input type="time" name="dfrom" value="${dl.from}"></label><label>🌙 night from <input type="time" name="dto" value="${dl.to}"></label></span>`
-      : `<div class="pl-legend">Today in Yverdon: sunrise ${hhmm(dl.sun.rise)}, sunset ${hhmm(dl.sun.set)}.</div>`}
+      : `<label class="mp-sunplace">📍 Sun of <select name="sunplace">
+          <option value="auto"${dl.place.auto ? " selected" : ""}>Auto: ${esc(PLACES.find((p) => p[0] === placeOfTz(deviceTz()))[1])}</option>
+          ${[...new Set(PLACES.map((p) => p[2]))].map((c) => `<optgroup label="${c}">${PLACES.filter((p) => p[2] === c).map(([k, n]) =>
+            `<option value="${k}"${!dl.place.auto && dl.place.key === k ? " selected" : ""}>${esc(n)}</option>`).join("")}</optgroup>`).join("")}
+        </select></label>
+        <div class="pl-legend">${dl.place.auto ? "Auto = from this device's time zone. " : ""}Today in ${esc(dl.place.name)}: sunrise ${hhmm(dl.sun.rise)}, sunset ${hhmm(dl.sun.set)}.</div>`}
     <div class="pl-legend mp-lookstate">Now: ${light ? "☀️ light" : "🌙 dark"}${pref === "auto" ? ` — ${dl.day ? "🌙 dark" : "☀️ light"} from ${hhmm(dl.next)}${dl.next.getDate() !== new Date().getDate() ? " tomorrow" : ""}` : ""}.</div>`;
   const redo = () => { applyTheme(); applyDecor(); fillLook(box); };
   box.querySelectorAll("[data-theme]").forEach((b) => b.addEventListener("click", () => { store.set("theme", b.dataset.theme); redo(); }));
   box.querySelectorAll("[data-daymode]").forEach((b) => b.addEventListener("click", () => { store.set("dayMode", b.dataset.daymode); redo(); }));
+  box.querySelector("[name=sunplace]")?.addEventListener("change", (ev) => { store.set("sunPlace", ev.target.value); redo(); });
   for (const [name, key] of [["dfrom", "dayFrom"], ["dto", "dayTo"]])
     box.querySelector(`[name=${name}]`)?.addEventListener("change", (ev) => { if (/^\d\d:\d\d$/.test(ev.target.value)) { store.set(key, ev.target.value); redo(); } });
 }
@@ -1007,12 +1037,15 @@ function seasonOf(d) {
   const md = (d.getMonth() + 1) * 100 + d.getDate();
   return md >= 1221 || md < 320 ? "winter" : md < 621 ? "spring" : md < 923 ? "summer" : "autumn";
 }
-// Lever / coucher du soleil à Yverdon (équation du lever, ±3 min ; vérifié avec sunrise-sunset.org, été / hiver / changement d'heure)
+// Lever / coucher du soleil au lieu (lat, lon) donné, Yverdon par défaut (équation du lever, ±3 min ; vérifié avec
+// sunrise-sunset.org, été / hiver / changement d'heure, à Yverdon et au Vietnam).
 // n = ⌈jour julien − 2451545 + 0,0008⌉ (corrigé le 2026-10-07 : l'ancien arrondi donnait le lever et le coucher de LA VEILLE,
-// date comprise — à quelques minutes près les mêmes heures, mais le décor « Auto » restait en version nuit toute la journée)
+// date comprise — à quelques minutes près les mêmes heures, mais le décor « Auto » restait en version nuit toute la journée).
+// Jour julien pris à 00:00 UTC de la date locale (2026-10-08 ; avant : midi local, même n en Suisse et au Vietnam, mais
+// le lendemain pour un appareil à UTC+0 ou à l'ouest) → même n quel que soit le fuseau de l'appareil.
 function sunTimes(d, lat = 46.78, lon = 6.64) {
-  const R = Math.PI / 180, noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12);
-  const J = Math.ceil(noon.getTime() / 86400000 + 2440587.5 - 2451545 + 0.0008) - lon / 360;
+  const R = Math.PI / 180, day0 = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const J = Math.ceil(day0 / 86400000 + 2440587.5 - 2451545 + 0.0008) - lon / 360;
   const M = (357.5291 + 0.98560028 * J) % 360;
   const L = (M + 1.9148 * Math.sin(M * R) + 0.02 * Math.sin(2 * M * R) + 0.0003 * Math.sin(3 * M * R) + 282.9372) % 360;
   const T = 2451545 + J + 0.0053 * Math.sin(M * R) - 0.0069 * Math.sin(2 * L * R);
