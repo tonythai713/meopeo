@@ -513,3 +513,42 @@ a { color: var(--text-accent); }
 .mp-light body.mp-decor-on .mp-who { background: rgba(255, 255, 255, 0.78); color: #6e4700; text-shadow: none; }
 /* Boutons qui ont leur propre fond (sinon « .mp-light button » le remplacerait) : le disque du grand Tino reste une lune */
 .mp-light .bt-moon, .mp-light .bt-moon:hover { background: #fffdf6; color: inherit; }
+
+/* Onglets : 5 boutons ; celui de Tino = sa tête (SVG à la taille d'un émoji) */
+.mp-nav-i svg { display: block; width: 1.05em; height: 1.05em; overflow: visible; filter: drop-shadow(0 1px 1px rgba(0, 0, 20, 0.35)); }
+.mp-nav button { min-width: 0; }
+/* Onglet Tino : Tino en grand, avec ses habits, posé sur une petite ombre */
+.mp-showcase { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.mp-show-stage { display: flex; justify-content: center; width: 100%; padding: 26px 0 4px;
+  background: radial-gradient(ellipse 30% 9px at 50% calc(100% - 6px), rgba(0, 0, 20, 0.28), transparent 75%); }
+.mp-show-cap { text-align: center; margin-top: 2px; }
+
+/* Onglet 🎣 Fishing : la scène (ciel, mer, ponton, Tino, canne), le bouton, la prise, les prises */
+.mp-fish { display: flex; flex-direction: column; gap: 10px; }
+.mp-fish-scene { position: relative; }
+.mp-fish-svg { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--pl-line); }
+.mp-fish-tino { position: absolute; width: 0; height: 0; }
+.mp-waves { animation: mp-waves 6s linear infinite; }
+@keyframes mp-waves { from { transform: translateX(0); } to { transform: translateX(-30px); } }
+.mp-ripple-go { animation: mp-ripple 0.9s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes mp-ripple { from { opacity: 0.9; transform: scale(0.4); } to { opacity: 0; transform: scale(2.4); } }
+.mp-fish-btn { width: 100%; min-height: 50px; font-size: 1.1em; }
+.mp-fish-btn.mp-fish-now { animation: mp-now 0.35s ease-in-out infinite alternate; }
+@keyframes mp-now { from { transform: scale(1); } to { transform: scale(1.04); box-shadow: 0 0 18px rgba(255, 232, 163, 0.9); } }
+.mp-fish-out { padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255, 232, 163, 0.6); background: rgba(255, 232, 163, 0.08); display: flex; flex-direction: column; gap: 8px; animation: mp-in 0.25s ease-out; }
+.mp-fish-got { display: flex; align-items: center; gap: 12px; }
+.mp-fish-img { width: 64px; height: 64px; flex: none; border-radius: 10px; background: repeating-conic-gradient(rgba(255, 255, 255, 0.14) 0 25%, rgba(255, 255, 255, 0.04) 0 50%) 0 0 / 10px 10px; }
+.mp-fish-emoji { font-size: 2.4em; line-height: 1; flex: none; }
+.mp-swatch { display: inline-block; width: 16px; height: 16px; border-radius: 50%; vertical-align: -3px; border: 1px solid rgba(255, 255, 255, 0.6); box-shadow: 0 0 0 1px rgba(0, 0, 20, 0.25); }
+.mp-swatch-big { width: 44px; height: 44px; flex: none; }
+.mp-fish-info h4 + .mp-fish-line { margin-top: -4px; }
+.mp-fish-line { font-size: 0.92em; margin-bottom: 10px; }
+.mp-catches { display: flex; flex-direction: column; }
+.mp-catch { padding: 5px 0; border-bottom: 1px solid var(--pl-line); font-size: 0.92em; }
+.mp-catch:last-child { border-bottom: 0; }
+.mp-pooled img, .mp-pooled .mp-othumb { opacity: 0.55; }
+@media (prefers-reduced-motion: reduce) { .mp-waves, .mp-fish-btn.mp-fish-now { animation: none; } }
+.mp-light .mp-fish-out { border-color: var(--mp-gold); background: rgba(255, 226, 140, 0.2); }
+.mp-light .mp-fish-img { background: repeating-conic-gradient(rgba(40, 50, 110, 0.12) 0 25%, rgba(40, 50, 110, 0.03) 0 50%) 0 0 / 10px 10px; }
+.mp-light .mp-fish-btn.mp-fish-now { animation-name: mp-now-light; }
+@keyframes mp-now-light { from { transform: scale(1); } to { transform: scale(1.04); box-shadow: 0 0 16px rgba(217, 165, 32, 0.8); } }

@@ -7,6 +7,7 @@
 // ou la souris bouton enfoncé sur lui) = sa tête s'aplatit, puis rebondit quand on le lâche.
 
 const STYLE = `
+.ms-fur { fill: var(--ms-fur, #ffffff); stroke: var(--ms-fur-line, #c9d0e2); } /* couleur pêchée : variables posées par l'app sur la racine (html) ; jamais de chevrons ici : ce style va aussi dans les images SVG du widget */
 .ms-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .ms { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; will-change: transform;
   -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; }
@@ -152,16 +153,16 @@ function sealSvg() {
     return `<circle cx="${(22 + 4.6 * Math.cos(a)).toFixed(1)}" cy="${(19 + 4.6 * Math.sin(a)).toFixed(1)}" r="4.3"/>`;
   }).join("");
   return `<svg viewBox="0 0 100 100" aria-hidden="true">
-  <g class="ms-foot-l"><ellipse cx="38" cy="95" rx="8.5" ry="4.5" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
-  <g class="ms-foot-r"><ellipse cx="62" cy="95" rx="8.5" ry="4.5" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
+  <g class="ms-foot-l"><ellipse class="ms-fur" cx="38" cy="95" rx="8.5" ry="4.5" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
+  <g class="ms-foot-r"><ellipse class="ms-fur" cx="62" cy="95" rx="8.5" ry="4.5" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
   <path d="M34 58C26 52 13 55 14 65C15 73 22 75 27 74C24 80 22 90 30 95C37 99 45 96 50 92C55 96 63 99 70 95C78 90 76 80 73 74C78 75 85 73 86 65C87 55 74 52 66 58Z" fill="#f7f0de" stroke="#dacfb4" stroke-width="1.3"/>
   ${stars}
   <g class="ms-wear-body"></g>
   <g class="ms-hold" display="none">${Object.entries(HELD).map(([k, svg]) => `<g class="ms-it ms-it-${k}">${svg}</g>`).join("")}</g>
-  <g class="ms-arm-l">${tools(-1)}<ellipse cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
-  <g class="ms-arm-r">${tools(1)}<ellipse cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
+  <g class="ms-arm-l">${tools(-1)}<ellipse class="ms-fur" cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
+  <g class="ms-arm-r">${tools(1)}<ellipse class="ms-fur" cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
   <g class="ms-head">
-    <ellipse cx="50" cy="36" rx="32" ry="28.5" fill="${fur}" stroke="${line}" stroke-width="1.4"/>
+    <ellipse class="ms-fur" cx="50" cy="36" rx="32" ry="28.5" fill="${fur}" stroke="${line}" stroke-width="1.4"/>
     <path d="M30 13Q33 9 36 12M46 8Q50 5 54 8M64 12Q67 9 70 13" fill="none" stroke="#e3e7f1" stroke-width="1.2" stroke-linecap="round"/>
     <g class="ms-face">
       <radialGradient id="ms-flush-grad"><stop offset="0" stop-color="#ff5468" stop-opacity="0.9"/><stop offset="1" stop-color="#ff5468" stop-opacity="0"/></radialGradient>
@@ -184,6 +185,12 @@ function sealSvg() {
     <g class="ms-wear-head"></g>
   </g>
 </svg>`;
+}
+
+// La tête de Tino seule (bouton de l'onglet Tino) : le même dessin, cadré sur la tête
+export function tinoHeadSvg() {
+  const s = sealSvg(), head = s.slice(s.indexOf('<g class="ms-head">'), s.lastIndexOf("</svg>")).replace(/ms-flush-grad/g, "ms-flush-grad-icon");
+  return `<svg viewBox="15 4 70 63" aria-hidden="true">${head}</svg>`;
 }
 
 // ---------- Tenues dessinées (garde-robe) ----------
@@ -1641,7 +1648,11 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
   }[type] ??{ type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
   if (!animate) return m;
   let last = performance.now();
-  const loop = (t) => { m.update(Math.min(0.05, (t - last) / 1000)); last = t; m.render(); requestAnimationFrame(loop); };
+  let shown = false; // la boucle s'arrête quand la boîte a quitté la page (le grand Tino de l'onglet Tino, refait à chaque ouverture)
+  const loop = (t) => {
+    if (box.isConnected) shown = true; else if (shown) return;
+    m.update(Math.min(0.05, (t - last) / 1000)); last = t; m.render(); requestAnimationFrame(loop);
+  };
   requestAnimationFrame(loop);
   return m;
 }
@@ -1660,7 +1671,7 @@ export const WIDGET_SCENES = [ // [nom, pose de demoPose, temps de l'action (s),
 ];
 const SCENE_FREEZE = `* { animation: none !important; transition: none !important; }
   .ms-sleep .ms-zzz { opacity: 1; } .ms-smoke circle, .ms-steam path { opacity: 0.7; } .ms-wind path { opacity: 0.9; }`;
-function sceneSvg(name, { outfit = null, out = 600 } = {}) {
+function sceneSvg(name, { outfit = null, out = 600, fur = null } = {}) {
   const [, type, t, opt = {}] = WIDGET_SCENES.find((s) => s[0] === name);
   const host = document.createElement("div"), box = document.createElement("div");
   host.style.cssText = "position:fixed;left:-10000px;top:0;pointer-events:none";
@@ -1706,14 +1717,15 @@ function sceneSvg(name, { outfit = null, out = 600 } = {}) {
       }
     }
     const side = Math.max(x1 - x0, y1 - y0) + 12, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    const extra = opt.chop ? ".ms-chop { transform: translateY(-9px); }" : "";
+    const extra = (opt.chop ? ".ms-chop { transform: translateY(-9px); }" : "") + (fur ? `.ms-fur { fill: ${fur.fill}; stroke: ${fur.line}; }` : "");
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${out}" height="${out}" viewBox="${cx - side / 2} ${cy - side / 2} ${side} ${side}"><style>${STYLE}${SCENE_FREEZE}${extra}</style>${[...box.children].map(layer).join("")}</svg>`;
   } finally { host.remove(); }
 }
-// Image PNG (out × out, fond transparent) d'une scène, avec la tenue { head, body, hideFlower } (adresses data:) ou sans
-export async function scenePng(name, { outfit = null, out = 600 } = {}) {
+// Image PNG (out × out, fond transparent) d'une scène, avec la tenue { head, body, hideFlower } (adresses data:) ou sans,
+// et la couleur pêchée { fill, line } ou sans
+export async function scenePng(name, { outfit = null, out = 600, fur = null } = {}) {
   injectStyle();
-  const svg = sceneSvg(name, { outfit, out });
+  const svg = sceneSvg(name, { outfit, out, fur });
   const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error("couldn't draw the widget picture")); i.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); }); // (onload : decode() ne finit jamais dans une page cachée)
   const c = document.createElement("canvas");
   c.width = c.height = out;

@@ -17,7 +17,11 @@
 //   listTinoLines(), addTinoLine(body), deleteTinoLine(id), getBigTino(), setBigTino(blob, meta), resetBigTino(),
 //   tinoFile(path), subscribeTinoExtras(onChange) → phrases de Tino et grand Tino (supabase/08_tino_extras.sql)
 //   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id),
-//   subscribeOutfits(onChange) → garde-robe du petit Tino (supabase/12_tino_outfits.sql)
+//   subscribeOutfits(onChange) → garde-robe du petit Tino (supabase/12_tino_outfits.sql) ; une tenue a aussi caughtAt /
+//     caughtBy (20_fishing.sql : pêchée quand, par qui ; null = dans la réserve)
+//   fishTino() → la prise d'un lancer, listCatches() → { catches (les plus récentes d'abord), color (couleur active | null) },
+//   subscribeCatches(onChange) → la pêche (20_fishing.sql) ; une prise : { id, by, at, kind: "outfit" | "color" | "junk",
+//     outfit, outfitName, color: { h, s, l } | null, junk, until }
 //   listDecor(), setDecor(blob, { season, layout, light }), deleteDecor({ season, layout, light }),
 //   subscribeDecor(onChange) → décor dessiné, fond d'écran par saison / jour-nuit / format (supabase/16_decor.sql)
 //   listGrumbles(), addGrumble(body), deleteGrumble(id), subscribeGrumbles(onChange) → phrases râleuses (13_tino_grumbles.sql)
@@ -36,6 +40,7 @@ import { SUPABASE_URL, SUPABASE_KEY, VAPID_PUBLIC_KEY } from "./config.js";
 // « * » : marche avant et après 15_recurring.sql (colonne series) — une colonne inconnue ferait échouer tout le chargement
 const TASK_COLS = "*";
 const NOTE_COLS = "id, author, title, body, private, created_at, updated_at, updated_by";
+const toCatch = (r) => ({ id: r.id, by: r.by, at: r.at, kind: r.kind, outfit: r.outfit ?? null, outfitName: r.outfit_name ?? null, color: r.color ?? null, junk: r.junk ?? null, until: r.until ?? null });
 const toNote = (r) => ({ id: r.id, by: r.author, title: r.title, body: r.body, private: !!r.private, at: r.created_at, updated: r.updated_at, updatedBy: r.updated_by });
 
 // Rappel : « AAAA-MM-JJ HH:MM » en heure locale dans l'app, instant absolu (UTC) dans la base
@@ -268,12 +273,13 @@ export function createBackend() {
         sb.from("shared_settings").select("value").eq("key", "tino_outfit").maybeSingle(),
       ])).map(must);
       return {
-        outfits: rows.map((r) => ({ id: r.id, by: r.author, name: r.name, layer: r.layer, path: r.path, hideFlower: r.hide_flower, anim: r.anim ?? null, at: r.created_at })),
+        outfits: rows.map((r) => ({ id: r.id, by: r.author, name: r.name, layer: r.layer, path: r.path, hideFlower: r.hide_flower, anim: r.anim ?? null, at: r.created_at, caughtAt: r.caught_at ?? null, caughtBy: r.caught_by ?? null })),
         worn: { head: worn?.value?.head ?? null, body: worn?.value?.body ?? null },
       };
     },
     // Nouveau dessin (PNG transparent déjà réduit sur l'appareil, ou planche d'une tenue animée + anim, voir
-    // 17_outfit_anim.sql) : fichier, puis la tenue (sinon le fichier est retiré), puis Tino la porte
+    // 17_outfit_anim.sql) : fichier, puis la tenue (sinon le fichier est retiré) ; renvoie son id (avec la pêche, 20, elle
+    // part dans la réserve : c'est l'app qui décide de la faire porter ou non)
     async addOutfit(blob, { name, layer, hideFlower, anim = null }) {
       const ext = { "image/png": "png", "image/webp": "webp" }[blob.type];
       if (!ext) throw new Error("unsupported file type");
@@ -282,7 +288,22 @@ export function createBackend() {
       let row;
       try { row = must(await sb.from("tino_outfits").insert({ name, layer, path, hide_flower: !!hideFlower, ...(anim ? { anim } : {}) }).select("id").single()); }
       catch (err) { await sb.storage.from("tino").remove([path]).catch(() => {}); throw err; }
-      await this.wearOutfit(layer, row.id);
+      return row.id;
+    },
+    // La pêche (supabase/20_fishing.sql) : le tirage est fait par la base (on ne sait pas ce qu'on attrape avant)
+    async fishTino() { return toCatch(must(await sb.rpc("fish_tino"))); },
+    async listCatches() {
+      const [rows, color] = (await Promise.all([
+        sb.from("tino_catches").select("*").order("at", { ascending: false }).limit(30),
+        sb.from("tino_catches").select("*").eq("kind", "color").gt("until", new Date().toISOString()).order("at", { ascending: false }).limit(1).maybeSingle(),
+      ])).map(must);
+      return { catches: rows.map(toCatch), color: color ? toCatch(color) : null };
+    },
+    subscribeCatches(onChange) {
+      const ch = sb.channel("fish-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "tino_catches" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
     },
     // Images du widget « Tino » avec la tenue portée (supabase/18_widget_scenes.sql) : empreinte de chaque scène rangée,
     // ranger une image (PNG en base64), tout effacer (plus de tenue : le widget reprend ses images de base)
