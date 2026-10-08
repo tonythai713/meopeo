@@ -77,7 +77,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -105,7 +105,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); loadDecor(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyTheme(); runClocks(); } }); // (minuteries endormies en arrière-plan)
   runClocks();
@@ -160,6 +160,7 @@ async function boot(user) {
   loadOutfits();
   loadGrumbles();
   loadNotes();
+  loadDoodles();
   loadSeries();
   loadDecor();
   resubscribe();
@@ -172,6 +173,7 @@ function resubscribe() {
   unsubOutfits?.(); unsubOutfits = S.user ? db.subscribeOutfits(() => loadOutfits()) : null; // canal à part (sans 12, rien d'autre ne casse)
   unsubGrumbles?.(); unsubGrumbles = S.user ? db.subscribeGrumbles(() => loadGrumbles()) : null; // idem (13)
   unsubNotes?.(); unsubNotes = S.user ? db.subscribeNotes(() => loadNotes()) : null; // idem (14)
+  unsubDoodles?.(); unsubDoodles = S.user ? db.subscribeDoodles(() => loadDoodles()) : null; // idem (19)
   unsubSeries?.(); unsubSeries = S.user ? db.subscribeSeries(() => loadSeries()) : null; // idem (15)
   unsubDecor?.(); unsubDecor = S.user ? db.subscribeDecor(() => loadDecor()) : null; // idem (16)
 }
@@ -245,6 +247,7 @@ function showLogin() {
   unsubOutfits?.(); unsubOutfits = null; S.outfits = []; S.worn = { head: null, body: null }; S.outfitsOk = null; applyOutfit();
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
   unsubNotes?.(); unsubNotes = null; S.notes = []; S.notesOk = null;
+  unsubDoodles?.(); unsubDoodles = null; S.doodles = []; S.doodlesOk = null; doodleUi?.el.remove(); doodleUi = null; doodlePng.clear(); doodleSeen = null;
   unsubSeries?.(); unsubSeries = null; S.series = []; S.seriesOk = null; toppedUp = 0;
   unsubDecor?.(); unsubDecor = null; S.decor = []; S.decorOk = null; applyDecor(); // fond d'origine sur l'écran de connexion
   showTab(); // plus de barre d'onglets sur l'écran de connexion
@@ -313,7 +316,7 @@ function render() {
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); loadDecor(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
@@ -549,7 +552,11 @@ function mascotPlatforms() {
     }
     cards(root, ".pl-card", ".pl-item", (it) => it.dataset.id);
     cards(tinoHost, ".pl-card", ".pl-item", () => null);
-  } else if (tab === "notes") cards(panes.notes, ".pl-editor-card", ".mp-note", (it) => it.dataset.note, true); // (+ le fond de la carte : le haut est collé au haut de l'écran)
+  } else if (tab === "notes") {
+    cards(panes.notes, ".mp-notes-card", ".mp-note", (it) => it.dataset.note, true); // (+ le fond de la carte : le haut est collé au haut de l'écran)
+    const dc = panes.notes?.querySelector(".mp-doodle");
+    if (dc) add(dc, "card:doodle", 22, 22); // (dessins : seulement le haut de la carte, jamais sur la toile)
+  }
   return out;
 }
 function mascotToday() {
@@ -1679,13 +1686,73 @@ function fillTinoWidget(box) {
     div.innerHTML = `<b>${ios ? "📱 iPhone" : "🤖 Android"} Tino widget</b>${steps}
       <textarea readonly rows="${ios ? 6 : 3}" spellcheck="false">${esc(text)}</textarea>
       <span class="mp-row"><button type="button" class="mp-cta" data-act="copy">Copy</button></span>
-      <div class="pl-legend">⚠️ Shown only once. It contains your widget key: anyone who has it can see your calendar (without private tasks' text) and Tino's outfit. Lost it? Make a new one and remove this one above.</div>`;
+      <div class="pl-legend">⚠️ Shown only once. ${KEY_WARN} Lost it? Make a new one and remove this one above.</div>`;
     box.append(div);
     const area = div.querySelector("textarea");
     div.querySelector("[data-act=copy]").addEventListener("click", () => copyText(text, area));
     div.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }));
 }
+
+// ---------- Widget « Doodle » (widget/doodle.js pour Scriptable, widget/doodle.html pour Android) ----------
+// Le dernier dessin reçu de l'autre (📝 Notes → ✏️ Doodles), lu avec une clé de widget (widget_doodle de 19_doodles.sql).
+const DOODLE_CODE_URL = new URL("widget/doodle.js", location.href).href;
+const DOODLE_PAGE_URL = new URL("widget/doodle.html", location.href).href;
+const doodleLoader = (token) => `// MeoPeo Doodle widget for Scriptable — paste ALL of this into a new script named "Doodle".
+// KEY = your personal widget key (shows the doodles you receive): don't share it. Lost phone? Remove it in MeoPeo (Settings → Home-screen widget).
+const KEY = "${token}";
+const CODE_URL = "${DOODLE_CODE_URL}";
+const fm = FileManager.local();
+const file = fm.joinPath(fm.documentsDirectory(), "meopeo-doodle-code.js");
+let code = null;
+try {
+  const req = new Request(CODE_URL);
+  req.timeoutInterval = 15;
+  code = await req.loadString();
+  if (!code.includes("MEOPEO_DOODLE_WIDGET")) throw new Error("bad download");
+  fm.writeString(file, code);
+} catch (e) {
+  code = fm.fileExists(file) ? fm.readString(file) : null;
+}
+if (!code) throw new Error("MeoPeo: no connection — try again once the phone is online");
+await new Function("KEY", "return (async () => {\\n" + code + "\\n})()")(KEY);
+`;
+function fillDoodleWidget(box) {
+  const P = S.partner ?? { mark: "", label: "the other" };
+  box.innerHTML = `<div class="pl-sub">✏️ Doodle widget</div>
+    <div class="pl-legend">The last doodle ${esc(P.mark)} ${esc(P.label)} sent you (📝 Notes → ✏️ Doodles), on your home screen.${S.doodlesOk === false ? " (Tony needs to run <code>supabase/19_doodles.sql</code> first.)" : ""}</div>
+    <span class="mp-row"><button type="button" data-doodlew="iPhone">＋ iPhone Doodle widget</button><button type="button" data-doodlew="Android">＋ Android Doodle widget</button></span>`;
+  box.querySelectorAll("[data-doodlew]").forEach((b) => b.addEventListener("click", async () => {
+    box.querySelector(".mp-wsetup")?.remove();
+    const ios = b.dataset.doodlew === "iPhone";
+    b.disabled = true;
+    const { token, sha } = await newWidgetKey();
+    const made = await guard(() => db.registerWidgetKey(sha, `Doodle ${b.dataset.doodlew}`), "Couldn't create the widget");
+    b.disabled = false;
+    if (!made) return;
+    const list = document.querySelector(".mp-widgets");
+    if (list) fillWidgets(list); // (la clé apparaît dans la liste, avec « Remove »)
+    const text = ios ? doodleLoader(token) : `${DOODLE_PAGE_URL}#k=${token}`;
+    const steps = ios
+      ? `<ol><li>In <b>Scriptable</b>: <b>＋</b>, then tap <b>Copy</b> below and paste, name the script <b>Doodle</b>, <b>Done</b>.</li>
+         <li>Home screen: hold an empty spot → <b>Edit</b> → <b>Add Widget</b> → <b>Scriptable</b> → pick a size (small = just the doodle) → <b>Add Widget</b>. Then hold the new widget → <b>Edit Widget</b> → Script: <b>Doodle</b>.</li>
+         <li>The iPhone refreshes widgets when it wants (every 15 min to 1 h): a new doodle can take a while to show — the notification comes right away.</li></ol>`
+      : `<ol><li>Tap <b>Copy</b> below.</li><li>Home screen: hold an empty spot → <b>Widgets</b> → your web-page widget app (e.g. <b>WebsiteWidget</b>) → drag it to the screen, paste the link when it asks for a URL. A square size suits a doodle best.</li>
+         <li>In the widget app's settings, pick the shortest refresh time, so new doodles show up sooner.</li></ol>`;
+    const div = document.createElement("div");
+    div.className = "mp-wsetup";
+    div.innerHTML = `<b>${ios ? "📱 iPhone" : "🤖 Android"} Doodle widget</b>${steps}
+      <textarea readonly rows="${ios ? 6 : 3}" spellcheck="false">${esc(text)}</textarea>
+      <span class="mp-row"><button type="button" class="mp-cta" data-act="copy">Copy</button></span>
+      <div class="pl-legend">⚠️ Shown only once. ${KEY_WARN} Lost it? Make a new one and remove this one above.</div>`;
+    box.append(div);
+    const area = div.querySelector("textarea");
+    div.querySelector("[data-act=copy]").addEventListener("click", () => copyText(text, area));
+    div.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }));
+}
+// Une clé de widget (n'importe lequel des trois) ouvre le calendrier, la tenue de Tino et les dessins reçus
+const KEY_WARN = "It contains your widget key: anyone who has it can see your calendar (without private tasks' text), Tino's outfit and the doodles you receive.";
 
 // Mode d'emploi + code, montrés une seule fois juste après la création de la clé
 function showWidgetSetup(box, label, token) {
@@ -1702,7 +1769,7 @@ function showWidgetSetup(box, label, token) {
   div.innerHTML = `<b>${ios ? "📱 iPhone widget" : "🤖 Android widget"} — set it up now</b>${steps}
     <textarea readonly rows="${ios ? 6 : 3}" spellcheck="false">${esc(text)}</textarea>
     <span class="mp-row"><button type="button" class="mp-cta" data-act="copy">Copy</button></span>
-    <div class="pl-legend">⚠️ This is shown only once. It contains your widget key: anyone who has it can see your calendar (without private tasks' text). Lost it? Make a new widget and remove this one.</div>`;
+    <div class="pl-legend">⚠️ This is shown only once. ${KEY_WARN} Lost it? Make a new widget and remove this one.</div>`;
   box.append(div);
   const area = div.querySelector("textarea");
   div.querySelector("[data-act=copy]").addEventListener("click", () => copyText(text, area));
@@ -1812,6 +1879,12 @@ function renderTinoPane(pane) {
 // Une nouvelle version installée pendant que la page tourne ne s'affiche qu'après un rechargement : on le dit.
 let swUpdated = false;
 navigator.serviceWorker?.addEventListener("controllerchange", () => { swUpdated = true; });
+// Notification touchée alors que l'app était déjà ouverte : aller à l'onglet qu'elle indique (sw.js, « ./#notes »)
+navigator.serviceWorker?.addEventListener("message", (ev) => {
+  if (ev.data?.type !== "meopeo-open") return;
+  const hash = new URL(ev.data.url, location.href).hash;
+  if (hash && hash !== location.hash) location.hash = hash;
+});
 async function appVersion() {
   try {
     const v = (await caches.keys()).filter((k) => k.startsWith("meopeo-")).map((k) => k.slice(7)).sort().pop();
@@ -1827,7 +1900,7 @@ function renderSettings(pane) {
       <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button></div>`)
     + fold("notif", "🔔 Notifications", `<div class="mp-notif">Checking…</div>
       ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}`)
-    + fold("widget", "📱 Home-screen widget", `<div class="mp-widgets">Checking…</div><div class="mp-tinowidget"></div>`)
+    + fold("widget", "📱 Home-screen widget", `<div class="mp-widgets">Checking…</div><div class="mp-tinowidget"></div><div class="mp-doodlewidget"></div>`)
     + fold("password", "🔑 Password", `<label>New password<input type="password" name="pw" autocomplete="new-password" minlength="6"></label>
       <label>Repeat it<input type="password" name="pw2" autocomplete="new-password" minlength="6"></label>
       <div class="pl-editor-actions"><span class="mp-grow"></span><button type="submit" class="mp-cta">Change password</button></div>`, "form")
@@ -1845,6 +1918,7 @@ function renderSettings(pane) {
   fillNotif(pane.querySelector(".mp-notif"));
   fillWidgets(pane.querySelector(".mp-widgets"));
   fillTinoWidget(pane.querySelector(".mp-tinowidget"));
+  fillDoodleWidget(pane.querySelector(".mp-doodlewidget"));
   setupFolds(pane, "settings");
   pane.querySelector("[name=notify]")?.addEventListener("change", async (ev) => {
     const on = ev.target.checked;
@@ -1876,10 +1950,13 @@ const BULLET_RE = /^\s*[-*•] (.*)$/;
 const LIST_RE = /^\s*(?:[-*•] \[(?: |x|X)\] ?|[-*•] )/;
 // Horodatage Supabase (microsecondes) plus récent qu’un autre ; illisible → « différent »
 const newerThan = (a, b) => { const ms = (t) => Date.parse(String(t).replace(/(\.\d{3})\d+/, "$1")), x = ms(a), y = ms(b); return Number.isNaN(x) || Number.isNaN(y) ? a !== b : x > y; };
-function renderNotes(pane) {
+function renderNotes(host) {
   const P = S.partner;
+  let pane = host.querySelector(".mp-notes-list");
+  if (!pane) { host.innerHTML = `<div class="mp-notes-list"></div>`; pane = host.firstChild; }
+  doodleCard(host); // (sous les notes ; créée une fois, jamais réécrite ici : un dessin en cours reste)
   if (S.notesOk === false) {
-    pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><h4>📝 Notes</h4><div class="pl-legend">Shared notes aren't available yet — Tony needs to run <code>supabase/14_notes.sql</code>.</div></div>`;
+    pane.innerHTML = `<div class="pl-editor-card mp-pane-card mp-notes-card"><h4>📝 Notes</h4><div class="pl-legend">Shared notes aren't available yet — Tony needs to run <code>supabase/14_notes.sql</code>.</div></div>`;
     return;
   }
   const who = (id) => (id === S.user.id ? S.me : P);
@@ -1890,7 +1967,7 @@ function renderNotes(pane) {
       <span class="mp-note-title">${n.private ? "🔒 " : ""}${esc(n.title || "Untitled")}${progress(n)}${store.get(draftKey(n.id), null) ? ` <span class="mp-src">not saved yet</span>` : ""}</span>
       ${n.body.trim() ? `<span class="mp-note-preview">${esc(preview(n))}</span>` : ""}
       <span class="pl-legend">${esc(who(n.updatedBy)?.mark ?? "")} ${tinoWhen(n.updated)}</span></button>`;
-  pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><div class="mp-notes-head"><h4>📝 Notes</h4><button type="button" class="mp-cta" data-act="newnote">＋ New note</button></div>
+  pane.innerHTML = `<div class="pl-editor-card mp-pane-card mp-notes-card"><div class="mp-notes-head"><h4>📝 Notes</h4><button type="button" class="mp-cta" data-act="newnote">＋ New note</button></div>
     ${newDraft ? `<button type="button" class="mp-note" data-note="new"><span class="mp-note-title">${esc(newDraft.title || "Untitled")} <span class="mp-src">new · not saved yet</span></span></button>` : ""}
     <div class="mp-notes">${S.notes.length ? S.notes.map(card).join("") : newDraft ? "" : `<div class="pl-empty">No notes yet — shopping lists, ideas, plans… anything you both want to keep.</div>`}</div>
     <div class="pl-legend">Shared with ${esc(P?.mark ?? "")} ${esc(P?.label ?? "the other")}: you can both edit and delete shared notes. 🔒 = only you.</div></div>`;
@@ -2085,4 +2162,195 @@ function noteHtml(body) {
     if ((m = line.match(/^#{1,3} (.*)$/))) return `<div class="mp-nl mp-nl-head">${esc(m[1])}</div>`;
     return line.trim() ? `<div class="mp-nl">${esc(line)}</div>` : `<div class="mp-nl mp-nl-gap"></div>`;
   }).join("");
+}
+
+// ---------- ✏️ Dessins pour l'écran d'accueil de l'autre (supabase/19_doodles.sql) ----------
+// Dans l'onglet 📝 Notes, sous les notes : on dessine (doigt, stylet, souris) et on envoie à l'autre ; son widget « Doodle »
+// montre le dernier dessin reçu (widget_doodle) et une notification le prévient. La carte est créée une fois par connexion
+// et n'est JAMAIS réécrite par renderNotes (qui refait la liste à chaque événement temps réel) : un dessin en cours reste.
+// Brouillon (les traits) gardé sur l'appareil à chaque trait fini. Les images (~30–300 Ko) ne sont lues que pour ce qui
+// est affiché, une fois. Sans 19 : la carte le dit, rien d'autre ne change.
+const DOODLE = 600, DOODLE_SHOWN = 12;
+const INKS = ["#1c1c28", "#ffffff", "#e5383b", "#ff8c42", "#ffd23f", "#3bb273", "#3a86ff", "#8338ec", "#ff5d8f", "#8d5a3b"];
+const PAPERS = [["#ffffff", "White"], ["#fff6e5", "Cream"], ["#ffe3ec", "Pink"], ["#e3f0ff", "Sky"], ["#1c2046", "Night"]];
+const NIBS = [["S", 5], ["M", 12], ["L", 26]];
+let unsubDoodles = null, doodleUi = null, doodleSeen = null;
+const doodlePng = new Map(); // id → PNG en base64 (lu une fois)
+async function loadDoodles() {
+  if (!S.user) return;
+  try { S.doodles = await db.listDoodles(); S.doodlesOk = true; }
+  catch (err) {
+    if (/does not exist|schema cache/i.test(err.message)) { S.doodlesOk = false; S.doodles = []; }
+    else console.warn("Doodles", err); // hors ligne : la dernière liste reste
+  }
+  const want = S.doodles.slice(0, DOODLE_SHOWN).map((d) => d.id).filter((id) => !doodlePng.has(id));
+  if (want.length) try { for (const [id, png] of await db.doodlePngs(want)) doodlePng.set(id, png); } catch (err) { console.warn("Doodles", err); }
+  // Un nouveau dessin de l'autre pendant que l'app est ouverte (pas au démarrage) : on le dit, sauf si on regarde déjà.
+  // Repère = date du plus récent déjà vu (pas son id : s'il retire son dernier, l'avant-dernier n'est pas « nouveau »)
+  const got = S.doodles.find((d) => d.by !== S.user.id), P = S.partner;
+  const fresh = got && (doodleSeen === null || newerThan(got.at, doodleSeen));
+  if (fresh && doodleSeen !== null && currentTab() !== "notes")
+    toast(`✏️ ${P?.mark ?? ""} ${P?.label ?? "Someone"} sent you a doodle`, { action: "See it", onAction: () => { location.hash = "notes"; } });
+  if (fresh) doodleSeen = got.at;
+  else if (doodleSeen === null) doodleSeen = "";
+  doodleUi?.refresh();
+}
+function doodleCard(host) {
+  if (doodleUi?.user === S.user.id && doodleUi.el.parentNode === host) return;
+  doodleUi?.el.remove();
+  doodleUi = makeDoodle(host);
+}
+const doodleSrc = (id) => (doodlePng.has(id) ? `data:image/png;base64,${doodlePng.get(id)}` : "");
+function makeDoodle(host) {
+  const P = () => S.partner ?? { mark: "", label: "the other" };
+  const key = "doodle." + S.user.id;
+  let d = store.get(key, null); // brouillon : { paper, strokes: [{ c: couleur, w: épaisseur, e: gomme 0/1, p: [x, y, x, y…] }] }
+  if (!d || !Array.isArray(d.strokes) || typeof d.paper !== "string") d = { paper: PAPERS[1][0], strokes: [] };
+  let ink = INKS[0], nib = 1, erase = false, cur = null, sending = false, clearArmed = false;
+  const el = document.createElement("div");
+  el.className = "pl-editor-card mp-pane-card mp-doodle";
+  el.innerHTML = `<h4>✏️ Doodles</h4>
+    <div class="mp-doodle-got"></div>
+    <div class="mp-doodle-draw">
+      <div class="mp-doodle-pad"><canvas width="${DOODLE}" height="${DOODLE}" role="img" aria-label="Drawing area"></canvas></div>
+      <div class="mp-doodle-inks">${INKS.map((c) => `<button type="button" class="mp-swatch" data-ink="${c}" style="--c:${c}" aria-label="Colour ${c}"></button>`).join("")}</div>
+      <div class="mp-doodle-tools">
+        <span class="mp-seg">${NIBS.map(([n], i) => `<button type="button" data-nib="${i}">${n}</button>`).join("")}</span>
+        <button type="button" data-act="erase" aria-pressed="false">🧽 Eraser</button>
+        <button type="button" data-act="undo">↶ Undo</button>
+        <button type="button" data-act="clear">🗑 Clear</button>
+      </div>
+      <div class="mp-doodle-papers"><span class="pl-legend">Paper</span>${PAPERS.map(([c, n]) => `<button type="button" class="mp-swatch mp-paper" data-paper="${c}" style="--c:${c}" aria-label="${n} paper" title="${n}"></button>`).join("")}</div>
+      <div class="pl-editor-actions"><span class="mp-grow"></span><button type="button" class="mp-cta" data-act="send">Send</button></div>
+      <div class="pl-legend mp-doodle-hint"></div>
+    </div>
+    <div class="mp-doodle-hist"></div>`;
+  host.append(el);
+  const cv = el.querySelector("canvas"), g = cv.getContext("2d");
+  const layer = document.createElement("canvas"); // les traits seuls (la gomme y efface), posés sur le papier
+  layer.width = layer.height = DOODLE;
+  const lg = layer.getContext("2d");
+  const send = el.querySelector("[data-act=send]"), clear = el.querySelector("[data-act=clear]");
+  const save = () => store.set(key, d);
+  function strokeOn(c, s, from = 0) {
+    const p = s.p;
+    c.save();
+    c.globalCompositeOperation = s.e ? "destination-out" : "source-over";
+    c.strokeStyle = c.fillStyle = s.c;
+    c.lineWidth = s.w;
+    c.lineCap = c.lineJoin = "round";
+    c.beginPath();
+    if (p.length <= 2) { c.arc(p[0], p[1], s.w / 2, 0, Math.PI * 2); c.fill(); } // un point
+    else {
+      const i0 = Math.max(0, from - 2);
+      c.moveTo(p[i0], p[i0 + 1]);
+      for (let i = i0 + 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]);
+      c.stroke();
+    }
+    c.restore();
+  }
+  const paint = () => { g.fillStyle = d.paper; g.fillRect(0, 0, DOODLE, DOODLE); g.drawImage(layer, 0, 0); };
+  const redraw = () => { lg.clearRect(0, 0, DOODLE, DOODLE); d.strokes.forEach((s) => strokeOn(lg, s)); paint(); tools(); };
+  function tools() {
+    el.querySelectorAll("[data-ink]").forEach((b) => b.setAttribute("aria-pressed", String(!erase && b.dataset.ink === ink)));
+    el.querySelectorAll("[data-nib]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.nib === nib)));
+    el.querySelectorAll("[data-paper]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.paper === d.paper)));
+    el.querySelector("[data-act=erase]").setAttribute("aria-pressed", String(erase));
+    el.querySelector("[data-act=undo]").disabled = clear.disabled = !d.strokes.length;
+    if (!d.strokes.length) { clearArmed = false; clear.textContent = "🗑 Clear"; }
+    send.disabled = sending || !d.strokes.length;
+    send.textContent = sending ? "Sending…" : `Send to ${P().mark} ${P().label}`;
+  }
+  // Dessin : un seul doigt à la fois ; points rapprochés ignorés ; seulement le nouveau bout de trait est dessiné
+  const pt = (ev) => { const b = cv.getBoundingClientRect(); return [Math.round(((ev.clientX - b.left) / b.width) * DOODLE), Math.round(((ev.clientY - b.top) / b.height) * DOODLE)]; };
+  cv.addEventListener("pointerdown", (ev) => {
+    if (cur || ev.button > 0) return;
+    ev.preventDefault();
+    try { cv.setPointerCapture(ev.pointerId); } catch { /* (pointeur déjà parti : le trait se dessine quand même) */ }
+    cur = { id: ev.pointerId, s: { c: erase ? "#000000" : ink, w: NIBS[nib][1] * (erase ? 2 : 1), e: erase ? 1 : 0, p: pt(ev) } };
+    d.strokes.push(cur.s);
+    strokeOn(lg, cur.s);
+    paint();
+  });
+  cv.addEventListener("pointermove", (ev) => {
+    if (!cur || ev.pointerId !== cur.id) return;
+    ev.preventDefault();
+    const p = cur.s.p, from = p.length, evs = ev.getCoalescedEvents?.() ?? [];
+    for (const e of evs.length ? evs : [ev]) {
+      const [x, y] = pt(e);
+      if (Math.abs(x - p[p.length - 2]) + Math.abs(y - p[p.length - 1]) >= 2) p.push(x, y);
+    }
+    if (p.length > from) { strokeOn(lg, cur.s, from); paint(); }
+  });
+  const end = (ev) => { if (!cur || ev.pointerId !== cur.id) return; cur = null; save(); tools(); };
+  cv.addEventListener("pointerup", end);
+  cv.addEventListener("pointercancel", end);
+  cv.addEventListener("contextmenu", (ev) => ev.preventDefault());
+  el.querySelectorAll("[data-ink]").forEach((b) => b.addEventListener("click", () => { ink = b.dataset.ink; erase = false; tools(); }));
+  el.querySelectorAll("[data-nib]").forEach((b) => b.addEventListener("click", () => { nib = +b.dataset.nib; tools(); }));
+  el.querySelectorAll("[data-paper]").forEach((b) => b.addEventListener("click", () => { d.paper = b.dataset.paper; paint(); save(); tools(); }));
+  el.querySelector("[data-act=erase]").addEventListener("click", () => { erase = !erase; tools(); });
+  el.querySelector("[data-act=undo]").addEventListener("click", () => { d.strokes.pop(); save(); redraw(); });
+  clear.addEventListener("click", () => {
+    if (!clearArmed) { clearArmed = true; clear.textContent = "Sure? 🗑"; return; } // 2e appui pour confirmer
+    d.strokes = []; save(); redraw();
+  });
+  // Envoi : papier + traits en PNG (fond plein : un PNG transparent disparaîtrait sur un widget sombre)
+  const png = (size) => {
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const x = c.getContext("2d");
+    x.fillStyle = d.paper; x.fillRect(0, 0, size, size); x.drawImage(layer, 0, 0, size, size);
+    return c.toDataURL("image/png").split(",")[1];
+  };
+  send.addEventListener("click", async () => {
+    if (sending || !d.strokes.length) return;
+    let data = png(DOODLE);
+    if (data.length > 1400000) data = png(420); // (dessin très chargé : plus petit, sous la limite de la base)
+    sending = true; tools();
+    let made = null;
+    const ok = await guard(async () => { made = await db.sendDoodle(data); }, "Couldn't send the doodle");
+    sending = false;
+    if (ok) {
+      doodlePng.set(made.id, data);
+      d.strokes = []; save(); redraw();
+      toast(`✏️ Sent to ${P().mark} ${P().label} — it'll show on their Doodle widget`);
+      loadDoodles();
+    } else tools(); // (hors ligne ou erreur : le dessin reste, on peut réessayer)
+  });
+  function refresh() {
+    const Q = P(), off = S.doodlesOk === false;
+    el.classList.toggle("mp-off", off);
+    const got = S.doodles.find((x) => x.by !== S.user.id), box = el.querySelector(".mp-doodle-got");
+    box.innerHTML = off
+      ? `<div class="pl-legend">Doodles aren't set up yet — Tony needs to run <code>supabase/19_doodles.sql</code> in Supabase.</div>`
+      : got
+        ? `<button type="button" class="mp-doodle-last" data-doodle="${got.id}">${doodleSrc(got.id) ? `<img src="${doodleSrc(got.id)}" alt="Latest doodle from ${esc(Q.label)}">` : `<span class="mp-doodle-wait">✏️</span>`}
+            <span><b>From ${esc(Q.mark)} ${esc(Q.label)}</b><span class="pl-legend">${tinoWhen(got.at)}</span></span></button>`
+        : `<div class="pl-empty">No doodle from ${esc(Q.mark)} ${esc(Q.label)} yet — draw one for them below ✏️</div>`;
+    el.querySelector(".mp-doodle-hint").textContent = `It shows on ${Q.label}'s Doodle widget (⚙ Settings → Home-screen widget) and they get a notification.`;
+    const shown = S.doodles.slice(0, DOODLE_SHOWN);
+    el.querySelector(".mp-doodle-hist").innerHTML = off || !shown.length ? "" : `<div class="pl-sub">Sent & received</div><div class="mp-doodle-grid">${shown.map((x) => `<button type="button" class="mp-doodle-thumb" data-doodle="${x.id}" title="${x.by === S.user.id ? "You" : esc(Q.label)} · ${tinoWhen(x.at)}">
+        ${doodleSrc(x.id) ? `<img src="${doodleSrc(x.id)}" alt="">` : ""}<span class="mp-doodle-who">${x.by === S.user.id ? esc(S.me.mark) : esc(Q.mark)}</span></button>`).join("")}</div>`;
+    el.querySelectorAll("[data-doodle]").forEach((b) => b.addEventListener("click", () => openDoodle(b.dataset.doodle)));
+    tools();
+  }
+  redraw();
+  refresh();
+  return { user: S.user.id, el, refresh };
+}
+// Un dessin en grand ; les siens peuvent être retirés (ils disparaissent aussi du widget de l'autre)
+function openDoodle(id) {
+  const x = S.doodles.find((y) => y.id === id), P = S.partner ?? { mark: "", label: "the other" };
+  if (!x) return;
+  const mine = x.by === S.user.id;
+  const ov = overlay(`<div class="pl-editor-card mp-doodle-view"><h4>${mine ? `✏️ You → ${esc(P.mark)} ${esc(P.label)}` : `✏️ ${esc(P.mark)} ${esc(P.label)} → you`}</h4>
+    ${doodleSrc(id) ? `<img src="${doodleSrc(id)}" alt="Doodle">` : `<div class="pl-empty">The picture isn't loaded yet — check the connection.</div>`}
+    <div class="pl-legend">${tinoWhen(x.at)}</div>
+    <div class="pl-editor-actions">${mine ? `<button type="button" data-act="unsend" class="mp-danger">🗑 Unsend</button>` : ""}<span class="mp-grow"></span><button type="button" data-act="cancel">Close</button></div></div>`);
+  const un = ov.querySelector("[data-act=unsend]");
+  un?.addEventListener("click", async () => {
+    if (!un.dataset.armed) { un.dataset.armed = "1"; un.textContent = `Sure? It goes from ${P.label}'s widget too 🗑`; return; } // 2e appui pour confirmer
+    if (await guard(() => db.deleteDoodle(id), "Couldn't unsend the doodle")) { ov.remove(); toast("Unsent — their widget catches up at its next refresh"); loadDoodles(); }
+  });
 }

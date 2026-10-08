@@ -25,6 +25,8 @@
 //   subscribeSeries(onChange) → tâches récurrentes (15_recurring.sql) ; une tâche a aussi « series » (id de sa série ou null)
 //   listNotes(), addNote({ title, body, private }), saveNote(id, patch, version) → note | null (conflit), getNote(id),
 //   deleteNote(id), subscribeNotes(onChange) → notes partagées (14_notes.sql) ; une note : { id, by, title, body, private, at, updated, updatedBy }
+//   listDoodles(), doodlePngs(ids), sendDoodle(png), deleteDoodle(id), subscribeDoodles(onChange) → dessins envoyés à l'autre,
+//     pour son widget (19_doodles.sql) ; un dessin : { id, by, at } (l'image, PNG en base64, se lit à part : doodlePngs → Map id → png)
 //
 // Format d'une tâche dans l'app : { id, owner, date: "AAAA-MM-JJ", end: "AAAA-MM-JJ" | null, time: "HH:MM" | null,
 //   course: nom de catégorie | null, label, done, moon: "full" | "crescent" | null, private, source }
@@ -220,6 +222,27 @@ export function createBackend() {
     subscribeNotes(onChange) {
       const ch = sb.channel("notes-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "*", schema: "public", table: "notes" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+
+    // Dessins pour le widget de l'autre (supabase/19_doodles.sql) : la liste sans les images (plus récents d'abord), les
+    // images seulement pour ce qu'on affiche (~30–300 Ko chacune) ; canal temps réel à part (sans 19, rien d'autre ne casse)
+    async listDoodles() {
+      return must(await sb.from("doodles").select("id, author, created_at").order("created_at", { ascending: false }).limit(60))
+        .map((r) => ({ id: r.id, by: r.author, at: r.created_at }));
+    },
+    async doodlePngs(ids) {
+      return new Map(ids.length ? must(await sb.from("doodles").select("id, png").in("id", ids)).map((r) => [r.id, r.png]) : []);
+    },
+    async sendDoodle(png) {
+      const r = must(await sb.from("doodles").insert({ png }).select("id, author, created_at").single());
+      return { id: r.id, by: r.author, at: r.created_at };
+    },
+    async deleteDoodle(id) { must(await sb.from("doodles").delete().eq("id", id)); },
+    subscribeDoodles(onChange) {
+      const ch = sb.channel("doodles-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "doodles" }, () => onChange())
         .subscribe();
       return () => sb.removeChannel(ch);
     },

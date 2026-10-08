@@ -1,7 +1,7 @@
 // Service worker de MeoPeo : l'app s'ouvre même sans réseau (ses fichiers sont gardés sur le téléphone).
 // ⚠️ À CHAQUE publication d'une nouvelle version : changer VERSION, sinon les téléphones gardent l'ancienne.
 // Les données (Supabase : tâches, connexion, temps réel) ne passent JAMAIS par ce cache.
-const VERSION = "2026-10-08.5";
+const VERSION = "2026-10-08.6";
 const CACHE = "meopeo-" + VERSION;
 const SHELL = [
   "./", "index.html", "app.js", "mascot.js", "bigtino.js", "data.js", "config.js", "style.css", "manifest.webmanifest",
@@ -64,13 +64,15 @@ self.addEventListener("push", (event) => {
     body: d.body || "", tag: d.tag || undefined, icon: "icons/icon-192.png", badge: "icons/icon-192.png", data: { url: d.url || "./" },
   }));
 });
-// Toucher la notification ouvre MeoPeo (ou le remet au premier plan)
+// Toucher la notification ouvre MeoPeo (ou le remet au premier plan) ; si elle mène à un onglet (« ./#notes » pour un
+// dessin), l'app déjà ouverte y va aussi (message « meopeo-open », écouté dans app.js)
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil((async () => {
+    const url = event.notification.data?.url || "./";
     const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const open = wins.find((w) => w.url.startsWith(self.registration.scope));
-    if (open) return open.focus();
-    return self.clients.openWindow(new URL(event.notification.data?.url || "./", self.registration.scope).href);
+    if (open) { open.postMessage({ type: "meopeo-open", url }); return open.focus(); }
+    return self.clients.openWindow(new URL(url, self.registration.scope).href);
   })());
 });

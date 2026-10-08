@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Doodle</title>
+<!-- Widget Android « Doodle » de MeoPeo : page affichée par une app de widget « page web » (lien créé dans l'app, ⚙ Settings →
+     Home-screen widget → Doodle widget, avec la clé après #k=). Montre le DERNIER dessin envoyé par l'autre (📝 Notes →
+     ✏️ Doodles), lu avec la clé (widget_doodle de 19_doodles.sql). Requête SYNCHRONE : la page ne finit de charger qu'avec
+     le dessin (l'app de widget prend sa « photo » à la fin du chargement, voir widget.html). Même rôle que widget/doodle.js
+     (iPhone). Toucher le widget ouvre MeoPeo sur l'onglet Notes. -->
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { font: 600 14px/1.25 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1c2046; background: linear-gradient(170deg, #fff6e5, #ffe3ec); -webkit-text-size-adjust: 100%; }
+  #w { height: 100%; display: flex; align-items: center; justify-content: center; gap: 4%; padding: 3%; text-decoration: none; color: inherit; }
+  #w img { height: 100%; max-width: 62%; aspect-ratio: 1; object-fit: contain; border-radius: 9%; flex: none; box-shadow: 0 1px 6px rgba(28, 32, 70, 0.25); }
+  #w img[hidden] { display: none; }
+  .txt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .gold { color: #8a5a00; font-size: 0.85em; }
+  .who { font-size: 1.25em; }
+  .time { color: #565e8c; font-size: 0.8em; font-weight: 500; }
+  /* carré ou en hauteur : le dessin seul (avec un dessin) */
+  @media (max-aspect-ratio: 13/10) { #w.pic { padding: 2%; } #w.pic img { height: auto; width: 100%; max-width: none; max-height: 100%; } #w.pic .txt { display: none; } }
+</style>
+</head>
+<body>
+<a id="w" href="../#notes" target="_top"><img id="img" alt="" hidden><span class="txt"><span class="gold" id="head">✏️ Doodle</span><span class="who" id="who"></span><span class="time" id="time"></span></span></a>
+<script>
+  var q = {}; location.hash.replace(/^#/, "").split("&").forEach(function (kv) { var i = kv.indexOf("="); if (i > 0) q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function ago(at) {
+    var d = new Date(at), now = new Date(), min = Math.round((now - d) / 60000);
+    if (min < 1) return "just now";
+    if (min < 60) return min + " min ago";
+    var day = function (x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+    var days = Math.round((day(now) - day(d)) / 86400000), hm = pad(d.getHours()) + ":" + pad(d.getMinutes());
+    return days === 0 ? "today " + hm : days === 1 ? "yesterday " + hm : pad(d.getDate()) + "." + pad(d.getMonth() + 1) + " " + hm;
+  }
+  // { label, mark, png, at } ou { error }
+  function load() {
+    if (!q.k) return { error: "No widget key in the link — make the Doodle widget again in MeoPeo (Settings → Home-screen widget)." };
+    try {
+      var x = new XMLHttpRequest();
+      x.open("POST", "https://llwbzhlbaygolzuwlbkf.supabase.co/rest/v1/rpc/widget_doodle", false);
+      x.setRequestHeader("apikey", "sb_publishable_rMCGFrjzDmhsZ6eJ163B6g_MTA4dQSd"); // (clé publique de l'app)
+      x.setRequestHeader("Content-Type", "application/json");
+      x.send(JSON.stringify({ p_token: q.k }));
+      var r = JSON.parse(x.responseText || "null");
+      if (x.status === 200 && r && typeof r.label === "string") return r;
+      var msg = String((r && r.message) || "");
+      if (/unknown widget key/.test(msg)) return { error: "This widget's key was removed — make a new Doodle widget in MeoPeo." };
+      if (/widget_doodle/.test(msg)) return { error: "Doodles aren't set up yet in MeoPeo." };
+      return { error: "MeoPeo didn't answer — it'll try again at the next refresh." };
+    } catch (e) { return { error: "No connection — the doodle shows up once the phone is online." }; }
+  }
+  var r = load(), who = r.label ? (r.mark ? r.mark + " " : "") + r.label : "";
+  if (r.png) {
+    document.getElementById("w").className = "pic";
+    var img = document.getElementById("img");
+    img.src = "data:image/png;base64," + r.png;
+    img.alt = "Doodle from " + who;
+    img.hidden = false;
+    document.getElementById("head").textContent = "✏️ Doodle from";
+    document.getElementById("who").textContent = who;
+    document.getElementById("time").textContent = r.at ? ago(r.at) : "";
+  } else {
+    document.getElementById("who").textContent = r.error || "No doodle from " + who + " yet — they can draw one in MeoPeo → Notes ✏️";
+  }
+</script>
+<noscript>This widget app doesn't run JavaScript — try another web-page widget app (e.g. WebsiteWidget).</noscript>
+</body>
+</html>
