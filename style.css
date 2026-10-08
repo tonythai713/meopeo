@@ -252,8 +252,12 @@ input[type=radio], input[type=checkbox] { accent-color: #ffe8a3; width: 18px; he
 .mp-wardrobe { font-size: 0.92em; line-height: 1.5; color: var(--text-normal); display: flex; flex-direction: column; gap: 4px; }
 .pl-editor-card h4 + .mp-wardrobe { margin-top: -4px; }
 .mp-outfit { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--pl-line); }
-.mp-outfit img { width: 40px; height: 40px; border-radius: 8px; flex: none; background: repeating-conic-gradient(rgba(255, 255, 255, 0.14) 0 25%, rgba(255, 255, 255, 0.04) 0 50%) 0 0 / 10px 10px; }
-.mp-outfit.on img { outline: 2px solid #ffe8a3; }
+.mp-outfit img, .mp-othumb { width: 40px; height: 40px; border-radius: 8px; flex: none; background: repeating-conic-gradient(rgba(255, 255, 255, 0.14) 0 25%, rgba(255, 255, 255, 0.04) 0 50%) 0 0 / 10px 10px; }
+.mp-outfit.on img, .mp-outfit.on .mp-othumb { outline: 2px solid #ffe8a3; }
+/* Tenue animée : la planche en fond, une case à la fois (app.js : thumbFrame), petit « ▶ » dans le coin */
+.mp-othumb { position: relative; overflow: hidden; display: block; }
+.mp-othumb i { position: absolute; inset: 0; background-repeat: no-repeat; font-style: normal; text-align: center; line-height: 40px; }
+.mp-othumb::after { content: "▶"; position: absolute; right: 2px; bottom: 0; font-size: 8px; line-height: 1.2; color: #ffe8a3; text-shadow: 0 0 3px rgba(0, 0, 0, 0.9); }
 .mp-outfit-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .mp-outfit button { white-space: nowrap; }
 .mp-outfit-add { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
@@ -379,6 +383,7 @@ a { color: var(--text-accent); }
 .mp-look .pl-sub { margin-top: 8px; }
 .mp-look .mp-seg { flex-wrap: wrap; }
 .mp-dayhours label { display: inline-flex; align-items: center; gap: 6px; }
+.mp-sleepwhen { align-self: center; min-width: 4.8em; font-weight: 600; font-size: 0.9em; } /* (🌙 Night / ☀️ Nap : les champs s'alignent) */
 .mp-sunplace { display: flex; align-items: center; gap: 6px; margin-top: 8px; white-space: nowrap; }
 .mp-sunplace select { min-width: 0; max-width: 100%; }
 
@@ -460,8 +465,8 @@ a { color: var(--text-accent); }
 .mp-light .mp-tino-row, .mp-light .mp-note { background: rgba(40, 50, 110, 0.05); }
 .mp-light .mp-tino-row { border-left-color: var(--mp-gold); }
 .mp-light .mp-tino-row.mine { border-left-color: var(--interactive-accent); }
-.mp-light .mp-outfit img { background: repeating-conic-gradient(rgba(40, 50, 110, 0.12) 0 25%, rgba(40, 50, 110, 0.03) 0 50%) 0 0 / 10px 10px; }
-.mp-light .mp-outfit.on img { outline-color: var(--mp-gold); }
+.mp-light .mp-outfit img, .mp-light .mp-othumb { background: repeating-conic-gradient(rgba(40, 50, 110, 0.12) 0 25%, rgba(40, 50, 110, 0.03) 0 50%) 0 0 / 10px 10px; }
+.mp-light .mp-outfit.on img, .mp-light .mp-outfit.on .mp-othumb { outline-color: var(--mp-gold); }
 .mp-light .mp-wsetup, .mp-light .mp-note-conflict, .mp-light .mp-scope { border-color: var(--mp-gold); background: rgba(255, 226, 140, 0.2); }
 .mp-light .mp-wsetup textarea { background: rgba(255, 255, 255, 0.85); }
 .mp-light .mp-nl-head { color: var(--text-accent); }

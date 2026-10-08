@@ -12,8 +12,9 @@ const STYLE = `
   -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; }
 .ms[hidden], .ms-bubble[hidden], .ms-bed[hidden], .ms-blanket[hidden] { display: none; }
 .ms-in { width: 100%; height: 100%; transform-origin: 50% 100%; }
-.ms svg { width: 100%; height: 100%; overflow: visible; display: block; }
-.ms-in svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
+.ms > svg, .ms-in > svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.ms-in > svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
+.ms-wear-anim { overflow: hidden; } /* (tenue animée : une seule case de la planche est visible) */
 .ms-fx { position: absolute; inset: 0; pointer-events: none; }
 .ms-head { transform-origin: 50px 62px; }
 .ms-face { transform-origin: 50px 45px; }
@@ -44,6 +45,32 @@ const STYLE = `
 .ms-bed, .ms-blanket { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ms-bed svg, .ms-blanket svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .ms-bed svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
+.ms-prop { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transform-origin: 50% 50%; will-change: transform, opacity; }
+.ms-prop[hidden] { display: none; }
+.ms-prop svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
+.ms-gaming .ms-hold, .ms-tool-on-r .ms-tool-r, .ms-tool-on-l .ms-tool-l { display: inline; }
+.ms-scr-hero { animation: ms-hero 1.6s ease-in-out infinite; }
+.ms-scr-obs { animation: ms-obs 1.6s linear infinite; }
+@keyframes ms-hero { 0%, 56%, 100% { transform: translateY(0); } 68%, 80% { transform: translateY(-12px); } 92% { transform: translateY(0); } }
+@keyframes ms-obs { 0% { transform: translateX(0); opacity: 0; } 8%, 90% { opacity: 1; } 100% { transform: translateX(-46px); opacity: 0; } }
+.ms-scr-win, .ms-scr-lose, .ms-prop.ms-win .ms-scr-play, .ms-prop.ms-lose .ms-scr-play { display: none; }
+.ms-prop.ms-win .ms-scr-win, .ms-prop.ms-lose .ms-scr-lose { display: inline; }
+.ms-scr-win { animation: ms-coal 0.4s ease-in-out infinite alternate; }
+.ms-smoke circle, .ms-steam path { opacity: 0; transform-box: fill-box; transform-origin: center; animation: ms-smoke 2.4s ease-out infinite; }
+.ms-smoke circle:nth-child(2), .ms-steam path:nth-child(2) { animation-delay: 0.8s; }
+.ms-smoke circle:nth-child(3) { animation-delay: 1.6s; }
+@keyframes ms-smoke { 0% { opacity: 0; transform: translate(0, 6px) scale(0.6); } 25% { opacity: 0.75; } 100% { opacity: 0; transform: translate(3px, -14px) scale(1.5); } }
+.ms-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: ms-flame 0.3s ease-in-out infinite alternate; }
+.ms-flame:nth-child(2) { animation-delay: 0.12s; }
+@keyframes ms-flame { from { transform: scaleY(0.7); } to { transform: scaleY(1.15); } }
+.ms-coal { animation: ms-coal 1.3s ease-in-out infinite alternate; }
+@keyframes ms-coal { from { opacity: 0.55; } to { opacity: 1; } }
+.ms-banner { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; visibility: hidden; white-space: nowrap; padding: 7px 34px;
+  font: 400 16px/1.15 "Cinzel", "Trajan Pro", "Times New Roman", Georgia, serif; letter-spacing: 0.13em; text-transform: uppercase;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.82) 20%, rgba(0, 0, 0, 0.82) 80%, rgba(0, 0, 0, 0)); will-change: transform, opacity; }
+.ms-banner[hidden] { display: none; }
+.ms-banner.ms-felled { color: #e9c96b; text-shadow: 0 0 10px rgba(233, 201, 107, 0.65); }
+.ms-banner.ms-died { color: #b8231f; font-size: 22px; letter-spacing: 0.09em; text-shadow: 0 0 10px rgba(184, 35, 31, 0.6); }
 `;
 
 // Petite étoile à 5 branches (le coussin de Tino en est couvert)
@@ -55,6 +82,16 @@ function star(cx, cy, r, fill) {
   }
   return `<path d="${d}Z" fill="${fill}"/>`;
 }
+
+// Manette de jeu (sur son ventre, les nageoires sur les poignées) et spatule (au bout d'une nageoire, côté droit si
+// side = 1) : dans le dessin de Tino, cachées sauf pendant les actions « game », « cook » et « bbq » (display="none" :
+// aussi cachées dans le modèle de la garde-robe, qui est fait sans la feuille de style)
+const CONTROLLER = `<path d="M33 68H67Q75 68 75 76Q75 83 69 83Q65 83 62 79H38Q35 83 31 83Q25 83 25 76Q25 68 33 68Z" fill="#3b3f5a" stroke="#22253a" stroke-width="1.2"/>
+  <path d="M35 72.5V78.5M32 75.5H38" stroke="#e8ebf5" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="62" cy="73.5" r="1.9" fill="#ff6b7d"/><circle cx="66.5" cy="76.5" r="1.9" fill="#5fb4ff"/>
+  <rect x="46" y="72" width="8" height="2" rx="1" fill="#8a90ad"/>`;
+const spatula = (s) => { const X = (x) => (s > 0 ? x : 100 - x); return `<path d="M${X(87)} 69L${X(112)} 61" stroke="#8a5a3b" stroke-width="2.6" stroke-linecap="round"/>
+  <rect x="${s > 0 ? 110 : -22}" y="55" width="12" height="9" rx="1.8" transform="rotate(${-20 * s} ${X(116)} 59.5)" fill="#cfd4e0" stroke="#868ca3" stroke-width="1"/>`; };
 
 // Tino, le phoque en peluche : grosse tête blanche, yeux fermés, nez gris en deux boules, fleur jaune sur le côté,
 // coussin crème à étoiles de couleur. Repère 100 × 100, pieds posés sur y = 98.
@@ -72,8 +109,9 @@ function sealSvg() {
   <path d="M34 58C26 52 13 55 14 65C15 73 22 75 27 74C24 80 22 90 30 95C37 99 45 96 50 92C55 96 63 99 70 95C78 90 76 80 73 74C78 75 85 73 86 65C87 55 74 52 66 58Z" fill="#f7f0de" stroke="#dacfb4" stroke-width="1.3"/>
   ${stars}
   <g class="ms-wear-body"></g>
-  <g class="ms-arm-l"><ellipse cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
-  <g class="ms-arm-r"><ellipse cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
+  <g class="ms-hold" display="none">${CONTROLLER}</g>
+  <g class="ms-arm-l"><g class="ms-tool-l" display="none">${spatula(-1)}</g><ellipse cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
+  <g class="ms-arm-r"><g class="ms-tool-r" display="none">${spatula(1)}</g><ellipse cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
   <g class="ms-head">
     <ellipse cx="50" cy="36" rx="32" ry="28.5" fill="${fur}" stroke="${line}" stroke-width="1.4"/>
     <path d="M30 13Q33 9 36 12M46 8Q50 5 54 8M64 12Q67 9 70 13" fill="none" stroke="#e3e7f1" stroke-width="1.2" stroke-linecap="round"/>
@@ -136,6 +174,59 @@ const BLANKET = `<svg viewBox="0 0 100 110" aria-hidden="true">
   ${[[20, 52], [42, 30], [60, 46], [32, 78], [56, 72], [68, 98], [14, 96], [42, 102]].map(([x, y]) => star(x, y, 4.6, "#ffe8a3")).join("")}
 </svg>`;
 
+// Objets posés sur la ligne à côté de lui (dessinés avec Tino à GAUCHE ; retournés s'il est à droite, sauf l'écran) :
+// le petit écran de jeu (un bonhomme saute par-dessus des obstacles ; à la fin une étoile ou un ✕), le barbecue (saucisses,
+// braises, fumée) et le réchaud avec sa poêle (crêpe, flammes bleues, vapeur). .ms-food : ce qu'il retourne avec sa spatule
+// (mouvement calculé avec le sien, dans placeProp)
+const SCREEN = `<svg viewBox="0 0 60 52" aria-hidden="true">
+  <rect x="24" y="40" width="12" height="8" fill="#3d4360"/><rect x="14" y="47" width="32" height="5" rx="2.5" fill="#4a5175"/>
+  <rect x="1" y="1" width="58" height="41" rx="5" fill="#262a40" stroke="#141726" stroke-width="1.5"/>
+  <rect x="5" y="5" width="50" height="33" rx="2" fill="#4f7fe8"/>
+  <g class="ms-scr-play">
+    <circle cx="45" cy="12" r="3.6" fill="#ffe27a"/><rect x="5" y="31" width="50" height="7" fill="#46b860"/><rect x="5" y="31" width="50" height="1.6" fill="#7ad68a"/>
+    <g class="ms-scr-obs"><rect x="50" y="24" width="5" height="7" rx="1" fill="#e5484d"/></g>
+    <g class="ms-scr-hero"><rect x="13" y="24" width="7" height="7" rx="1.5" fill="#ffd23f"/><rect x="17" y="26" width="1.6" height="1.6" fill="#26283a"/></g>
+  </g>
+  <g class="ms-scr-win">${star(30, 21, 10, "#ffd23f")}<circle cx="15" cy="12" r="1.6" fill="#fff"/><circle cx="46" cy="29" r="1.6" fill="#fff"/><circle cx="44" cy="11" r="1.1" fill="#fff"/></g>
+  <g class="ms-scr-lose"><path d="M23 14L37 28M37 14L23 28" stroke="#ff5a6a" stroke-width="4" stroke-linecap="round"/></g>
+  <rect x="5" y="5" width="50" height="9" rx="2" fill="#ffffff" opacity="0.08"/>
+</svg>`;
+const GRILL = `<svg viewBox="0 0 60 56" aria-hidden="true">
+  <g class="ms-smoke" fill="#e9ecf5"><circle cx="24" cy="12" r="4"/><circle cx="34" cy="10" r="3.5"/><circle cx="29" cy="14" r="3"/></g>
+  <path d="M17 36L11 54M43 36L49 54M30 38V54" stroke="#3a3c48" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M5 27H55Q55 42 30 42Q5 42 5 27Z" fill="#2e3142" stroke="#1d1f2b" stroke-width="1.2"/>
+  <ellipse class="ms-coal" cx="30" cy="28.5" rx="21" ry="2.6" fill="#ff7b2e"/>
+  <g fill="#ffb43a"><path class="ms-flame" d="M10 27Q11 23 13 21Q14 24 15 27Z"/><path class="ms-flame" d="M28 27Q29 22 31 20Q32 24 33 27Z"/><path class="ms-flame" d="M46 27Q47 23 49 21Q50 24 51 27Z"/></g>
+  <g class="ms-food" style="transform-box: fill-box; transform-origin: center">
+    <rect x="12" y="19" width="15" height="6.5" rx="3.2" fill="#c4553a" stroke="#8c3622" stroke-width="1"/>
+    <rect x="31" y="19" width="15" height="6.5" rx="3.2" fill="#c4553a" stroke="#8c3622" stroke-width="1"/>
+    <path d="M16 20.5L18 24.5M21 20.5L23 24.5M35 20.5L37 24.5M40 20.5L42 24.5" stroke="#7a2d1b" stroke-width="1" stroke-linecap="round"/>
+  </g>
+  <path d="M4 27H56" stroke="#9aa0b4" stroke-width="1.6" stroke-linecap="round"/>
+</svg>`;
+const STOVE = `<svg viewBox="0 0 60 50" aria-hidden="true">
+  <g class="ms-steam" fill="none" stroke="#eef2ff" stroke-width="1.4" stroke-linecap="round"><path d="M29 15Q26 11 29 7"/><path d="M38 16Q35 12 38 8"/></g>
+  <rect x="12" y="34" width="40" height="15" rx="3" fill="#d4d8e4" stroke="#8d93a8" stroke-width="1.2"/>
+  <circle cx="20" cy="41.5" r="2.6" fill="#8d93a8"/><rect x="36" y="39" width="11" height="5" rx="1" fill="#2f3346"/>
+  <g fill="#59a8ff"><path class="ms-flame" d="M23 34Q24 30 26 28Q27 31 28 34Z"/><path class="ms-flame" d="M30 34Q31 29 33 27Q34 31 35 34Z"/><path class="ms-flame" d="M37 34Q38 30 40 28Q41 31 42 34Z"/></g>
+  <path d="M15 26H51Q50 32 33 32Q16 32 15 26Z" fill="#33374a" stroke="#1d1f2b" stroke-width="1"/>
+  <rect x="1" y="25" width="15" height="3.2" rx="1.6" fill="#6b4c34"/>
+  <g class="ms-food" style="transform-box: fill-box; transform-origin: center"><ellipse cx="33" cy="24.5" rx="10" ry="2.8" fill="#e9a94a" stroke="#c4802a" stroke-width="0.9"/><ellipse cx="31" cy="23.8" rx="4" ry="1" fill="#f6cf7e"/></g>
+</svg>`;
+// w : largeur (× sa taille) ; gap : du centre de Tino au bord de l'objet (× sa taille) ; flip : retourné s'il est à droite ;
+// period : un coup de spatule toutes les … s (barbecue, poêle)
+const PROPS = {
+  game: { svg: SCREEN, vb: [60, 52], w: 0.85, gap: 0.55, flip: false },
+  bbq: { svg: GRILL, vb: [60, 56], w: 0.95, gap: 0.42, flip: true, period: 2.4 },
+  cook: { svg: STOVE, vb: [60, 50], w: 0.9, gap: 0.3, flip: true, period: 3.2 },
+};
+// Coup de spatule : 0 la plupart du temps, puis de 0 à 1 (la saucisse / la crêpe saute et se retourne) à la fin de chaque période
+const flipK = (c, period) => clamp(((c % period) / period - 0.66) / 0.22, 0, 1);
+// Jeu vidéo perdu : après 0,7 s de stupeur, il s'énerve (sourcils froncés, « 💢 ») jusqu'à la fin de la partie
+const gameMad = (a) => a.type === "game" && a.win === false && a.t > a.dur - GAME_END + 0.7;
+// Bannière de fin de partie, « à la Elden Ring »
+const BANNERS = { win: ["Great enemy felled", "ms-felled"], lose: ["You died", "ms-died"] };
+
 // « z », cœur, « 💢 » et bulles d'eau : à part du corps, pour rester droits pendant une roulade, couché ou en nageant
 const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
   <g class="ms-bub-at"><g class="ms-bub" fill="rgba(200, 232, 255, 0.35)" stroke="#e6f5ff" stroke-width="1.1"><circle r="2.8"/><circle cx="4" cy="-1" r="1.9"/><circle cx="-2.5" cy="-2" r="1.5"/></g></g>
@@ -160,6 +251,12 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, s) => a + (b - a) * s;
 const smooth = (s) => s * s * (3 - 2 * s);
 const isNight = () => { const h = new Date().getHours(); return h >= 22 || h < 7; }; // par défaut (l'app donne les heures choisies dans 🎣 Tino)
+// Par défaut (heure de l'appareil ; l'app donne les heures choisies dans 🎣 Tino) : repas de 11:30 à 12:30 et de 18:30 à
+// 19:30 (il cuisine ou fait un barbecue), sieste dans son lit de 12:30 à 13:00
+const MEALS = [[11 * 60 + 30, 12 * 60 + 30], [18 * 60 + 30, 19 * 60 + 30]], SIESTA = [12 * 60 + 30, 13 * 60];
+const minutesNow = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+const isMeal = () => { const t = minutesNow(); return MEALS.some(([a, b]) => t >= a && t < b); };
+const isSiesta = () => { const t = minutesNow(); return t >= SIESTA[0] && t < SIESTA[1]; };
 // Tirage pondéré : [[poids, valeur], …]
 const weighted = (list) => { let r = Math.random() * list.reduce((s, [w]) => s + w, 0); return list.find(([w]) => (r -= w) < 0)?.[1] ?? list[0][1]; };
 
@@ -179,6 +276,8 @@ const SWIM_IN = 0.75, SWIM_OUT = 0.7, SWIM_TILT = 75; // nage : plongeon, sortie
 const REACH = 200;      // saut : au plus 200 px plus haut ou plus bas, sur une plateforme qui est au-dessus / au-dessous de lui
 const FOLLOW_MS = 200;  // la page a défilé et il n'est plus à l'écran : il revient 0,2 s après la fin du défilement
 const GRAVITY = 2600;   // il tombe du haut de l'écran (px/s²)
+const GAME_END = 3.4;   // jeu vidéo : la fin de la partie (gagné / perdu, avec sa bannière) dure 3,4 s
+const YUM = 1.5;        // cuisine : c'est prêt, il sautille de joie pendant 1,5 s
 
 // ---------- Les actions ----------
 // Une action = une entrée de ACTIONS ; en ajouter une = ajouter une entrée. Champs (tous facultatifs) :
@@ -197,6 +296,26 @@ function jumpPose(p, t, crouch, air) {
   if (t < crouch) { const k = t / crouch; p.sy = 1 - 0.18 * k; p.sx = 1 + 0.12 * k; p.armL = p.armR = -10; }
   else if (t < crouch + air) { const s = (t - crouch) / air; p.sy = 1.1 - 0.1 * s; p.sx = 0.93 + 0.07 * s; p.armL = 50; p.armR = -50; }
   else { const k = 1 - Math.min(1, (t - crouch - air) / LAND); p.sy = 1 - 0.16 * k; p.sx = 1 + 0.12 * k; }
+}
+
+// Il cuisine (kind = "cook" : une crêpe à la poêle) ou fait un barbecue ("bbq" : des saucisses), spatule en main, à côté de
+// lui ; un coup de spatule de temps en temps (ce qui cuit saute et se retourne), et à la fin il sautille : c'est prêt !
+// Surtout à l'heure des repas (midi et soir), un peu de temps en temps le reste de la journée.
+function cooking(kind) {
+  return {
+    weight: (m) => (!m.propSpot(kind) ? 0 : m.eng.meal() ? 30 : 1.5),
+    make: (m) => m.propSteps(kind, { dur: rand(14, 22) }),
+    start(m, a) { m.setProp(a, kind); },
+    step(m, a) { if (!a.ended && a.t >= a.dur - YUM) { a.ended = true; m.love(); } return a.t >= a.dur; },
+    look: (m, a) => a.side * LOOK * 0.8,
+    pose(m, a, p) {
+      const c = m.clock, s = a.side, f = Math.sin(Math.PI * flipK(c, PROPS[kind].period)), done = a.t > a.dur - YUM;
+      const lift = done ? 25 : kind === "bbq" ? 4 + 30 * f : -1 + 4 * Math.sin(c * 6) + 30 * f; // nageoire de la spatule (+ = levée)
+      if (s > 0) { p.armR = -lift; p.armL = -14; } else { p.armL = lift; p.armR = 14; }
+      p.rot = s * (2 + 1.5 * Math.sin(c * 3)); p.head = s * 3 + 2 * Math.sin(c * 2);
+      if (done) p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.08;
+    },
+  };
 }
 
 const ACTIONS = {
@@ -397,6 +516,33 @@ const ACTIONS = {
     sit: true, zzz: true,
     pose(m, a, p) { p.sy = 0.95 + 0.025 * Math.sin(m.clock * 1.6); p.sx = 1.03; p.armL = -28; p.armR = 28; p.head = 12; },
   },
+  // Il joue aux jeux vidéo : assis, la manette dans les nageoires, un petit écran posé à côté de lui sur sa ligne ; il
+  // s'agite en appuyant sur les boutons ; à la fin, bannière « à la Elden Ring » : gagné → « GREAT ENEMY FELLED » en or (il
+  // sautille, cœur, étoile à l'écran), perdu → « YOU DIED » en rouge (il s'énerve : sourcils, 💢, il secoue la manette).
+  // Plus souvent le matin, l'après-midi et le soir ; pas à l'heure des repas (il cuisine).
+  game: {
+    weight: (m) => (m.propSpot("game") && !m.eng.meal() ? 7 : 0),
+    make: (m) => m.propSteps("game", { dur: rand(12, 18), win: Math.random() < 0.6 }),
+    start(m, a) { m.setProp(a, "game"); },
+    step(m, a) { if (!a.ended && a.t >= a.dur - GAME_END) { a.ended = true; if (a.win) m.love(); } return a.t >= a.dur; },
+    sit: true,
+    look: (m, a) => (gameMad(a) ? 0 : a.side * LOOK * 0.8),
+    pose(m, a, p) {
+      const c = m.clock, s = a.side;
+      if (a.t < a.dur - GAME_END) { // il joue : il écrase les boutons, penché vers l'écran
+        p.armL = -52 + 7 * Math.sin(c * 23); p.armR = 52 + 7 * Math.sin(c * 19 + 1);
+        p.rot = s * (3 + 2 * Math.sin(c * 2.2)); p.head = s * 4 + 3 * Math.sin(c * 4.3); p.sy = 0.97 + 0.015 * Math.sin(c * 2.4); p.sx = 1.02;
+      } else if (a.win) { p.armL = -52; p.armR = 52; p.bob = -Math.abs(Math.sin(c * 10)) * m.size * 0.1; p.head = 7 * Math.sin(c * 12); p.sy = 1.02; } // gagné !
+      else if (!gameMad(a)) { p.armL = -40; p.armR = 40; p.sy = 0.93; p.sx = 1.05; p.head = s * 8; p.rot = -s * 3; } // perdu… il n'y croit pas
+      else { // puis il s'énerve : il trépigne et secoue la manette
+        p.sy = 1 - 0.06 * Math.abs(Math.sin(c * 14)); p.sx = 1 + 0.04 * Math.abs(Math.sin(c * 14));
+        p.rot = 4 * Math.sin(c * 26); p.head = 7 * Math.sin(c * 21);
+        p.armL = -52 + 20 * Math.sin(c * 19); p.armR = 52 - 20 * Math.sin(c * 19 + 1);
+      }
+    },
+  },
+  cook: cooking("cook"),
+  bbq: cooking("bbq"),
   // Embêté (touché 5 fois de suite) : sourcils froncés, « 💢 », il trépigne et agite les nageoires
   angry: {
     look: () => 0,
@@ -506,6 +652,14 @@ class Mascot {
     this.blanketEl = document.createElement("div");
     this.blanketEl.className = "ms-blanket";
     this.blanketEl.innerHTML = BLANKET;
+    // Objet posé à côté de lui (écran de jeu, barbecue, réchaud) : prop = { kind, k, x, side, act }, propK = visible de 0 à 1
+    this.propEl = document.createElement("div");
+    this.propEl.className = "ms-prop";
+    this.prop = null; this.propK = 0; this.propKind = null; this.propFood = null;
+    // Bannière de fin de partie (jeu vidéo), au-dessus de lui et de l'écran
+    this.bannerEl = document.createElement("div");
+    this.bannerEl.className = "ms-banner";
+    this.bannerW = 0;
     // k : la clé de la plateforme où il est (voir mountMascots)
     this.k = null; this.x = 0; this.y = 0; this.dir = 1; this.side = 1; this.clock = rand(0, 10);
     this.look = 0; this.gaze = 0; this.sink = 0; this.lie = 0; this.stay = false; this.bubble = null; this.bedK = 0; this.bedAt = null;
@@ -572,6 +726,24 @@ class Mascot {
     if (this.dropIn("top")) this.x = this.act.x1;
   }
   rollDist() { return Math.PI * 0.72 * this.size; } // distance d'un tour complet (il roule sans glisser)
+  // Où se mettre pour poser un objet à côté de lui sur sa plateforme (sans déborder de plus de 10 px, ni sortir de
+  // l'écran) : { side, x } — du côté où il regarde si possible, en marchant un peu si besoin ; null s'il n'y a pas la place
+  propSpot(kind, me = this.plat()) {
+    if (!me) return null;
+    const D = PROPS[kind], need = this.size * (D.gap + D.w), lo = Math.max(me.x0 - 10, this.eng.v.left), hi = Math.min(me.x1 + 10, this.eng.v.right);
+    for (const side of [this.dir, -this.dir]) {
+      const x = side > 0 ? Math.min(this.x, hi - need) : Math.max(this.x, lo + need);
+      if (x >= me.x0 && x <= me.x1 && x - this.size * 0.45 >= lo - 10 && x + this.size * 0.45 <= hi + 10) return { side, x };
+    }
+    return null;
+  }
+  propSteps(kind, extra) {
+    const s = this.propSpot(kind);
+    if (!s) return [{ type: "idle", dur: 1 }];
+    const act = { type: kind, side: s.side, ...extra };
+    return Math.abs(s.x - this.x) > 2 ? [{ type: "walk", x: s.x }, act] : [act];
+  }
+  setProp(a, kind) { a.side ??= this.dir; this.dir = a.side; this.prop = { kind, k: this.k, x: this.x, side: a.side, act: a }; }
   busy() { return !!ACTIONS[this.act?.type]?.busy; }
   // Fait faire une action tout de suite (ou juste après celle en cours si elle ne s'interrompt pas ; s'il nage, il sort de l'eau)
   now(steps) {
@@ -597,12 +769,35 @@ class Mascot {
     try { if (under && this.eng.tapThrough(under)) under.click(); } finally { this.eng.tapping = null; }
   }
 
-  // Tenue dessinée : { head: url | null, body: url | null, hideFlower } (images dans le repère du modèle)
+  // Tenue dessinée : { head, body, hideFlower } — head / body : adresse d'une image (dans le repère du modèle), ou
+  // { url, anim } pour une tenue animée : planche de anim.cols × anim.rows cases de anim.cell px (image de anim.size px au
+  // milieu) ; un <svg> imbriqué n'en montre qu'une case, changée au fil du temps dans render() (wearFrames)
   wear(o = {}) {
-    const img = (url) => (url ? `<image href="${String(url).replace(/"/g, "%22")}" x="${WEAR.x}" y="${WEAR.y}" width="${WEAR.size}" height="${WEAR.size}" preserveAspectRatio="none"/>` : "");
-    this.wear_head.innerHTML = img(o.head);
-    this.wear_body.innerHTML = img(o.body);
+    this.wearAnims = [];
+    const img = (it) => {
+      if (!it) return "";
+      const { url, anim } = typeof it === "string" ? { url: it, anim: null } : it, href = String(url).replace(/"/g, "%22");
+      if (!anim) return `<image href="${href}" x="${WEAR.x}" y="${WEAR.y}" width="${WEAR.size}" height="${WEAR.size}" preserveAspectRatio="none"/>`;
+      const m = (anim.cell - anim.size) / 2;
+      return `<svg class="ms-wear-anim" x="${WEAR.x}" y="${WEAR.y}" width="${WEAR.size}" height="${WEAR.size}" viewBox="${m} ${m} ${anim.size} ${anim.size}" preserveAspectRatio="none">
+        <image href="${href}" width="${anim.cols * anim.cell}" height="${anim.rows * anim.cell}" preserveAspectRatio="none"/></svg>`;
+    };
+    for (const [g, it] of [[this.wear_head, o.head], [this.wear_body, o.body]]) {
+      g.innerHTML = img(it);
+      const el = g.querySelector(".ms-wear-anim");
+      if (el) this.wearAnims.push({ el, anim: it.anim, i: 0 });
+    }
     this.flower.style.display = o.head && o.hideFlower ? "none" : ""; // un chapeau peut remplacer la fleur
+  }
+  // Tenue animée : la case de la planche qui correspond au moment (en boucle, à anim.fps images par seconde)
+  wearFrames() {
+    for (const w of this.wearAnims ?? []) {
+      const A = w.anim, i = Math.floor(this.clock * A.fps) % A.n;
+      if (i === w.i) continue;
+      w.i = i;
+      const m = (A.cell - A.size) / 2;
+      w.el.setAttribute("viewBox", `${(i % A.cols) * A.cell + m} ${Math.floor(i / A.cols) * A.cell + m} ${A.size} ${A.size}`);
+    }
   }
 
   // Le doigt (ou la souris, bouton enfoncé) glisse sur lui : on lui frotte la tête, elle s'aplatit petit à petit
@@ -618,7 +813,8 @@ class Mascot {
       this.press = Math.max(0, this.flat);
       this.petT = 0.7; // premier cœur bientôt
       // il s'arrête pour en profiter (pas s'il saute, roule, vole ou nage : seule sa tête s'aplatit ; assis ou endormi, il le reste)
-      if (!this.busy() && !this.stay && !["sit", "sleep", "nap", "pet"].includes(this.act?.type)) this.now([{ type: "pet" }]);
+      // (il joue ou cuisine : il continue, seule sa tête s'aplatit)
+      if (!this.busy() && !this.stay && !["sit", "sleep", "nap", "pet", "game", "cook", "bbq"].includes(this.act?.type)) this.now([{ type: "pet" }]);
     }
     this.press = Math.min(1, this.press + step / (this.size * RUB_FULL));
     this.rubT = this.clock;
@@ -761,6 +957,15 @@ class Mascot {
     const onBed = this.eng.night() && !!this.bedAt && this.bedAt.k === this.k && Math.abs(this.bedAt.x - this.x) < 4 && !moving;
     this.bedK += ((onBed ? 1 : 0) - this.bedK) * Math.min(1, dt * 3);
     if (!onBed && this.bedK < 0.01) { this.bedK = 0; if (!this.eng.night()) this.bedAt = null; }
+    // L'objet posé à côté de lui apparaît au début de l'action et s'efface quand elle est finie (ou interrompue : on le touche…)
+    const used = !!this.prop && this.prop.act === a;
+    this.propK += ((used ? 1 : 0) - this.propK) * Math.min(1, dt * (used ? 5 : 8));
+    if (!used && this.propK < 0.01 && this.prop) this.dropProp();
+  }
+  // Plus d'objet : son dessin est retiré (ses animations — fumée, flammes, petit jeu — ne tournent plus pour rien)
+  dropProp() {
+    this.prop = null; this.propK = 0; this.propKind = null; this.propFood = null; this.propEl.innerHTML = ""; this.propEl.className = "ms-prop";
+    this.bannerEl.style.visibility = "hidden"; this.bannerEl.style.opacity = "0";
   }
 
   // Largeur du lit : un peu plus long que Tino, sans dépasser de la case du jour
@@ -793,8 +998,12 @@ class Mascot {
     const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * SINK * u + lift - onMattress;
     const look = this.look;
     this.el.classList.toggle("ms-sleep", !!A.zzz);
-    this.el.classList.toggle("ms-mad", a.type === "angry");
+    this.el.classList.toggle("ms-mad", a.type === "angry" || (a.t !== undefined && gameMad(a)));
     this.el.classList.toggle("ms-swim", a.type === "swim" && !!a.wet);
+    const busyHands = a.t !== undefined && (a.type === "cook" || a.type === "bbq"); // spatule dans la nageoire du côté de l'objet
+    this.el.classList.toggle("ms-gaming", a.type === "game" && a.t !== undefined); // manette
+    this.el.classList.toggle("ms-tool-on-r", busyHands && a.side > 0);
+    this.el.classList.toggle("ms-tool-on-l", busyHands && a.side < 0);
     this.el.style.transform = `translate3d(${(this.x - W / 2).toFixed(1)}px, ${(this.y - W * 0.98).toFixed(1)}px, 0)`;
     this.inner.style.transform = `translateY(${down.toFixed(2)}px)` + (p.spin ? ` translateY(${pivot.toFixed(2)}px) rotate(${p.spin.toFixed(1)}deg) translateY(${(-pivot).toFixed(2)}px)` : "")
       + ` rotate(${p.rot.toFixed(2)}deg) scale(${p.sx.toFixed(3)}, ${p.sy.toFixed(3)})`;
@@ -817,6 +1026,31 @@ class Mascot {
     this.anger_at.style.transform = `translate(${(nx + 24).toFixed(1)}px, ${(ny - 23).toFixed(1)}px)`; // « 💢 » en haut de la tête
     this.placeBubble((nx - 50) * u, (ny - 30) * u);
     this.placeBed(bw);
+    this.placeProp();
+    this.wearFrames();
+  }
+
+  // Objet posé sur sa ligne, à côté de lui (du côté prop.side) ; le jeu montre gagné / perdu à la fin de la partie ;
+  // ce qui cuit saute et se retourne en même temps que son coup de spatule (même horloge que sa pose)
+  placeProp() {
+    const pr = this.prop, P = pr && this.plat(pr.k), show = this.propK > 0.01 && !!P;
+    this.propEl.style.visibility = show ? "visible" : "hidden";
+    if (!show) { this.bannerEl.style.visibility = "hidden"; return; }
+    const D = PROPS[pr.kind], W = this.size, w = W * D.w, h = w * D.vb[1] / D.vb[0];
+    if (this.propKind !== pr.kind) { this.propKind = pr.kind; this.propEl.innerHTML = D.svg; this.propFood = this.propEl.querySelector(".ms-food"); }
+    const near = pr.x + pr.side * W * D.gap, left = pr.side > 0 ? near : near - w;
+    this.propEl.style.width = w.toFixed(1) + "px";
+    this.propEl.style.height = h.toFixed(1) + "px";
+    this.propEl.style.opacity = this.propK.toFixed(3);
+    this.propEl.style.transform = `translate3d(${left.toFixed(1)}px, ${(P.y - h).toFixed(1)}px, 0)` + (D.flip ? ` scaleX(${pr.side})` : "");
+    const a = pr.act, over = pr.kind === "game" && a.t > a.dur - GAME_END;
+    this.propEl.classList.toggle("ms-win", over && !!a.win);
+    this.propEl.classList.toggle("ms-lose", over && !a.win);
+    this.placeBanner(pr, over, near + pr.side * w / 2, P.y - Math.max(h, W) - 8);
+    if (this.propFood && D.period) {
+      const k = flipK(this.clock, D.period), up = Math.sin(Math.PI * k) * 13;
+      this.propFood.style.transform = pr.kind === "bbq" ? `translateY(${(-up).toFixed(2)}px) rotate(${(360 * k).toFixed(1)}deg)` : `translateY(${(-up).toFixed(2)}px) scaleY(${Math.cos(2 * Math.PI * k).toFixed(3)})`; // (un tour complet : retombe pareil)
+    }
   }
 
   // Lit centré sur sa place de la nuit, tête de lit du côté de sa tête ; couverture de ses pieds jusqu'au cou
@@ -837,6 +1071,27 @@ class Mascot {
     this.blanketEl.style.height = kh.toFixed(1) + "px";
     this.blanketEl.style.opacity = (this.bedK * this.lie).toFixed(3); // il se lève (on l'a touché) : la couverture s'efface
     this.blanketEl.style.transform = `translate3d(${(x - s * W * 0.3 - kw / 2).toFixed(1)}px, ${top.toFixed(1)}px, 0) scaleX(${s})`;
+  }
+
+  // Bannière de fin de partie : centrée entre lui et l'écran, au-dessus d'eux, sans sortir de l'écran ; elle apparaît en
+  // fondu, grossit très lentement (comme dans le jeu) et s'efface juste avant la fin de la partie
+  placeBanner(pr, over, screenX, bottom) {
+    const b = this.bannerEl, a = pr.act;
+    if (!over) { b.style.visibility = "hidden"; b.style.opacity = "0"; return; }
+    if (this.bannerFor !== a) {
+      const [text, cls] = BANNERS[a.win ? "win" : "lose"];
+      this.bannerFor = a;
+      b.textContent = text;
+      b.className = "ms-banner " + cls;
+      b.style.transform = "none";
+      this.bannerW = b.offsetWidth; this.bannerH = b.offsetHeight;
+    }
+    const e = a.t - (a.dur - GAME_END), v = this.eng.v, bw = this.bannerW;
+    const m = bw * 0.03, left = clamp((pr.x + screenX) / 2 - bw / 2, v.left + m, Math.max(v.left + m, v.right - bw - m)); // (m : elle grossit un peu)
+    b.style.visibility = "visible";
+    b.style.opacity = (clamp(Math.min(e / 0.5, (a.dur - a.t) / 0.45), 0, 1) * this.propK).toFixed(3);
+    const top = Math.max(v.top + this.bannerH * 0.03 + 2, bottom - this.bannerH); // jamais sous la barre d'état (quitte à passer devant sa tête)
+    b.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0) scale(${(1 + 0.05 * e / GAME_END).toFixed(4)})`;
   }
 
   // La bulle se place au-dessus de la tête, sans sortir de l'écran sur les côtés ; sa pointe vise Tino
@@ -879,14 +1134,17 @@ const pageView = () => ({ top: scrollY, bottom: scrollY + innerHeight, left: scr
 // tapThrough(el) : l'appui sur un personnage est-il aussi transmis à cet élément en dessous ?
 // lines() : les petites phrases que Tino dit de temps en temps (⚙ → Tino), [] s'il n'y en a pas ;
 // grumbles() : ses phrases râleuses quand on le touche 5 fois de suite
-export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, tapThrough = () => true, lines = () => [], grumbles = () => [] }) {
+// siesta() : sa sieste après le repas (12:30 – 13:00 par défaut) — il dort dans son lit, comme la nuit ;
+// meal() : l'heure des repas (11:30 – 12:30 et 18:30 – 19:30 par défaut) — il cuisine ou fait un barbecue (et ne joue pas)
+export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, siesta = isSiesta, meal = isMeal, tapThrough = () => true, lines = () => [], grumbles = () => [] }) {
   injectStyle();
   layer.classList.add("ms-layer");
-  const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night, tapThrough, layer, tapping: null, lines, grumbles };
+  const asleep = () => night() || siesta(); // (la sieste fait tout comme la nuit : case d'aujourd'hui, lit, pas de nage…)
+  const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night: asleep, meal: () => meal() && !asleep(), tapThrough, layer, tapping: null, lines, grumbles };
   const list = kinds.map((k) => new Mascot(eng, KINDS[k] ?? KINDS.tino));
   const room = Math.max(...list.map((m) => m.size)) * 1.05; // place au-dessus d'une plateforme pour qu'il y tienne
   eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
-  list.forEach((m) => layer.append(m.bedEl, m.el, m.blanketEl));
+  list.forEach((m) => layer.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl));
   const reduce = matchMedia("(prefers-reduced-motion: reduce)");
   let raf = 0, last = 0;
   const inView = (m) => m.y <= eng.v.bottom + 2 && m.y - m.size * 1.05 >= eng.v.top - 2;
@@ -902,7 +1160,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     const t = today();
     eng.today = t && eng.byKey.has(t.key) ? { k: t.key, x: t.x } : null;
     list.forEach((m, i) => {
-      m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = !eng.plats.length;
+      m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = !eng.plats.length;
       if (m.bubble) m.bubble.el.hidden = !eng.plats.length;
       if (!eng.plats.length) return;
       if (!m.placed || moved) { m.place(i); return; }
@@ -926,6 +1184,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   // l'écran, sinon là où il est), le jour assis ; avec un message à lire, assis aussi (pour qu'on voie la bulle)
   function still(m) {
     if (m.act?.type === "drop") { m.k = m.act.p1; m.x = m.act.x1; } // sans animation : il est déjà là
+    m.dropProp(); // (pas d'écran ni de barbecue dans une pose fixe)
     const P = m.plat();
     if (P) m.y = P.y;
     if (eng.night() && !m.bubble?.sticky) {
@@ -1005,7 +1264,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     wear(o) { eng.outfit = o; list.forEach((m) => m.wear(o)); },
     hush() { tino?.hush(true); },
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
-    destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); }); },
+    destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); m.propEl.remove(); m.bannerEl.remove(); }); },
   };
 }
 
@@ -1015,11 +1274,12 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity) {
   injectStyle();
   const lines = ["Drink some water 💧", "You've got this!"];
   const plat = { key: "demo", y: size, x0: size / 2, x1: size / 2, cell };
-  const eng = { plats: [plat], byKey: new Map([["demo", plat]]), v: { top: -Infinity, bottom: Infinity, left: -Infinity, right: Infinity }, visible: () => true, today: null, night: () => ["sleep", "nap", "bed"].includes(type), tapThrough: () => false, layer: box, lines: () => (type === "chat" ? lines : []), grumbles: () => ["Stop poking me! 😤"] };
+  const eng = { plats: [plat], byKey: new Map([["demo", plat]]), v: { top: -Infinity, bottom: Infinity, left: -Infinity, right: Infinity }, visible: () => true, today: null, night: () => ["sleep", "nap", "bed"].includes(type), meal: () => true, tapThrough: () => false, layer: box, lines: () => (type === "chat" ? lines : []), grumbles: () => ["Stop poking me! 😤"] };
   const m = new Mascot(eng, { ...KINDS[kind], size });
   box.style.position = "relative";
   box.style.width = box.style.height = size + "px";
-  box.append(m.bedEl, m.el, m.blanketEl);
+  if (["game", "lose", "cook", "bbq"].includes(type)) box.style[dir > 0 ? "marginRight" : "marginLeft"] = size * 1.45 + "px"; // la place de l'objet
+  box.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl);
   m.k = "demo"; m.x = size / 2; m.y = size; m.dir = dir;
   if (type === "walk") m.update = function (dt) { this.clock += dt; this.act ??= { type: "walk", t: 0, x: this.x }; this.dir = dir; this.ease(dt); }; // marche sur place
   if (type === "swim") m.update = function (dt) { // nage sur place, en ondulant
@@ -1040,6 +1300,10 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity) {
     chat: { type: "chat", dur: 4 },
     angry: { type: "angry", dur: 2.6 },
     pet: { type: "pet" },
+    game: { type: "game", side: dir, dur: 9, win: true }, // une partie gagnée, puis une autre…
+    lose: { type: "game", side: dir, dur: 9, win: false },
+    cook: { type: "cook", side: dir, dur: 12 },
+    bbq: { type: "bbq", side: dir, dur: 12 },
   }[type] ??{ type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
   let last = performance.now();
   const loop = (t) => { m.update(Math.min(0.05, (t - last) / 1000)); last = t; m.render(); requestAnimationFrame(loop); };

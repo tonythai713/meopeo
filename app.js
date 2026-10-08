@@ -1,7 +1,7 @@
 // MeoPeo — l'interface (même mise en page que les planners Obsidian MeoMeo / PeoPeo).
 // Ne parle jamais directement à Supabase : tout passe par `db` (data.js ; data-mock.js dans test.html).
 import { mountMascots, outfitTemplate } from "./mascot.js";
-import { createBigTino, DEFAULT_ANIM, videoToSprite } from "./bigtino.js";
+import { createBigTino, DEFAULT_ANIM, videoToSprite, videoFrames, gifFrames, apngFrames, keyBackground, outfitSheet, shrinkFrames, isAnimatedImage, releaseCanvas } from "./bigtino.js";
 
 // ---------- Dates ----------
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -574,19 +574,29 @@ function mascotView() {
 // Un appui sur Tino passe aussi au jour du calendrier qu'il cache (ça ne fait que le choisir) — pas ailleurs : une tâche
 // ou une note s'ouvrirait par-dessus lui à chaque caresse (et les 5 appuis n'arriveraient plus jusqu'à lui) ; on touche à côté
 const mascotTapThrough = (el) => !el.closest("input, select, textarea, label, .pl-nav, .pl-hello, .mp-nav") && !!el.closest(".pl-cal");
-// Heures de sommeil du petit Tino (cet appareil ; 🎣 Tino → 🦭 Tino) : il dort dans son lit de « from » à « to » (peut
-// passer minuit). Lu à chaque image par mascot.js : gardé en mémoire, relu quand on le change.
+// Heures de sommeil du petit Tino (cet appareil ; 🎣 Tino → 🦭 Tino) : la nuit de « from » à « to » (peut passer minuit) et
+// la sieste de « napFrom » à « napTo », dans son lit. Lu à chaque image par mascot.js : gardé en mémoire, relu quand on le change.
+// Repas (il cuisine ou fait un barbecue, et ne joue pas) : l'heure avant la sieste, et de 18:30 à 19:30.
 let tinoSleepCache = null;
-const tinoSleep = () => (tinoSleepCache ??= { from: store.get("tinoSleepFrom", "22:00"), to: store.get("tinoSleepTo", "07:00") });
-function tinoNight(now = new Date()) {
-  const { from, to } = tinoSleep(), a = minutesOf(from), b = minutesOf(to), t = now.getHours() * 60 + now.getMinutes();
-  return a !== b && (a < b ? t >= a && t < b : t >= a || t < b);
+const tinoSleep = () => (tinoSleepCache ??= { from: store.get("tinoSleepFrom", "22:00"), to: store.get("tinoSleepTo", "07:00"),
+  napFrom: store.get("tinoNapFrom", "12:30"), napTo: store.get("tinoNapTo", "13:00") });
+const nowMinutes = (now) => now.getHours() * 60 + now.getMinutes();
+const inSpan = (t, a, b) => a !== b && (a < b ? t >= a && t < b : t >= a || t < b); // (de a à b, en minutes ; peut passer minuit)
+const DINNER = [18 * 60 + 30, 19 * 60 + 30];
+function tinoNight(now = new Date()) { const s = tinoSleep(); return inSpan(nowMinutes(now), minutesOf(s.from), minutesOf(s.to)); }
+function tinoNap(now = new Date()) { const s = tinoSleep(); return inSpan(nowMinutes(now), minutesOf(s.napFrom), minutesOf(s.napTo)); }
+function tinoMeal(now = new Date()) {
+  const n = minutesOf(tinoSleep().napFrom), t = nowMinutes(now);
+  return inSpan(t, (n + 1380) % 1440, n) || inSpan(t, ...DINNER);
 }
+const hmOf = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+const mealText = () => { const n = minutesOf(tinoSleep().napFrom);
+  return `He cooks or has a barbecue 🍳 mostly from ${hmOf((n + 1380) % 1440)} to ${hmOf(n)} and from ${hmOf(DINNER[0])} to ${hmOf(DINNER[1])} (now and then otherwise), and plays video games 🎮 more the rest of the day.`; };
 function refreshMascots() {
   if (mascots) return mascots.refresh();
   const layer = document.createElement("div");
   document.body.append(layer);
-  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines });
+  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines });
   syncTinoBubble();
   applyOutfit();
 }
@@ -749,9 +759,10 @@ function fillTinoSettings(box) {
   const big = S.big, who = big && (big.by === S.user.id ? "you" : esc(P?.label ?? "the other"));
   const sl = tinoSleep();
   box.innerHTML = `<label class="mp-check"><input type="checkbox" name="bigtino" ${showBig() ? "checked" : ""}> Big Tino above the calendar <span class="pl-legend">(this device)</span></label>
-    <div class="pl-sub">😴 Bedtime <span class="pl-legend">— this device only</span></div>
-    <span class="mp-row mp-dayhours"><label>Sleeps at <input type="time" name="sleepfrom" value="${sl.from}"></label><label>wakes up at <input type="time" name="sleepto" value="${sl.to}"></label></span>
-    <div class="pl-legend">At night Tino goes to bed in today's square (or wherever he is, if it's off screen).</div>
+    <div class="pl-sub">😴 Sleep <span class="pl-legend">— this device only</span></div>
+    <span class="mp-row mp-dayhours"><span class="mp-sleepwhen">🌙 Night</span><label>from <input type="time" name="sleepfrom" value="${sl.from}"></label><label>to <input type="time" name="sleepto" value="${sl.to}"></label></span>
+    <span class="mp-row mp-dayhours"><span class="mp-sleepwhen">☀️ Nap</span><label>from <input type="time" name="napfrom" value="${sl.napFrom}"></label><label>to <input type="time" name="napto" value="${sl.napTo}"></label></span>
+    <div class="pl-legend">Tino sleeps in his bed, in today's square (or wherever he is, if it's off screen). <span class="mp-mealtxt">${mealText()}</span></div>
     ${ok ? `<div class="mp-row mp-anim"><span>Animation: <b>${big ? `new one, from ${who} (${shortDate(big.at)})` : "the original"}</b></span></div>
     <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/gif,image/webp,image/png,image/jpeg,video/*" hidden> Change… (GIF or video)</label>${big ? `<button type="button" data-act="bigreset">Back to the original</button>` : ""}</span>
     <div class="pl-legend mp-animstatus">Shared: ${esc(P?.label ?? "the other")} sees the same animation. A video becomes a looping animation (10 s max); files up to 10 MB.</div>
@@ -760,14 +771,16 @@ function fillTinoSettings(box) {
     <div class="mp-row mp-lineadd"><input type="text" name="newline" maxlength="120" placeholder="Something Tino should say…" enterkeyhint="done"><button type="button" data-act="lineadd">Add</button></div>`
     : `<div class="pl-legend">Tino's lines and changing the animation aren't available yet — Tony needs to run <code>supabase/08_tino_extras.sql</code>.</div>`}`;
   box.querySelector("[name=bigtino]").addEventListener("change", (ev) => { store.set("bigTino", ev.target.checked); placeBigTino(); align(); });
-  for (const name of ["sleepfrom", "sleepto"]) box.querySelector(`[name=${name}]`).addEventListener("change", () => {
-    const from = box.querySelector("[name=sleepfrom]").value, to = box.querySelector("[name=sleepto]").value;
-    if (!/^\d\d:\d\d$/.test(from) || !/^\d\d:\d\d$/.test(to)) return;
-    if (from === to) { toast("😴 Pick two different times"); fillTinoSettings(box); return; }
-    store.set("tinoSleepFrom", from); store.set("tinoSleepTo", to); tinoSleepCache = null;
-    mascots?.refresh();
-    toast(`😴 Tino sleeps from ${from} to ${to}`);
-  });
+  for (const [fromName, toName, fromKey, toKey, what] of [["sleepfrom", "sleepto", "tinoSleepFrom", "tinoSleepTo", "sleeps"], ["napfrom", "napto", "tinoNapFrom", "tinoNapTo", "naps"]])
+    for (const name of [fromName, toName]) box.querySelector(`[name=${name}]`).addEventListener("change", () => {
+      const from = box.querySelector(`[name=${fromName}]`).value, to = box.querySelector(`[name=${toName}]`).value;
+      if (!/^\d\d:\d\d$/.test(from) || !/^\d\d:\d\d$/.test(to)) return;
+      if (from === to) { toast("😴 Pick two different times"); fillTinoSettings(box); return; }
+      store.set(fromKey, from); store.set(toKey, to); tinoSleepCache = null;
+      mascots?.refresh();
+      box.querySelector(".mp-mealtxt").textContent = mealText(); // (le repas de midi suit la sieste)
+      toast(`😴 Tino ${what} from ${from} to ${to}`);
+    });
   if (!ok) return;
   const status = (t) => { box.querySelector(".mp-animstatus").textContent = t; };
   const input = box.querySelector("input[type=file]");
@@ -860,7 +873,8 @@ async function applyOutfit() {
   const pick = (layer) => S.outfits.find((o) => o.id === S.worn[layer] && o.layer === layer);
   const head = pick("head"), body = pick("body");
   try {
-    mascots?.wear({ head: head ? await outfitUrl(head) : null, body: body ? await outfitUrl(body) : null, hideFlower: !!head?.hideFlower });
+    const it = async (o) => (o ? { url: await outfitUrl(o), anim: o.anim ?? null } : null); // (anim : tenue animée, voir 17)
+    mascots?.wear({ head: await it(head), body: await it(body), hideFlower: !!head?.hideFlower });
   } catch (err) { console.warn("Tino's outfit", err); mascots?.wear({}); }
   const keep = new Set(S.outfits.map((o) => o.path));
   for (const [path, url] of outfitUrls) if (!keep.has(path)) { URL.revokeObjectURL(url); outfitUrls.delete(path); }
@@ -872,10 +886,11 @@ async function applyOutfit() {
 
 // Dessin choisi : carré, avec de la transparence (sinon un carré blanc couvrirait Tino), réduit à 512 px en PNG
 async function prepareOutfit(file) {
-  if (!/^image\//.test(file.type)) throw new Error("pick a PNG drawing");
+  if (!/^image\//.test(file.type)) throw new Error("pick a PNG drawing, a GIF or a video");
   const img = new Image();
   const url = URL.createObjectURL(file);
-  try { img.src = url; await img.decode(); } catch { throw new Error("this image can't be read — export it as PNG"); } finally { URL.revokeObjectURL(url); }
+  try { await new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; img.src = url; }); } // (onload, pas decode() : jamais fini dans une page cachée)
+  catch { throw new Error("this image can't be read — export it as PNG"); } finally { URL.revokeObjectURL(url); }
   const w = img.naturalWidth, h = img.naturalHeight;
   if (!w || Math.abs(w - h) > Math.max(2, w * 0.01)) throw new Error(`the drawing must be square, like the template (this one is ${w} × ${h})`);
   const c = document.createElement("canvas");
@@ -889,6 +904,54 @@ async function prepareOutfit(file) {
   const blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
   if (!blob || blob.type !== "image/png") throw new Error("this browser couldn't save the drawing");
   return blob;
+}
+// Tenue animée : un GIF, un PNG animé ou une vidéo (10 s au plus, la suite est ignorée) devient sur l'appareil une planche
+// PNG transparente (images de 192 px, plus petites si la planche dépasse ~9,5 Mo) + anim (bigtino.js ; 17_outfit_anim.sql).
+// kind : "gif" | "apng" | "video". Un fond uni (une vidéo n'a pas de transparence) est retiré.
+// null : GIF / PNG d'une seule image (traité comme un dessin fixe).
+const OUTFIT_MAX = 10 * 1024 * 1024;
+async function animatedOutfit(file, kind, status) {
+  const what = { gif: "GIF", apng: "animated PNG", video: "video" }[kind];
+  if (kind !== "video" && file.size > OUTFIT_MAX) throw new Error(`this ${what} is too big (${(file.size / 1048576).toFixed(1)} MB, 10 MB max)`);
+  const label = kind === "video" ? "Turning the video into an animation…" : `Reading the ${what}…`;
+  status(label);
+  await new Promise((r) => setTimeout(r, 40)); // (le message s'affiche avant le calcul)
+  const opts = { size: 192, onProgress: (p) => status(`${label} ${Math.round(p * 100)}%`) };
+  const { frames, fps } = kind === "gif" ? await gifFrames(new Uint8Array(await file.arrayBuffer()), opts)
+    : kind === "apng" ? await apngFrames(new Uint8Array(await file.arrayBuffer()), opts)
+    : await videoFrames(file, { ...opts, square: true });
+  try {
+    if (frames.length < 2) { if (kind !== "video") return null; throw new Error("this video is too short"); }
+    if (keyBackground(frames)) status("Background removed — saving…"); else status("Saving…");
+    let res = await outfitSheet(frames, fps);
+    for (const size of [144, 112]) {
+      if (res.blob.size <= 9.5 * 1024 * 1024) break;
+      const small = shrinkFrames(frames, size);
+      res = await outfitSheet(small, fps);
+      small.forEach(releaseCanvas);
+    }
+    if (res.blob.size > OUTFIT_MAX) throw new Error("this animation is too big, even made smaller — use a shorter one");
+    return res;
+  } finally { frames.forEach(releaseCanvas); }
+}
+// Miniatures des tenues animées dans la garde-robe : la planche en fond, une case à la fois (minuterie tant qu'elles sont affichées)
+let thumbTimer = 0;
+function thumbFrame(el, i) {
+  const A = el._anim, k = el.clientWidth / A.size, m = (A.cell - A.size) / 2;
+  el.style.backgroundSize = `${A.cols * A.cell * k}px ${A.rows * A.cell * k}px`;
+  el.style.backgroundPosition = `${-((i % A.cols) * A.cell + m) * k}px ${-(Math.floor(i / A.cols) * A.cell + m) * k}px`;
+}
+function animateThumbs(els) {
+  clearInterval(thumbTimer);
+  if (!els.length) return;
+  const t0 = performance.now();
+  thumbTimer = setInterval(() => {
+    const live = els.filter((e) => e.isConnected && e._anim);
+    if (!els.some((e) => e.isConnected)) { clearInterval(thumbTimer); return; }
+    if (document.hidden) return;
+    const t = (performance.now() - t0) / 1000;
+    for (const e of live) if (e.offsetParent) thumbFrame(e, Math.floor(t * e._anim.fps) % e._anim.n); // (pas quand l'onglet est fermé)
+  }, 80);
 }
 // Modèle : feuille de partage (iPhone / iPad : « Enregistrer l'image », « Enregistrer dans Fichiers »), sinon téléchargement
 async function shareTemplate() { await shareFile(await outfitTemplate(), "tino-template.png", "Tino template"); }
@@ -908,20 +971,28 @@ function fillWardrobe(box) {
   const who = (o) => (o.by === S.user.id ? S.me : S.partner);
   const row = (o) => {
     const on = S.worn[o.layer] === o.id;
-    return `<div class="mp-outfit${on ? " on" : ""}"><img alt="" data-thumb="${o.id}"><span class="mp-outfit-name">${esc(o.name)} <span class="pl-legend">${o.layer === "head" ? "head" : "body"} · ${esc(who(o)?.mark ?? "")}</span></span>
+    const thumb = o.anim ? `<span class="mp-othumb" title="Animated"><i data-athumb="${o.id}"></i></span>` : `<img alt="" data-thumb="${o.id}">`;
+    return `<div class="mp-outfit${on ? " on" : ""}">${thumb}<span class="mp-outfit-name">${esc(o.name)} <span class="pl-legend">${o.layer === "head" ? "head" : "body"}${o.anim ? " · animated" : ""} · ${esc(who(o)?.mark ?? "")}</span></span>
       <button type="button" data-wear="${o.id}">${on ? "Take off" : "Wear"}</button><button type="button" data-drop="${o.id}" title="Remove from the wardrobe">✕</button></div>`;
   };
   box.innerHTML = `<div class="pl-legend">Draw outfits for Tino on a tablet: download the template, draw on a <b>new layer</b> on top of it, then export <b>only your layer</b> as a PNG with a transparent background. Shared: ${esc(S.partner?.label ?? "the other")} sees what Tino wears.</div>
+    <div class="pl-legend">✨ It can also <b>move</b>: export your animation as an <b>animated PNG</b> or a <b>GIF</b> with a transparent background, or as a <b>video</b> on a plain background color you don't use in the drawing (it's removed). Square like the template, 10 s max (the rest is cut), plays in a loop.</div>
     <span class="mp-row"><button type="button" data-act="template">⬇ Template</button></span>
     <div class="mp-outfits">${S.outfits.length ? S.outfits.map(row).join("") : `<div class="pl-empty">No outfits yet.</div>`}</div>
     <div class="mp-outfit-add">
       <input type="text" name="oname" maxlength="40" placeholder="Name (e.g. Summer hat)">
       <span class="mp-row"><label class="mp-check"><input type="radio" name="olayer" value="head" checked> On his head</label><label class="mp-check"><input type="radio" name="olayer" value="body"> On his body</label></span>
       <label class="mp-check mp-oflower"><input type="checkbox" name="oflower"> Hide his flower</label>
-      <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/png,image/webp" hidden> ＋ Add a drawing (PNG)</label></span>
+      <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/png,image/apng,.apng,image/webp,image/gif,video/*" hidden> ＋ Add a drawing (PNG, GIF or video)</label></span>
       <div class="pl-legend mp-ostatus"></div>
     </div>`;
   box.querySelectorAll("[data-thumb]").forEach(async (im) => { const o = S.outfits.find((x) => x.id === im.dataset.thumb); try { im.src = await outfitUrl(o); } catch { im.alt = "?"; } });
+  const anims = [...box.querySelectorAll("[data-athumb]")];
+  anims.forEach(async (el) => {
+    const o = S.outfits.find((x) => x.id === el.dataset.athumb);
+    try { el.style.backgroundImage = `url("${await outfitUrl(o)}")`; el._anim = o.anim; thumbFrame(el, 0); } catch { el.textContent = "?"; }
+  });
+  animateThumbs(anims);
   box.querySelector("[data-act=template]").addEventListener("click", () => shareTemplate().catch((err) => toast(`⚠️ Couldn't make the template (${err.message})`)));
   box.querySelectorAll("[data-wear]").forEach((b) => b.addEventListener("click", async () => {
     const o = S.outfits.find((x) => x.id === b.dataset.wear);
@@ -945,13 +1016,20 @@ function fillWardrobe(box) {
     box.querySelector(".mp-filebtn").classList.add("mp-busy");
     try {
       status("Checking the drawing…");
-      const blob = await prepareOutfit(file);
+      const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/i.test(file.name), isGif = file.type === "image/gif" || /\.gif$/i.test(file.name);
+      const isPng = file.type === "image/png" || /\.a?png$/i.test(file.name), animated = !isVideo && !isGif && await isAnimatedImage(file);
+      if (animated && !isPng) throw new Error("an animated WebP can't be used — export the animation as an animated PNG, a GIF or a video");
+      const kind = isVideo ? "video" : isGif ? "gif" : animated ? "apng" : null;
+      const moving = kind ? await animatedOutfit(file, kind, status) : null;
+      const blob = moving?.blob ?? await prepareOutfit(file), anim = moving?.anim ?? null;
       status("Sending…");
-      await db.addOutfit(blob, { name, layer, hideFlower: layer === "head" && box.querySelector("[name=oflower]").checked });
-      toast(`👒 Tino is wearing “${name}”!`);
+      await db.addOutfit(blob, { name, layer, hideFlower: layer === "head" && box.querySelector("[name=oflower]").checked, anim });
+      toast(`👒 Tino is wearing “${name}”!${anim ? " ✨" : ""}`);
       await loadOutfits();
     } catch (err) {
-      const why = /bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql" : err.message;
+      const why = /bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql"
+        : /anim/i.test(err.message) && /column|schema cache/i.test(err.message) ? "animated outfits aren't set up yet — Tony needs to run supabase/17_outfit_anim.sql"
+        : err.message;
       toast(`⚠️ Couldn't add the outfit (${why})`);
       fillWardrobe(box);
     }

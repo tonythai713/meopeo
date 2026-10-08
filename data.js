@@ -241,21 +241,24 @@ export function createBackend() {
     // Garde-robe du petit Tino (supabase/12_tino_outfits.sql) : tenues dessinées + ce qu'il porte (réglage commun)
     async listOutfits() {
       const [rows, worn] = (await Promise.all([
-        sb.from("tino_outfits").select("id, author, name, layer, path, hide_flower, created_at").order("created_at"),
+        sb.from("tino_outfits").select("*").order("created_at"), // (« * » : marche avant et après 17, qui ajoute anim)
         sb.from("shared_settings").select("value").eq("key", "tino_outfit").maybeSingle(),
       ])).map(must);
       return {
-        outfits: rows.map((r) => ({ id: r.id, by: r.author, name: r.name, layer: r.layer, path: r.path, hideFlower: r.hide_flower, at: r.created_at })),
+        outfits: rows.map((r) => ({ id: r.id, by: r.author, name: r.name, layer: r.layer, path: r.path, hideFlower: r.hide_flower, anim: r.anim ?? null, at: r.created_at })),
         worn: { head: worn?.value?.head ?? null, body: worn?.value?.body ?? null },
       };
     },
-    // Nouveau dessin (PNG transparent déjà réduit sur l'appareil) : fichier, puis la tenue, puis Tino la porte
-    async addOutfit(blob, { name, layer, hideFlower }) {
+    // Nouveau dessin (PNG transparent déjà réduit sur l'appareil, ou planche d'une tenue animée + anim, voir
+    // 17_outfit_anim.sql) : fichier, puis la tenue (sinon le fichier est retiré), puis Tino la porte
+    async addOutfit(blob, { name, layer, hideFlower, anim = null }) {
       const ext = { "image/png": "png", "image/webp": "webp" }[blob.type];
       if (!ext) throw new Error("unsupported file type");
       const path = `outfits/${crypto.randomUUID()}.${ext}`;
       must(await sb.storage.from("tino").upload(path, blob, { contentType: blob.type, upsert: false }));
-      const row = must(await sb.from("tino_outfits").insert({ name, layer, path, hide_flower: !!hideFlower }).select("id").single());
+      let row;
+      try { row = must(await sb.from("tino_outfits").insert({ name, layer, path, hide_flower: !!hideFlower, ...(anim ? { anim } : {}) }).select("id").single()); }
+      catch (err) { await sb.storage.from("tino").remove([path]).catch(() => {}); throw err; }
       await this.wearOutfit(layer, row.id);
     },
     // Ce que Tino porte : une seule écriture (le réglage entier)
