@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>MeoPeo</title>
+<!-- Widget Android « tout-en-un » de MeoPeo (2026-10-08 : certaines apps de widget gratuites n'en acceptent qu'UN) : le
+     dernier dessin reçu (widget_doodle, 19), Tino dans une activité choisie selon l'heure, avec sa tenue (widget_tino, 18 ;
+     sinon tino/*.png), et les tâches d'aujourd'hui et des jours suivants (widget_feed, 05) — une seule clé de widget.
+     Lien créé dans l'app (⚙ Settings → Home-screen widget → All-in-one) : #k=clé&night=22:00-07:00&nap=12:30-13:00 (heures
+     de sommeil de l'appareil, comme widget/tino.html). Disposition selon la taille : large = dessin + Tino + tâches côte à
+     côte (Tino en petit si la place manque), carré / en hauteur = dessin et Tino en haut, tâches dessous, petit = le dessin.
+     Requêtes SYNCHRONES : la page ne finit de charger qu'avec tout affiché (l'app de widget prend sa « photo » à la fin du
+     chargement, voir widget.html). Hors connexion : la dernière réponse gardée dans le stockage de la page. -->
+<style>
+  :root { --bg1: #0e1230; --bg2: #232a63; --gold: #ffe8a3; --text: #eceeff; --muted: #aab1da; --late: #ff8fa3; --line: rgba(170, 177, 218, 0.22); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: linear-gradient(160deg, var(--bg1), var(--bg2)); color: var(--text); font: 13px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+  #w { height: 100%; display: grid; gap: 8px; padding: 8px; color: inherit; text-decoration: none; }
+  .pic { position: relative; min-width: 0; min-height: 0; border-radius: 14px; overflow: hidden; background: rgba(255, 255, 255, 0.07); display: flex; align-items: center; justify-content: center; }
+  .pic img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .doodle img { object-fit: cover; }
+  .tino { background: linear-gradient(170deg, #bfe0ff, #fdf3df); }
+  .tino.evening { background: linear-gradient(170deg, #3b2f6b, #e58b6b); }
+  .tino.night { background: linear-gradient(170deg, #0e1230, #2d3577); }
+  .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 6px 3px; font-size: 0.72em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: linear-gradient(transparent, rgba(10, 12, 40, 0.65)); color: #fff; }
+  .empty { text-align: center; color: var(--muted); font-size: 0.8em; padding: 6px; }
+  .tasks { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 3px; }
+  .head { display: flex; gap: 6px; align-items: baseline; }
+  .head b { color: var(--gold); }
+  .head .sp { flex: 1; }
+  .note { color: var(--muted); font-size: 0.8em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .late { color: var(--late); }
+  .row { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+  .row .d { width: 44px; flex: none; color: var(--muted); font-weight: 700; font-size: 0.8em; }
+  .row.now .d { color: var(--gold); }
+  .row .t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hour { font-size: 0.85em; padding: 0 4px; border-radius: 6px; border: 1px solid var(--line); }
+  .msg { margin: auto; text-align: center; padding: 8px; grid-column: 1 / -1; }
+  .msg b { color: var(--gold); }
+  /* Dispositions (classe posée par le script selon la taille) */
+  #w.wide { grid-template-columns: var(--sq) var(--sq) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  #w.wide2 { grid-template-columns: var(--sq) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  #w.wide2 .tino { display: none; }
+  #w.wide2 .mini { display: flex; }
+  #w.tall { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: var(--sq) minmax(0, 1fr); }
+  #w.tall .tasks { grid-column: 1 / -1; }
+  #w.small { grid-template-columns: minmax(0, 1fr); padding: 4px; }
+  #w.small .tino, #w.small .tasks { display: none; }
+  #w.small.nodoodle .doodle { display: none; }
+  #w.small.nodoodle .tino { display: flex; }
+  .mini { display: none; align-items: center; gap: 6px; min-width: 0; }
+  .mini img { width: 40px; height: 40px; border-radius: 10px; flex: none; background: linear-gradient(170deg, #bfe0ff, #fdf3df); }
+  .mini span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85em; }
+</style>
+</head>
+<body>
+<a id="w" href="../" target="_top"><noscript><div class="msg"><b>MeoPeo</b><br>This widget app doesn't run the page's code — try another web-page widget app with the same link.</div></noscript></a>
+<script>
+"use strict";
+addEventListener("error", (e) => { // une erreur s'affiche dans le widget (au lieu d'un widget vide)
+  const w = document.getElementById("w");
+  if (w && !w.querySelector(".tasks, .pic")) w.innerHTML = `<div class="msg"><b>MeoPeo</b><br>Error: ${String(e.message ?? e).replace(/[<>&]/g, "")}</div>`;
+});
+const SUPABASE_URL = "https://llwbzhlbaygolzuwlbkf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_rMCGFrjzDmhsZ6eJ163B6g_MTA4dQSd"; // clé publique de l'app
+const REFRESH_MS = 15 * 60 * 1000;
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const pad = (n) => String(n).padStart(2, "0");
+const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+const dowIdx = (d) => (d.getDay() + 6) % 7;
+const onDay = (t, k) => t.date === k || (!!t.end && t.date <= k && k <= t.end);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Lien : #k=CLÉ&night=22:00-07:00&nap=12:30-13:00 (?k= accepté si l'app de widget enlève la partie après #)
+const q = {};
+(location.hash.slice(1) || location.search.slice(1)).split("&").forEach((kv) => { const i = kv.indexOf("="); if (i > 0) q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });
+const KEY = q.k || "";
+const span = (v) => { const p = v ? v.split("-") : []; return p.length === 2 ? p : null; }; // (une clé, elle, peut contenir des tirets)
+const H = { night: span(q.night) || ["22:00", "07:00"], nap: span(q.nap) || ["12:30", "13:00"] };
+
+// Tino : même choix d'activité que widget/tino.html et widget/tino.js (à garder pareil)
+const SCENES = {
+  sleep: ["sleep", "Tino is fast asleep 😴", "night"], nap: ["sleep", "Nap time 😴", "day"],
+  cook: ["cook", "Cooking a crêpe 🍳", "day"], bbq: ["bbq", "Barbecue time 🍖", "day"], rice: ["rice", "The rice is cooking 🍚", "day"],
+  pho: ["pho", "Slurping pho 🍜", "day"], matcha: ["matcha", "Matcha break 🍵", "day"], beer: ["beer", "Cheers! 🍺", "evening"],
+  game: ["game", "Gaming 🎮", "day"], shop: ["shop", "Grocery run 🛒", "day"], scooter: ["scooter", "Scooter ride 🛵", "day"],
+  wave: ["wave", "Hi! 👋", "day"], sit: ["sit", "Just chilling ☁️", "day"],
+};
+const mins = (s) => { const p = String(s).split(":"); return (+p[0] || 0) * 60 + (+p[1] || 0); };
+const inSpan = (t, a, b) => a !== b && (a < b ? t >= a && t < b : t >= a || t < b);
+const pick = (w) => { let r = Math.random() * Object.values(w).reduce((a, b) => a + b, 0); for (const [k, v] of Object.entries(w)) if ((r -= v) < 0) return k; return Object.keys(w)[0]; };
+function pickScene(now) {
+  const t = now.getHours() * 60 + now.getMinutes(), nap = mins(H.nap[0]);
+  if (inSpan(t, mins(H.night[0]), mins(H.night[1]))) return "sleep";
+  if (inSpan(t, nap, mins(H.nap[1]))) return "nap";
+  if (inSpan(t, (nap + 1380) % 1440, nap) || inSpan(t, 18 * 60 + 30, 19 * 60 + 30)) return pick({ cook: 3, bbq: 2, rice: 2, pho: 3, sit: 1, wave: 1 });
+  if (t >= 18 * 60) return pick({ beer: 3, game: 3, scooter: 2, shop: 1, sit: 1 });
+  return pick({ game: 3, matcha: 3, shop: 2, scooter: 2, wave: 2, sit: 1, cook: 1 });
+}
+
+// Une requête SYNCHRONE à une fonction de la base → { status, json } (status 0 = pas de réseau)
+function rpc(name, body) {
+  try {
+    const x = new XMLHttpRequest();
+    x.open("POST", `${SUPABASE_URL}/rest/v1/rpc/${name}`, false);
+    x.setRequestHeader("apikey", SUPABASE_KEY);
+    x.setRequestHeader("Content-Type", "application/json");
+    x.send(JSON.stringify(body));
+    let json = null; try { json = JSON.parse(x.responseText || "null"); } catch { /* pas de JSON */ }
+    return { status: x.status, json };
+  } catch { return { status: 0, json: null }; }
+}
+const CACHE = "meopeo.all." + KEY.slice(0, 8);
+const mem = {
+  get() { try { return JSON.parse(localStorage.getItem(CACHE)) || {}; } catch { return {}; } },
+  set(v) { try { localStorage.setItem(CACHE, JSON.stringify(v)); } catch { /* stockage plein ou indisponible */ } },
+};
+
+const now = new Date(), today = iso(now), scene = pickScene(now), [imgId, caption, sky] = SCENES[scene];
+const box = document.getElementById("w");
+function load() {
+  const old = mem.get(), out = { at: Date.now() };
+  // tâches (05)
+  const f = rpc("widget_feed", { p_token: KEY, p_from: today, p_to: iso(addDays(now, 6)), p_today: today });
+  if (/unknown widget key/.test(f.json?.message ?? "")) { mem.set({}); return { error: "This widget was removed in MeoPeo. Make a new one: <b>MeoPeo → ⚙ Settings → Home-screen widget</b>." }; }
+  const online = f.status >= 200 && f.status < 300 && Array.isArray(f.json?.tasks);
+  out.feed = online ? f.json : old.feed ?? null;
+  out.stale = online ? null : old.at ?? null;
+  // dernier dessin reçu (19) : { label, mark, png, at } ; base sans 19 → rien
+  const d = online ? rpc("widget_doodle", { p_token: KEY }) : { status: 0 };
+  out.doodle = d.status === 200 && typeof d.json?.label === "string" ? d.json : d.status === 0 ? old.doodle ?? null : null;
+  // Tino habillé pour cette scène (18) : { png } ou null → image de base
+  const t = online ? rpc("widget_tino", { p_token: KEY, p_scene: imgId }) : { status: 0 };
+  out.tino = t.status === 200 && t.json?.png ? t.json.png : null;
+  if (online) mem.set({ at: out.at, feed: out.feed, doodle: out.doodle }); // (Tino habillé pas gardé : une image par scène)
+  if (!out.feed && !online) return { error: "No connection — MeoPeo shows up here once the phone is online." };
+  return out;
+}
+
+function ago(at) {
+  const d = new Date(at), min = Math.round((Date.now() - d) / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return days === 0 ? `today ${hm}` : days === 1 ? `yesterday ${hm}` : `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${hm}`;
+}
+function render(r) {
+  if (r.error) { box.innerHTML = `<div class="msg"><b>MeoPeo</b><br>${r.error}</div>`; return; }
+  const f = r.feed, dd = r.doodle, who = dd ? `${dd.mark ? esc(dd.mark) + " " : ""}${esc(dd.label)}` : "";
+  const tinoSrc = r.tino ? `data:image/png;base64,${r.tino}` : `tino/${imgId}.png`;
+  const doodle = dd?.png
+    ? `<div class="pic doodle"><img src="data:image/png;base64,${dd.png}" alt="Doodle from ${who}"><span class="cap">✏️ ${who} · ${ago(dd.at)}</span></div>`
+    : `<div class="pic doodle"><div class="empty">✏️<br>${dd ? `No doodle from ${who} yet` : "Doodles: nothing yet"}</div></div>`;
+  const tino = `<div class="pic tino ${sky}"><img src="${tinoSrc}" alt=""><span class="cap">${esc(caption)}</span></div>`;
+  // tâches : aujourd'hui, puis les jours suivants qui en ont (comme la vue « semaine » de widget.html)
+  const textOf = (t, k) => `${esc((t.who === "me" ? f.me : f.partner)?.mark ?? "•")} ${t.time && t.date === k ? `<span class="hour">${t.time}</span> ` : ""}${esc(t.label)}`;
+  const rows = [];
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(now, i), k = iso(day), list = (f?.tasks ?? []).filter((t) => onDay(t, k));
+    if (!list.length && i > 0) continue;
+    rows.push(`<div class="row${i === 0 ? " now" : ""}"><span class="d">${i === 0 ? "Today" : i === 1 ? "Tmrw" : `${DAYS[dowIdx(day)]} ${day.getDate()}`}</span><span class="t">${list.length ? list.map((t) => textOf(t, k)).join(" · ") : `<span class="note">nothing 🎉</span>`}</span></div>`);
+  }
+  const late = f?.late ? `<span class="late">⚠️ ${f.late} late</span>` : "";
+  const stale = r.stale ? `<span class="note">offline · ${pad(new Date(r.stale).getHours())}:${pad(new Date(r.stale).getMinutes())}</span>` : "";
+  const tasks = `<div class="tasks"><div class="mini"><img src="${tinoSrc}" alt=""><span>${esc(caption)}</span></div>
+    <div class="head"><b>${DAYS[dowIdx(now)]} ${now.getDate()}</b><span class="sp"></span>${late}${stale}</div>${rows.join("")}</div>`;
+  box.innerHTML = doodle + tino + tasks;
+  box.classList.toggle("nodoodle", !dd?.png);
+  layout();
+}
+// Disposition selon la taille du widget
+function layout() {
+  const w = innerWidth, h = innerHeight, pad8 = 8;
+  box.classList.remove("wide", "wide2", "tall", "small");
+  if (!box.querySelector(".tasks")) return; // (message d'erreur : pas de disposition)
+  if (w < 230 || h < 120) { box.classList.add("small"); return; }
+  if (w / h >= 1.5) {
+    const sq = h - 2 * pad8; // côté des carrés = hauteur utile
+    box.style.setProperty("--sq", sq + "px");
+    box.classList.add(w - 2 * sq - 4 * pad8 >= 130 ? "wide" : "wide2"); // assez de place pour les tâches à côté des deux ?
+  } else {
+    box.style.setProperty("--sq", Math.min((w - 3 * pad8) / 2, h * 0.55) + "px");
+    box.classList.add("tall");
+  }
+  // une ligne de tâches coupée en deux par le bas du widget : cachée (pas de demi-ligne)
+  const t = box.querySelector(".tasks"), bottom = t.getBoundingClientRect().bottom;
+  t.querySelectorAll(".row").forEach((r) => { r.style.visibility = ""; if (r.getBoundingClientRect().bottom > bottom + 1) r.style.visibility = "hidden"; });
+}
+
+if (!KEY) box.innerHTML = `<div class="msg"><b>MeoPeo</b><br>This link has no widget key. Make one in <b>MeoPeo → ⚙ Settings → Home-screen widget → All-in-one</b> and paste that link.</div>`;
+else {
+  render(load()); // tout est dans la page avant la fin du chargement
+  addEventListener("resize", layout);
+  setInterval(() => location.reload(), REFRESH_MS);
+}
+</script>
+</body>
+</html>

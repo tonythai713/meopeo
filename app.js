@@ -1751,7 +1751,41 @@ function fillDoodleWidget(box) {
     div.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }));
 }
-// Une clé de widget (n'importe lequel des trois) ouvre le calendrier, la tenue de Tino et les dessins reçus
+// ---------- Widget Android « tout-en-un » (widget/all.html) ----------
+// Pour une app de widget qui n'en accepte qu'UN (version gratuite de certaines apps) : le dernier dessin reçu, Tino (avec
+// les heures de sommeil de cet appareil, comme le widget Tino) et les tâches, avec une seule clé.
+const ALL_PAGE_URL = new URL("widget/all.html", location.href).href;
+function fillAllWidget(box) {
+  box.innerHTML = `<div class="pl-sub">🧩 All-in-one widget (Android)</div>
+    <div class="pl-legend">Your widget app only allows one widget? This one shows everything together: the last doodle, Tino and your tasks. Wide = side by side, big square = doodle and Tino on top with the tasks below, small = the doodle.</div>
+    <span class="mp-row"><button type="button" data-allw>＋ Android all-in-one widget</button></span>`;
+  const b = box.querySelector("[data-allw]");
+  b.addEventListener("click", async () => {
+    box.querySelector(".mp-wsetup")?.remove();
+    const h = tinoSleep();
+    b.disabled = true;
+    const { token, sha } = await newWidgetKey();
+    const made = await guard(() => db.registerWidgetKey(sha, "All-in-one Android"), "Couldn't create the widget");
+    b.disabled = false;
+    if (!made) return;
+    const list = document.querySelector(".mp-widgets");
+    if (list) fillWidgets(list); // (la clé apparaît dans la liste, avec « Remove »)
+    const text = `${ALL_PAGE_URL}#k=${token}&night=${h.from}-${h.to}&nap=${h.napFrom}-${h.napTo}`;
+    const div = document.createElement("div");
+    div.className = "mp-wsetup";
+    div.innerHTML = `<b>🤖 Android all-in-one widget</b>
+      <ol><li>Tap <b>Copy</b> below.</li><li>In your web-page widget app (e.g. <b>WebsiteWidget</b>), open the widget you already have and replace its link with this one (or add the widget: hold an empty spot → <b>Widgets</b> → the app → paste the link).</li>
+        <li>Resize it as you like: wide (4 × 2), big (4 × 3 or 4 × 4) or small. In the app's settings, pick the shortest refresh time.</li></ol>
+      <textarea readonly rows="3" spellcheck="false">${esc(text)}</textarea>
+      <span class="mp-row"><button type="button" class="mp-cta" data-act="copy">Copy</button></span>
+      <div class="pl-legend">⚠️ Shown only once. ${KEY_WARN} Lost it? Make a new one and remove this one above.</div>`;
+    box.append(div);
+    const area = div.querySelector("textarea");
+    div.querySelector("[data-act=copy]").addEventListener("click", () => copyText(text, area));
+    div.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+}
+// Une clé de widget (n'importe lequel) ouvre le calendrier, la tenue de Tino et les dessins reçus
 const KEY_WARN = "It contains your widget key: anyone who has it can see your calendar (without private tasks' text), Tino's outfit and the doodles you receive.";
 
 // Mode d'emploi + code, montrés une seule fois juste après la création de la clé
@@ -1900,7 +1934,7 @@ function renderSettings(pane) {
       <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button></div>`)
     + fold("notif", "🔔 Notifications", `<div class="mp-notif">Checking…</div>
       ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}`)
-    + fold("widget", "📱 Home-screen widget", `<div class="mp-widgets">Checking…</div><div class="mp-tinowidget"></div><div class="mp-doodlewidget"></div>`)
+    + fold("widget", "📱 Home-screen widget", `<div class="mp-widgets">Checking…</div><div class="mp-tinowidget"></div><div class="mp-doodlewidget"></div><div class="mp-allwidget"></div>`)
     + fold("password", "🔑 Password", `<label>New password<input type="password" name="pw" autocomplete="new-password" minlength="6"></label>
       <label>Repeat it<input type="password" name="pw2" autocomplete="new-password" minlength="6"></label>
       <div class="pl-editor-actions"><span class="mp-grow"></span><button type="submit" class="mp-cta">Change password</button></div>`, "form")
@@ -1919,6 +1953,7 @@ function renderSettings(pane) {
   fillWidgets(pane.querySelector(".mp-widgets"));
   fillTinoWidget(pane.querySelector(".mp-tinowidget"));
   fillDoodleWidget(pane.querySelector(".mp-doodlewidget"));
+  fillAllWidget(pane.querySelector(".mp-allwidget"));
   setupFolds(pane, "settings");
   pane.querySelector("[name=notify]")?.addEventListener("change", async (ev) => {
     const on = ev.target.checked;
