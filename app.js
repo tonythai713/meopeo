@@ -1,6 +1,6 @@
 // MeoPeo — l'interface (même mise en page que les planners Obsidian MeoMeo / PeoPeo).
 // Ne parle jamais directement à Supabase : tout passe par `db` (data.js ; data-mock.js dans test.html).
-import { mountMascots, outfitTemplate } from "./mascot.js";
+import { mountMascots, outfitTemplate, scenePng, WIDGET_SCENES, SCENES_V } from "./mascot.js";
 import { createBigTino, DEFAULT_ANIM, videoToSprite, videoFrames, gifFrames, apngFrames, keyBackground, outfitSheet, shrinkFrames, isAnimatedImage, releaseCanvas } from "./bigtino.js";
 
 // ---------- Dates ----------
@@ -863,6 +863,61 @@ async function loadOutfits() {
   await applyOutfit();
   const box = document.querySelector(".mp-wardrobe");
   if (box) fillWardrobe(box);
+  syncWidgetScenes();
+}
+
+// ---------- Images du widget « Tino » avec la tenue portée (supabase/18_widget_scenes.sql) ----------
+// Une image par scène (scenePng de mascot.js : le vrai dessin de Tino, avec sa tenue), rangée dans la base ; le widget la lit
+// avec sa clé. Refaites quand la tenue portée change : tout de suite sur l'appareil qui l'a changée (outfitChangedHere),
+// 40 s plus tard sur l'autre (s'il voit qu'elles ne sont toujours pas à jour — pas de travail en double). Plus de tenue :
+// tout est effacé (le widget reprend ses images de base). Empreinte = version des scènes + tenues portées.
+let outfitChangedHere = false, sceneChain = Promise.resolve(), sceneTimer = 0, sceneDue = Infinity;
+const sceneSig = (head, body) => `v${SCENES_V}|${head ? `${head.id}:${head.hideFlower ? 1 : 0}` : "-"}|${body?.id ?? "-"}`;
+const blobToDataUrl = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ko(r.error); r.readAsDataURL(blob); });
+// Tenue en adresse data: (une image SVG ne charge rien d'autre) ; tenue animée : sa première image (un widget ne bouge pas)
+async function outfitDataUrl(o) {
+  const blob = await mediaBlob(o.path);
+  if (!o.anim) return blobToDataUrl(blob);
+  const url = URL.createObjectURL(blob), A = o.anim, m = (A.cell - A.size) / 2;
+  try {
+    const img = await loadImg(url), c = document.createElement("canvas");
+    c.width = c.height = A.size;
+    c.getContext("2d").drawImage(img, m, m, A.size, A.size, 0, 0, A.size, A.size);
+    const out = c.toDataURL("image/png");
+    c.width = c.height = 0;
+    return out;
+  } finally { URL.revokeObjectURL(url); }
+}
+// (une mise à jour déjà prévue plus tôt n'est jamais repoussée — l'écho temps réel de notre propre changement arrive juste
+// après — et les mises à jour passent l'une après l'autre, chacune ne refait que ce qui n'est pas à jour)
+function syncWidgetScenes() {
+  const due = Date.now() + (outfitChangedHere ? 300 : 40000);
+  outfitChangedHere = false;
+  if (due >= sceneDue) return;
+  clearTimeout(sceneTimer);
+  sceneDue = due;
+  sceneTimer = setTimeout(() => {
+    sceneDue = Infinity;
+    sceneChain = sceneChain.then(renderWidgetScenes).catch((err) => console.warn("Tino widget pictures", err));
+  }, due - Date.now());
+}
+async function renderWidgetScenes() {
+  if (!S.user || !S.outfitsOk || S.scenesOk === false || !navigator.onLine) return;
+  let sigs;
+  try { sigs = await db.widgetSceneSigs(); S.scenesOk = true; }
+  catch (err) { if (/widget_scenes|schema cache|does not exist/i.test(err.message)) S.scenesOk = false; return; } // (base sans 18 : rien à faire)
+  const pick = (layer) => S.outfits.find((o) => o.id === S.worn[layer] && o.layer === layer);
+  const head = pick("head"), body = pick("body"), sig = sceneSig(head, body);
+  if (!head && !body) { if (sigs.size) await db.clearWidgetScenes(); return; }
+  const todo = WIDGET_SCENES.filter(([name]) => sigs.get(name) !== sig);
+  if (!todo.length) return;
+  const outfit = { head: head ? await outfitDataUrl(head) : null, body: body ? await outfitDataUrl(body) : null, hideFlower: !!head?.hideFlower };
+  for (const [name] of todo) {
+    const now = sceneSig(S.outfits.find((o) => o.id === S.worn.head), S.outfits.find((o) => o.id === S.worn.body));
+    if (now !== sig) return; // la tenue a encore changé : la prochaine fois
+    const png = (await blobToDataUrl(await scenePng(name, { outfit }))).replace(/^data:image\/png;base64,/, "");
+    await db.saveWidgetScene(name, png, sig);
+  }
 }
 async function outfitUrl(o) {
   if (!outfitUrls.has(o.path)) outfitUrls.set(o.path, URL.createObjectURL(await mediaBlob(o.path)));
@@ -996,11 +1051,11 @@ function fillWardrobe(box) {
   box.querySelector("[data-act=template]").addEventListener("click", () => shareTemplate().catch((err) => toast(`⚠️ Couldn't make the template (${err.message})`)));
   box.querySelectorAll("[data-wear]").forEach((b) => b.addEventListener("click", async () => {
     const o = S.outfits.find((x) => x.id === b.dataset.wear);
-    if (await guard(() => db.wearOutfit(o.layer, S.worn[o.layer] === o.id ? null : o.id), "Couldn't change Tino's outfit")) loadOutfits();
+    if (await guard(() => db.wearOutfit(o.layer, S.worn[o.layer] === o.id ? null : o.id), "Couldn't change Tino's outfit")) { outfitChangedHere = true; loadOutfits(); }
   }));
   box.querySelectorAll("[data-drop]").forEach((b) => b.addEventListener("click", async () => {
     if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Sure? ✕"; return; } // 2e appui pour confirmer
-    if (await guard(() => db.deleteOutfit(b.dataset.drop), "Couldn't remove the outfit")) loadOutfits();
+    if (await guard(() => db.deleteOutfit(b.dataset.drop), "Couldn't remove the outfit")) { outfitChangedHere = true; loadOutfits(); }
   }));
   const flower = box.querySelector(".mp-oflower");
   box.querySelectorAll("[name=olayer]").forEach((r) => r.addEventListener("change", () => { flower.hidden = box.querySelector("[name=olayer]:checked").value !== "head"; })); // (seulement pour la tête)
@@ -1025,6 +1080,7 @@ function fillWardrobe(box) {
       status("Sending…");
       await db.addOutfit(blob, { name, layer, hideFlower: layer === "head" && box.querySelector("[name=oflower]").checked, anim });
       toast(`👒 Tino is wearing “${name}”!${anim ? " ✨" : ""}`);
+      outfitChangedHere = true; // (images du widget refaites tout de suite)
       await loadOutfits();
     } catch (err) {
       const why = /bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql"
@@ -1571,6 +1627,66 @@ async function fillWidgets(box) {
   }));
 }
 
+// ---------- Widget « Tino » (widget/tino.js pour Scriptable, widget/tino.html pour Android) ----------
+// Tino et ses activités sur l'écran d'accueil, choisies selon l'heure (images widget/tino/*.png faites avec
+// design/make-tino-widget.html). Pas de données perso → pas de clé ; les heures de sommeil de CET appareil sont mises
+// dans le code / le lien au moment de l'ajout.
+const TINO_CODE_URL = new URL("widget/tino.js", location.href).href;
+const TINO_PAGE_URL = new URL("widget/tino.html", location.href).href;
+const tinoLoader = (h, token) => `// MeoPeo Tino widget for Scriptable — paste ALL of this into a new script named "Tino".
+// KEY = your personal widget key (shows Tino's outfit): don't share it. Lost phone? Remove it in MeoPeo (Settings → Home-screen widget).
+const KEY = "${token}";
+// Tino's sleep hours, from MeoPeo on this phone (changed them? make the widget again, or edit this line).
+const HOURS = { night: ["${h.from}", "${h.to}"], nap: ["${h.napFrom}", "${h.napTo}"] };
+const CODE_URL = "${TINO_CODE_URL}";
+const fm = FileManager.local();
+const file = fm.joinPath(fm.documentsDirectory(), "meopeo-tino-code.js");
+let code = null;
+try {
+  const req = new Request(CODE_URL);
+  req.timeoutInterval = 15;
+  code = await req.loadString();
+  if (!code.includes("MEOPEO_TINO_WIDGET")) throw new Error("bad download");
+  fm.writeString(file, code);
+} catch (e) {
+  code = fm.fileExists(file) ? fm.readString(file) : null;
+}
+if (!code) throw new Error("MeoPeo: no connection — try again once the phone is online");
+await new Function("KEY", "HOURS", "return (async () => {\\n" + code + "\\n})()")(KEY, HOURS);
+`;
+function fillTinoWidget(box) {
+  box.innerHTML = `<div class="pl-sub">🦭 Tino widget</div>
+    <div class="pl-legend">Tino on your home screen, doing his things — cooking at mealtimes, asleep at night (with this phone's sleep hours)… a new one each time the widget refreshes, wearing his outfit.${S.scenesOk === false ? " (For the outfit, Tony needs to run <code>supabase/18_widget_scenes.sql</code>.)" : ""}</div>
+    <span class="mp-row"><button type="button" data-tino="iPhone">＋ iPhone Tino widget</button><button type="button" data-tino="Android">＋ Android Tino widget</button></span>`;
+  box.querySelectorAll("[data-tino]").forEach((b) => b.addEventListener("click", async () => {
+    box.querySelector(".mp-wsetup")?.remove();
+    const ios = b.dataset.tino === "iPhone", h = tinoSleep();
+    // une clé de widget (comme le calendrier) : le widget lit avec elle les images de Tino habillé (18)
+    b.disabled = true;
+    const { token, sha } = await newWidgetKey();
+    const made = await guard(() => db.registerWidgetKey(sha, `Tino ${b.dataset.tino}`), "Couldn't create the widget");
+    b.disabled = false;
+    if (!made) return;
+    const list = document.querySelector(".mp-widgets");
+    if (list) fillWidgets(list); // (la clé apparaît dans la liste, avec « Remove »)
+    const text = ios ? tinoLoader(h, token) : `${TINO_PAGE_URL}#k=${token}&night=${h.from}-${h.to}&nap=${h.napFrom}-${h.napTo}`;
+    const steps = ios
+      ? `<ol><li>In <b>Scriptable</b> (free, App Store): <b>＋</b>, then tap <b>Copy</b> below and paste, name the script <b>Tino</b>, <b>Done</b>.</li>
+         <li>Home screen: hold an empty spot → <b>Edit</b> → <b>Add Widget</b> → <b>Scriptable</b> → pick a size → <b>Add Widget</b>. Then hold the new widget → <b>Edit Widget</b> → Script: <b>Tino</b>.</li></ol>`
+      : `<ol><li>Tap <b>Copy</b> below.</li><li>Home screen: hold an empty spot → <b>Widgets</b> → your web-page widget app (e.g. <b>WebsiteWidget</b>) → drag it to the screen, paste the link when it asks for a URL. Any size works.</li></ol>`;
+    const div = document.createElement("div");
+    div.className = "mp-wsetup";
+    div.innerHTML = `<b>${ios ? "📱 iPhone" : "🤖 Android"} Tino widget</b>${steps}
+      <textarea readonly rows="${ios ? 6 : 3}" spellcheck="false">${esc(text)}</textarea>
+      <span class="mp-row"><button type="button" class="mp-cta" data-act="copy">Copy</button></span>
+      <div class="pl-legend">⚠️ Shown only once. It contains your widget key: anyone who has it can see your calendar (without private tasks' text) and Tino's outfit. Lost it? Make a new one and remove this one above.</div>`;
+    box.append(div);
+    const area = div.querySelector("textarea");
+    div.querySelector("[data-act=copy]").addEventListener("click", () => copyText(text, area));
+    div.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }));
+}
+
 // Mode d'emploi + code, montrés une seule fois juste après la création de la clé
 function showWidgetSetup(box, label, token) {
   const ios = label === "iPhone";
@@ -1711,7 +1827,7 @@ function renderSettings(pane) {
       <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button></div>`)
     + fold("notif", "🔔 Notifications", `<div class="mp-notif">Checking…</div>
       ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}`)
-    + fold("widget", "📱 Home-screen widget", `<div class="mp-widgets">Checking…</div>`)
+    + fold("widget", "📱 Home-screen widget", `<div class="mp-widgets">Checking…</div><div class="mp-tinowidget"></div>`)
     + fold("password", "🔑 Password", `<label>New password<input type="password" name="pw" autocomplete="new-password" minlength="6"></label>
       <label>Repeat it<input type="password" name="pw2" autocomplete="new-password" minlength="6"></label>
       <div class="pl-editor-actions"><span class="mp-grow"></span><button type="submit" class="mp-cta">Change password</button></div>`, "form")
@@ -1728,6 +1844,7 @@ function renderSettings(pane) {
   appVersion().then((v) => { pane.querySelector(".mp-version").textContent = `MeoPeo version ${v}`; });
   fillNotif(pane.querySelector(".mp-notif"));
   fillWidgets(pane.querySelector(".mp-widgets"));
+  fillTinoWidget(pane.querySelector(".mp-tinowidget"));
   setupFolds(pane, "settings");
   pane.querySelector("[name=notify]")?.addEventListener("change", async (ev) => {
     const on = ev.target.checked;

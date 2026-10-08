@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Tino</title>
+<!-- Widget Android « Tino » de MeoPeo : page affichée par une app de widget « page web » (lien créé dans l'app, ⚙ Settings →
+     Home-screen widget → Tino widget). Tino fait une de ses activités, choisie selon l'heure (comme dans l'app) ; à chaque
+     rechargement de l'app de widget, une autre. Dans le lien après # : k=clé de widget (pour Tino habillé, voir
+     18_widget_scenes.sql) et night=22:00-07:00&nap=12:30-13:00 (heures de sommeil du téléphone au moment de l'ajout).
+     Image : Tino habillé si la clé le permet, sinon l'image de base (tino/*.png). Même choix d'activité que
+     widget/tino.js (iPhone). Tout est choisi avant la fin du chargement (l'app de widget prend sa « photo » à la fin). -->
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { font: 600 14px/1.25 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); background: linear-gradient(170deg, var(--sky1), var(--sky2)); -webkit-text-size-adjust: 100%; }
+  body.day { --sky1: #bfe0ff; --sky2: #fdf3df; --text: #1c2046; --gold: #8a5a00; }
+  body.evening { --sky1: #3b2f6b; --sky2: #e58b6b; --text: #eceeff; --gold: #ffe8a3; }
+  body.night { --sky1: #0e1230; --sky2: #232a63; --text: #eceeff; --gold: #ffe8a3; }
+  #w { height: 100%; display: flex; align-items: center; justify-content: center; gap: 4%; padding: 4%; text-decoration: none; color: inherit; }
+  #w img { height: 100%; max-width: 62%; aspect-ratio: 1; object-fit: contain; flex: none; }
+  .txt { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .who { color: var(--gold); font-size: 0.85em; }
+  .cap { font-size: 1.25em; }
+  .time { color: var(--gold); font-size: 0.8em; font-weight: 500; }
+  /* carré ou en hauteur : image en haut, texte dessous */
+  @media (max-aspect-ratio: 13/10) { #w { flex-direction: column; } #w img { height: auto; width: 100%; max-width: none; max-height: 76%; } .txt { align-items: center; text-align: center; } .who, .time { display: none; } }
+</style>
+</head>
+<body class="day">
+<a id="w" href="../" target="_top"><img id="img" alt=""><span class="txt"><span class="who">Tino</span><span class="cap" id="cap"></span><span class="time" id="time"></span></span></a>
+<script>
+  var SCENES = {
+    sleep: ["sleep", "Tino is fast asleep 😴", "night"], nap: ["sleep", "Nap time 😴", "day"],
+    cook: ["cook", "Cooking a crêpe 🍳", "day"], bbq: ["bbq", "Barbecue time 🍖", "day"], rice: ["rice", "The rice is cooking 🍚", "day"],
+    pho: ["pho", "Slurping pho 🍜", "day"], matcha: ["matcha", "Matcha break 🍵", "day"], beer: ["beer", "Cheers! 🍺", "evening"],
+    game: ["game", "Gaming 🎮", "day"], shop: ["shop", "Grocery run 🛒", "day"], scooter: ["scooter", "Scooter ride 🛵", "day"],
+    wave: ["wave", "Hi! 👋", "day"], sit: ["sit", "Just chilling ☁️", "day"]
+  };
+  function mins(s) { var p = String(s).split(":"); return (+p[0] || 0) * 60 + (+p[1] || 0); }
+  function inSpan(t, a, b) { return a !== b && (a < b ? t >= a && t < b : t >= a || t < b); }
+  function pick(weights) { var keys = Object.keys(weights), sum = 0, i; for (i = 0; i < keys.length; i++) sum += weights[keys[i]]; var r = Math.random() * sum; for (i = 0; i < keys.length; i++) if ((r -= weights[keys[i]]) < 0) return keys[i]; return keys[0]; }
+  // Heures de sommeil (lien : #night=22:00-07:00&nap=12:30-13:00)
+  var q = {}; location.hash.replace(/^#/, "").split("&").forEach(function (kv) { var i = kv.indexOf("="); if (i > 0) q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });
+  function span(v) { var p = v ? v.split("-") : []; return p.length === 2 ? p : null; } // (« 22:00-07:00 » ; une clé, elle, peut contenir des tirets)
+  var H = { night: span(q.night) || ["22:00", "07:00"], nap: span(q.nap) || ["12:30", "13:00"] };
+  function pickScene(now) {
+    var t = now.getHours() * 60 + now.getMinutes(), nap = mins(H.nap[0]);
+    if (inSpan(t, mins(H.night[0]), mins(H.night[1]))) return "sleep";
+    if (inSpan(t, nap, mins(H.nap[1]))) return "nap";
+    if (inSpan(t, (nap + 1380) % 1440, nap) || inSpan(t, 18 * 60 + 30, 19 * 60 + 30)) return pick({ cook: 3, bbq: 2, rice: 2, pho: 3, sit: 1, wave: 1 });
+    if (t >= 18 * 60) return pick({ beer: 3, game: 3, scooter: 2, shop: 1, sit: 1 });
+    return pick({ game: 3, matcha: 3, shop: 2, scooter: 2, wave: 2, sit: 1, cook: 1 });
+  }
+  // Image de Tino habillé (dessinée par l'app, widget_tino de 18_widget_scenes.sql) avec la clé du lien (k=…) : requête
+  // SYNCHRONE, pour que la page ne finisse de charger qu'avec la bonne image (l'app de widget prend sa photo à la fin) ;
+  // pas de clé, pas de tenue, pas de réseau ou base sans 18 → l'image de base
+  function dressed(id) {
+    if (!q.k) return null;
+    try {
+      var x = new XMLHttpRequest();
+      x.open("POST", "https://llwbzhlbaygolzuwlbkf.supabase.co/rest/v1/rpc/widget_tino", false);
+      x.setRequestHeader("apikey", "sb_publishable_rMCGFrjzDmhsZ6eJ163B6g_MTA4dQSd"); // (clé publique de l'app)
+      x.setRequestHeader("Content-Type", "application/json");
+      x.send(JSON.stringify({ p_token: q.k, p_scene: id }));
+      var r = x.status === 200 ? JSON.parse(x.responseText) : null;
+      return r && r.png ? "data:image/png;base64," + r.png : null;
+    } catch (e) { return null; }
+  }
+  var now = new Date(), s = SCENES[pickScene(now)];
+  document.body.className = s[2];
+  document.getElementById("img").src = dressed(s[0]) || "tino/" + s[0] + ".png";
+  document.getElementById("cap").textContent = s[1];
+  document.getElementById("time").textContent = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0") + " · MeoPeo";
+</script>
+</body>
+</html>

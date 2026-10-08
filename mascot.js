@@ -48,7 +48,21 @@ const STYLE = `
 .ms-prop { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ms-prop[hidden] { display: none; }
 .ms-prop svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
-.ms-gaming .ms-hold, .ms-tool-on-r .ms-tool-r, .ms-tool-on-l .ms-tool-l { display: inline; }
+.ms-it, .ms-paddle, .ms-tool-paddle .ms-spatula { display: none; }
+.ms[class*="ms-hold-"] .ms-hold, .ms-tool-on-r .ms-tool-r, .ms-tool-on-l .ms-tool-l, .ms-tool-paddle .ms-paddle,
+.ms-hold-controller .ms-it-controller, .ms-hold-matcha .ms-it-matcha, .ms-hold-beer .ms-it-beer, .ms-hold-pho .ms-it-pho { display: inline; }
+.ms-hold { transform-origin: 50px 76px; }
+.ms-liquid { transform: scaleY(var(--sip, 1)); }
+.ms-chop { animation: ms-chop 2.2s ease-in-out infinite; }
+@keyframes ms-chop { 0%, 50%, 100% { transform: translateY(0); } 66%, 82% { transform: translateY(-9px); } }
+.ms-wheel { transform-box: fill-box; transform-origin: center; animation: ms-spin 0.7s linear infinite; }
+@keyframes ms-spin { to { transform: rotate(360deg); } }
+.ms-wind path { animation: ms-wind 0.45s linear infinite; }
+.ms-wind path:nth-child(2) { animation-delay: 0.15s; }
+.ms-wind path:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ms-wind { from { transform: translateX(8px); opacity: 0; } 30% { opacity: 1; } to { transform: translateX(-8px); opacity: 0; } }
+.ms-lid { transition: transform 0.35s ease-out; }
+.ms-prop.ms-done .ms-lid { transform: rotate(28deg); }
 .ms-scr-hero { animation: ms-hero 1.6s ease-in-out infinite; }
 .ms-scr-obs { animation: ms-obs 1.6s linear infinite; }
 @keyframes ms-hero { 0%, 56%, 100% { transform: translateY(0); } 68%, 80% { transform: translateY(-12px); } 92% { transform: translateY(0); } }
@@ -83,15 +97,38 @@ function star(cx, cy, r, fill) {
   return `<path d="${d}Z" fill="${fill}"/>`;
 }
 
-// Manette de jeu (sur son ventre, les nageoires sur les poignées) et spatule (au bout d'une nageoire, côté droit si
-// side = 1) : dans le dessin de Tino, cachées sauf pendant les actions « game », « cook » et « bbq » (display="none" :
-// aussi cachées dans le modèle de la garde-robe, qui est fait sans la feuille de style)
+// Ce qu'il tient devant lui, sur son ventre (groupe .ms-hold : une seule chose visible à la fois, classe ms-hold-<nom> sur
+// .ms) — manette, matcha glacé à la paille (son niveau baisse : --sip), chope de bière, bol de pho (les baguettes montent
+// les nouilles jusqu'à sa bouche) — et ce qu'il tient au bout d'une nageoire (côté droit si side = 1) : spatule ou spatule
+// à riz. Tout est caché sauf pendant l'action qui va avec (display="none" : aussi caché dans le modèle de la garde-robe,
+// qui est fait sans la feuille de style).
 const CONTROLLER = `<path d="M33 68H67Q75 68 75 76Q75 83 69 83Q65 83 62 79H38Q35 83 31 83Q25 83 25 76Q25 68 33 68Z" fill="#3b3f5a" stroke="#22253a" stroke-width="1.2"/>
   <path d="M35 72.5V78.5M32 75.5H38" stroke="#e8ebf5" stroke-width="2" stroke-linecap="round"/>
   <circle cx="62" cy="73.5" r="1.9" fill="#ff6b7d"/><circle cx="66.5" cy="76.5" r="1.9" fill="#5fb4ff"/>
   <rect x="46" y="72" width="8" height="2" rx="1" fill="#8a90ad"/>`;
+const MATCHA = `<path d="M53 67L49 52" stroke="#f28fb0" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M41 66H59L57 85Q57 87 55 87H45Q43 87 43 85Z" fill="rgba(235, 245, 255, 0.55)" stroke="#a9bccf" stroke-width="1.1"/>
+  <g class="ms-liquid" style="transform-box: fill-box; transform-origin: 50% 100%"><path d="M42.4 71H57.6L56.6 85Q56.6 86.2 55 86.2H45Q43.4 86.2 43.4 85Z" fill="#8cc56a"/><path d="M42.4 71H57.6L57.4 74H42.6Z" fill="#dcefc8"/></g>
+  <rect x="45" y="75" width="4.5" height="4.5" rx="1" fill="#f2f9ff" opacity="0.75" transform="rotate(12 47 77)"/>`;
+const BEER = `<path d="M60 70Q67 70 67 76Q67 82 60 82" fill="none" stroke="#c9d6e3" stroke-width="2.4"/>
+  <rect x="41" y="66" width="20" height="20" rx="2.5" fill="#f2b233" stroke="#c98a12" stroke-width="1.1"/>
+  <path d="M46 72V83M51 72V83M56 72V83" stroke="#ffd36b" stroke-width="1.2" opacity="0.8"/>
+  <path d="M40.5 69Q40 63 44.5 64Q47 61 51 63Q54 61 57 63Q61.5 62 61.5 67V69Z" fill="#fffaf0" stroke="#e6dcc6" stroke-width="0.8"/>`;
+const PHO = `<g class="ms-steam" fill="none" stroke="#eef2ff" stroke-width="1.3" stroke-linecap="round"><path d="M42 68Q39 64 42 60"/><path d="M58 68Q55 64 58 60"/></g>
+  <path d="M32 72H68Q67 86 50 86Q33 86 32 72Z" fill="#fdfdfd" stroke="#9aa6c4" stroke-width="1.1"/>
+  <path d="M35 77H65" stroke="#5b7fd6" stroke-width="1.3" stroke-dasharray="2 2"/>
+  <ellipse cx="50" cy="72" rx="18" ry="3.2" fill="#d9a05b"/>
+  <path d="M38 72Q42 70 46 72Q50 74 54 72Q58 70 62 72" fill="none" stroke="#fff3d6" stroke-width="1.2"/>
+  <ellipse cx="44" cy="71.6" rx="3" ry="1.2" fill="#c9776b"/><ellipse cx="57" cy="72.3" rx="3" ry="1.1" fill="#c9776b"/>
+  <circle cx="50" cy="71" r="1" fill="#5fae4f"/><circle cx="61" cy="71.2" r="0.9" fill="#5fae4f"/><circle cx="40" cy="72.6" r="0.9" fill="#5fae4f"/>
+  <g class="ms-chop"><path d="M58 74L48 57M61 73.5L51 56.5" stroke="#b07a46" stroke-width="1.4" stroke-linecap="round"/><path d="M50.5 61V70M52 60.5V69" stroke="#fff3d6" stroke-width="1" stroke-linecap="round"/></g>`;
+const HELD = { controller: CONTROLLER, matcha: MATCHA, beer: BEER, pho: PHO };
+const HOLD_OF = { game: "controller", matcha: "matcha", beer: "beer", pho: "pho" }; // action → ce qu'il tient
 const spatula = (s) => { const X = (x) => (s > 0 ? x : 100 - x); return `<path d="M${X(87)} 69L${X(112)} 61" stroke="#8a5a3b" stroke-width="2.6" stroke-linecap="round"/>
   <rect x="${s > 0 ? 110 : -22}" y="55" width="12" height="9" rx="1.8" transform="rotate(${-20 * s} ${X(116)} 59.5)" fill="#cfd4e0" stroke="#868ca3" stroke-width="1"/>`; };
+const paddle = (s) => { const X = (x) => (s > 0 ? x : 100 - x); return `<path d="M${X(87)} 69L${X(106)} 62" stroke="#e3d6b8" stroke-width="2.6" stroke-linecap="round"/>
+  <ellipse cx="${X(111)}" cy="60" rx="6.5" ry="4.4" transform="rotate(${-20 * s} ${X(111)} 60)" fill="#fbf6ea" stroke="#cdbf9f" stroke-width="1"/>`; };
+const tools = (s) => `<g class="ms-tool-${s > 0 ? "r" : "l"}" display="none"><g class="ms-spatula">${spatula(s)}</g><g class="ms-paddle">${paddle(s)}</g></g>`;
 
 // Tino, le phoque en peluche : grosse tête blanche, yeux fermés, nez gris en deux boules, fleur jaune sur le côté,
 // coussin crème à étoiles de couleur. Repère 100 × 100, pieds posés sur y = 98.
@@ -109,9 +146,9 @@ function sealSvg() {
   <path d="M34 58C26 52 13 55 14 65C15 73 22 75 27 74C24 80 22 90 30 95C37 99 45 96 50 92C55 96 63 99 70 95C78 90 76 80 73 74C78 75 85 73 86 65C87 55 74 52 66 58Z" fill="#f7f0de" stroke="#dacfb4" stroke-width="1.3"/>
   ${stars}
   <g class="ms-wear-body"></g>
-  <g class="ms-hold" display="none">${CONTROLLER}</g>
-  <g class="ms-arm-l"><g class="ms-tool-l" display="none">${spatula(-1)}</g><ellipse cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
-  <g class="ms-arm-r"><g class="ms-tool-r" display="none">${spatula(1)}</g><ellipse cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
+  <g class="ms-hold" display="none">${Object.entries(HELD).map(([k, svg]) => `<g class="ms-it ms-it-${k}">${svg}</g>`).join("")}</g>
+  <g class="ms-arm-l">${tools(-1)}<ellipse cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
+  <g class="ms-arm-r">${tools(1)}<ellipse cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
   <g class="ms-head">
     <ellipse cx="50" cy="36" rx="32" ry="28.5" fill="${fur}" stroke="${line}" stroke-width="1.4"/>
     <path d="M30 13Q33 9 36 12M46 8Q50 5 54 8M64 12Q67 9 70 13" fill="none" stroke="#e3e7f1" stroke-width="1.2" stroke-linecap="round"/>
@@ -213,12 +250,53 @@ const STOVE = `<svg viewBox="0 0 60 50" aria-hidden="true">
   <rect x="1" y="25" width="15" height="3.2" rx="1.6" fill="#6b4c34"/>
   <g class="ms-food" style="transform-box: fill-box; transform-origin: center"><ellipse cx="33" cy="24.5" rx="10" ry="2.8" fill="#e9a94a" stroke="#c4802a" stroke-width="0.9"/><ellipse cx="31" cy="23.8" rx="4" ry="1" fill="#f6cf7e"/></g>
 </svg>`;
-// w : largeur (× sa taille) ; gap : du centre de Tino au bord de l'objet (× sa taille) ; flip : retourné s'il est à droite ;
-// period : un coup de spatule toutes les … s (barbecue, poêle)
+// Rice cooker (vapeur par la soupape, voyant qui clignote ; à la fin le couvercle s'ouvre : classe ms-done)
+const RICE = `<svg viewBox="0 0 60 50" aria-hidden="true">
+  <g class="ms-smoke" fill="#eef2ff"><circle cx="40" cy="8" r="3"/><circle cx="44" cy="6" r="2.6"/><circle cx="38" cy="10" r="2.2"/></g>
+  <rect x="14" y="45" width="6" height="4" rx="1.2" fill="#9aa0b4"/><rect x="44" y="45" width="6" height="4" rx="1.2" fill="#9aa0b4"/>
+  <rect x="10" y="22" width="44" height="25" rx="9" fill="#fbfaf6" stroke="#c9c3b6" stroke-width="1.2"/>
+  <circle cx="16" cy="38" r="2" fill="#f6a6c1"/><circle cx="19.5" cy="41.5" r="1.4" fill="#f6a6c1"/><circle cx="48" cy="40" r="1.6" fill="#f6a6c1"/>
+  <rect x="24" y="30" width="16" height="10" rx="2" fill="#2f3346"/><rect x="26.5" y="33" width="9" height="2.6" rx="0.8" fill="#7be08a"/>
+  <circle class="ms-coal" cx="44" cy="35" r="1.9" fill="#ff8a3d"/>
+  <g class="ms-lid" style="transform-box: fill-box; transform-origin: 100% 100%"><path d="M11 24Q12 13 32 13Q52 13 53 24Z" fill="#f4f1ea" stroke="#c9c3b6" stroke-width="1.2"/><rect x="37" y="11.5" width="6" height="3" rx="1" fill="#9aa0b4"/></g>
+</svg>`;
+// Caddie de courses (poignée à gauche, du côté de Tino ; baguette, lait, poireau, pomme ; roues qui tournent)
+const CART = `<svg viewBox="0 0 60 56" aria-hidden="true">
+  <rect x="17" y="2" width="7" height="27" rx="3.5" transform="rotate(-18 20.5 15.5)" fill="#e7b46a" stroke="#b9853e" stroke-width="1"/>
+  <path d="M18.5 9L22 8M19 14L22.5 13M20 19L23.5 18" stroke="#b9853e" stroke-width="1" stroke-linecap="round"/>
+  <rect x="28" y="12" width="9" height="14" fill="#ffffff" stroke="#9aa6c4" stroke-width="1"/><path d="M28 12L32.5 7.5L37 12Z" fill="#5fb4ff"/>
+  <path d="M46 6L41 24" stroke="#5fae4f" stroke-width="5" stroke-linecap="round"/><path d="M41.6 21L40 28" stroke="#f1f5e8" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="50" cy="22" r="5" fill="#e5484d"/><path d="M50 17Q51 14 53 14" stroke="#5fae4f" stroke-width="1.2" fill="none"/>
+  <path d="M12 20H58L52 40H16Z" fill="rgba(200, 210, 230, 0.4)" stroke="#7b8399" stroke-width="1.8" stroke-linejoin="round"/>
+  <path d="M14 26.5H56M15.5 33H54M23 20L24 40M33 20L33.5 40M43 20L42.5 40M53 20L51 40" stroke="#9aa3b8" stroke-width="0.9"/>
+  <path d="M2 14L10 16L16 42H52M18 42L20 45M50 42L48 45" fill="none" stroke="#7b8399" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="0" y="11" width="6" height="5" rx="2" fill="#e5484d"/>
+  <g class="ms-wheel"><circle cx="20" cy="50" r="5" fill="#3a3c48"/><path d="M20 46V54M16 50H24" stroke="#9aa0b4" stroke-width="1.2"/></g>
+  <g class="ms-wheel"><circle cx="48" cy="50" r="5" fill="#3a3c48"/><path d="M48 46V54M44 50H52" stroke="#9aa0b4" stroke-width="1.2"/></g>
+</svg>`;
+// Scooter (va vers la droite ; Tino assis sur la selle, les nageoires au guidon ; traits de vent derrière, roues qui tournent)
+const SCOOTER = `<svg viewBox="0 0 80 56" aria-hidden="true">
+  <g class="ms-wind" stroke="#dfe7ff" stroke-width="1.6" stroke-linecap="round"><path d="M1 22H11"/><path d="M0 31H8"/><path d="M3 40H12"/></g>
+  <g class="ms-wheel"><circle cx="18" cy="48" r="7" fill="#2f3346"/><path d="M18 43V53M13 48H23" stroke="#9aa0b4" stroke-width="1.4"/></g>
+  <g class="ms-wheel"><circle cx="63" cy="48" r="7" fill="#2f3346"/><path d="M63 43V53M58 48H68" stroke="#9aa0b4" stroke-width="1.4"/></g>
+  <path d="M8 44Q5 27 22 25H44Q50 25 50 31V40H25Q21 44 8 44Z" fill="#8fd3c7" stroke="#5aa99c" stroke-width="1.2"/>
+  <rect x="22" y="38" width="30" height="5" rx="2" fill="#5aa99c"/>
+  <path d="M17 24Q17 18.5 25 18.5H41Q45.5 18.5 45.5 24Z" fill="#7a5238"/>
+  <path d="M53 40L60 14" stroke="#5aa99c" stroke-width="5" stroke-linecap="round"/>
+  <path d="M50 43Q53 23 61 18L66 22Q60 30 58 43Z" fill="#8fd3c7" stroke="#5aa99c" stroke-width="1.2"/>
+  <path d="M55 46Q57 39 63 39Q70 39 71 46" fill="none" stroke="#5aa99c" stroke-width="2.4"/>
+  <path d="M56 13H67" stroke="#3a3c48" stroke-width="2.6" stroke-linecap="round"/><circle cx="65" cy="22" r="2.6" fill="#ffe27a"/>
+</svg>`;
+// w : largeur (× sa taille) ; gap : du centre de Tino au bord de l'objet (× sa taille ; négatif : l'objet est sous lui) ;
+// flip : retourné s'il est à droite ; period : un coup de spatule toutes les … s (barbecue, poêle) ; follow : l'objet le
+// suit quand il avance (caddie, scooter) ; seat : hauteur de la selle (× sa taille : il est assis dessus)
 const PROPS = {
   game: { svg: SCREEN, vb: [60, 52], w: 0.85, gap: 0.55, flip: false },
   bbq: { svg: GRILL, vb: [60, 56], w: 0.95, gap: 0.42, flip: true, period: 2.4 },
   cook: { svg: STOVE, vb: [60, 50], w: 0.9, gap: 0.3, flip: true, period: 3.2 },
+  rice: { svg: RICE, vb: [60, 50], w: 0.85, gap: 0.38, flip: true },
+  shop: { svg: CART, vb: [60, 56], w: 1, gap: 0.36, flip: true, follow: true, trip: [1.5, 4] },
+  scooter: { svg: SCOOTER, vb: [80, 56], w: 1.6, gap: -0.64, flip: true, follow: true, trip: [2.5, 8], seat: 0.7, round: true },
 };
 // Coup de spatule : 0 la plupart du temps, puis de 0 à 1 (la saucisse / la crêpe saute et se retourne) à la fin de chaque période
 const flipK = (c, period) => clamp(((c % period) / period - 0.66) / 0.22, 0, 1);
@@ -298,19 +376,21 @@ function jumpPose(p, t, crouch, air) {
   else { const k = 1 - Math.min(1, (t - crouch - air) / LAND); p.sy = 1 - 0.16 * k; p.sx = 1 + 0.12 * k; }
 }
 
-// Il cuisine (kind = "cook" : une crêpe à la poêle) ou fait un barbecue ("bbq" : des saucisses), spatule en main, à côté de
-// lui ; un coup de spatule de temps en temps (ce qui cuit saute et se retourne), et à la fin il sautille : c'est prêt !
-// Surtout à l'heure des repas (midi et soir), un peu de temps en temps le reste de la journée.
+// Il cuisine (kind = "cook" : une crêpe à la poêle), fait un barbecue ("bbq" : des saucisses) ou du riz ("rice" : rice
+// cooker, spatule à riz), à côté de lui ; un coup de spatule de temps en temps (ce qui cuit saute et se retourne), et à la
+// fin il sautille : c'est prêt ! (le couvercle du rice cooker s'ouvre). Plus souvent à l'heure des repas (midi et soir) —
+// mais pas tout le temps : il fait aussi autre chose (≈ 35 % du temps avec le pho, mesuré) —, de temps en temps sinon.
+const MEAL_WEIGHT = { cook: 8, bbq: 6, rice: 7 };
 function cooking(kind) {
   return {
-    weight: (m) => (!m.propSpot(kind) ? 0 : m.eng.meal() ? 30 : 1.5),
-    make: (m) => m.propSteps(kind, { dur: rand(14, 22) }),
+    weight: (m) => (!m.propSpot(kind) ? 0 : m.eng.meal() ? MEAL_WEIGHT[kind] : 1),
+    make: (m) => m.propSteps(kind, { dur: rand(10, 16) }),
     start(m, a) { m.setProp(a, kind); },
     step(m, a) { if (!a.ended && a.t >= a.dur - YUM) { a.ended = true; m.love(); } return a.t >= a.dur; },
     look: (m, a) => a.side * LOOK * 0.8,
     pose(m, a, p) {
-      const c = m.clock, s = a.side, f = Math.sin(Math.PI * flipK(c, PROPS[kind].period)), done = a.t > a.dur - YUM;
-      const lift = done ? 25 : kind === "bbq" ? 4 + 30 * f : -1 + 4 * Math.sin(c * 6) + 30 * f; // nageoire de la spatule (+ = levée)
+      const c = m.clock, s = a.side, f = PROPS[kind].period ? Math.sin(Math.PI * flipK(c, PROPS[kind].period)) : 0, done = a.t > a.dur - YUM;
+      const lift = done ? 25 : kind === "bbq" ? 4 + 30 * f : kind === "rice" ? 2 + 6 * Math.sin(c * 2.5) : -1 + 4 * Math.sin(c * 6) + 30 * f; // nageoire de la spatule (+ = levée)
       if (s > 0) { p.armR = -lift; p.armL = -14; } else { p.armL = lift; p.armR = 14; }
       p.rot = s * (2 + 1.5 * Math.sin(c * 3)); p.head = s * 3 + 2 * Math.sin(c * 2);
       if (done) p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.08;
@@ -543,6 +623,94 @@ const ACTIONS = {
   },
   cook: cooking("cook"),
   bbq: cooking("bbq"),
+  rice: cooking("rice"),
+  // Un bol de pho, assis : les baguettes montent les nouilles jusqu'à sa bouche (animation CSS .ms-chop), il slurpe ;
+  // surtout aux repas
+  pho: {
+    weight: (m) => (m.eng.meal() ? 7 : 0.5),
+    make: () => [{ type: "pho", dur: rand(9, 14) }],
+    sit: true,
+    step(m, a) { if (!a.ended && a.t >= a.dur - 1.2) { a.ended = true; m.love(); } return a.t >= a.dur; },
+    pose(m, a, p) {
+      const c = m.clock, slurp = Math.max(0, Math.sin(((c % 2.2) / 2.2) * 2 * Math.PI - 1.9)) ** 2;
+      p.armL = -48; p.armR = 48; p.head = -3 * slurp + 2 * Math.sin(c * 1.1); p.sy = 0.97 + 0.02 * slurp; p.sx = 1.02;
+      if (a.ended) p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.06;
+    },
+  },
+  // Pause boisson, assis : un matcha glacé à la paille la journée (le niveau baisse), une bière le soir (gorgées, ses
+  // joues rougissent, « hic ! »). Pas aux repas.
+  matcha: {
+    weight: (m) => (!m.eng.meal() && minutesNow() < 18 * 60 ? 4 : 0),
+    make: () => [{ type: "matcha", dur: rand(8, 12) }],
+    start(m) { m.gaze = pick([-LOOK * 0.4, LOOK * 0.4]); },
+    sit: true,
+    look: (m) => m.gaze,
+    step(m, a) { if (!a.ended && a.t >= a.dur - 1) { a.ended = true; m.love(); } return a.t >= a.dur; },
+    pose(m, a, p) {
+      const c = m.clock, sip = Math.max(0, Math.sin(c * 2.2)) ** 6;
+      p.armL = -50; p.armR = 50; p.head = 2 * Math.sin(c * 0.8) - 4 * sip; p.sy = 0.97 - 0.02 * sip; p.sx = 1.02;
+      p.sip = 1 - 0.85 * clamp(a.t / a.dur, 0, 1);
+    },
+  },
+  beer: {
+    weight: (m) => (!m.eng.meal() && minutesNow() >= 18 * 60 ? 5 : 0),
+    make: () => [{ type: "beer", dur: rand(9, 13) }],
+    sit: true,
+    step(m, a) { if (!a.hic && a.t > a.dur * 0.65) { a.hic = true; if (!m.bubble) m.say("hic! 🍺", { ms: 1400 }); } return a.t >= a.dur; },
+    pose(m, a, p) {
+      const c = m.clock, gulp = Math.max(0, Math.sin(c * 1.7)) ** 4, tipsy = clamp(a.t / a.dur, 0, 1);
+      p.holdY = -7 * gulp; p.holdRot = -14 * gulp; p.head = -6 * gulp; p.armL = -50 - 10 * gulp; p.armR = 50 + 10 * gulp;
+      p.rot = 3 * Math.sin(c * 1.3) * tipsy; p.sy = 0.97; p.sx = 1.02; p.blush = tipsy;
+    },
+  },
+  // Courses : il pousse un caddie plein le long de sa ligne (le caddie le suit), puis un cœur
+  shop: {
+    weight: (m) => (m.trip("shop") ? (m.eng.meal() ? 1 : 6) : 0),
+    make: (m) => m.tripSteps("shop"),
+    start(m, a) { m.setProp(a, "shop"); },
+    step(m, a, dt) {
+      if (a.t < 0.4) return false; // le caddie apparaît
+      if (!a.ended) {
+        const d = a.x1 - m.x, s = 20 * (m.size / 40) * dt;
+        if (Math.abs(d) <= s) { m.x = a.x1; a.ended = true; a.endT = a.t; m.love(); } else m.x += Math.sign(d) * s;
+        return false;
+      }
+      return a.t >= a.endT + 0.9;
+    },
+    look: (m, a) => a.side * LOOK,
+    pose(m, a, p) {
+      const ph = m.clock * 9, go = a.t > 0.4 && !a.ended ? 1 : 0, fwd = -40 + 6 * Math.sin(ph) * go;
+      p.rot = a.side * 5 + 3 * Math.sin(ph) * go; p.bob = -Math.abs(Math.sin(ph)) * m.size * 0.05 * go;
+      if (a.side > 0) { p.armR = fwd; p.armL = -10; } else { p.armL = -fwd; p.armR = 10; }
+      p.footL = -Math.max(0, Math.sin(ph)) * 3 * go; p.footR = -Math.max(0, -Math.sin(ph)) * 3 * go;
+    },
+  },
+  // Balade en scooter : il monte sur la selle, accélère le long de sa ligne (vent, roues qui tournent), fait demi-tour au
+  // bout, revient, s'arrête et descend
+  scooter: {
+    weight: (m) => (!m.eng.night() && m.trip("scooter") ? (m.eng.meal() ? 0.5 : 7) : 0),
+    make: (m) => m.tripSteps("scooter"),
+    start(m, a) { m.setProp(a, "scooter"); a.x0 = m.x; a.leg = 0; a.legT = 0.5; },
+    step(m, a, dt) {
+      if (a.t < 0.5) return false; // il monte
+      if (!a.ended) {
+        const to = a.leg ? a.x0 : a.x1, d = to - m.x, s = 85 * (m.size / 40) * dt * Math.min(1, (a.t - a.legT) / 0.6); // il accélère
+        if (Math.abs(d) > s) { m.x += Math.sign(d) * s; return false; }
+        m.x = to;
+        if (!a.leg) { a.leg = 1; a.legT = a.t; a.side = -a.side; m.dir = a.side; m.prop.side = a.side; } // demi-tour (le scooter aussi)
+        else { a.ended = true; a.endT = a.t; }
+        return false;
+      }
+      return a.t >= a.endT + 0.7;
+    },
+    look: (m, a) => a.side * LOOK,
+    pose(m, a, p) {
+      const W = m.size, k = smooth(clamp(a.t / 0.45, 0, 1)) * (a.ended ? 1 - smooth(clamp((a.t - a.endT) / 0.5, 0, 1)) : 1), riding = a.t > 0.5 && !a.ended;
+      p.bob = -PROPS.scooter.seat * W * k + (riding ? Math.sin(m.clock * 40) * 0.3 : 0); // assis sur la selle (ça vibre un peu)
+      if (a.side > 0) { p.armR = -55 * k; p.armL = 10 * k; } else { p.armL = 55 * k; p.armR = -10 * k; }
+      p.rot = -a.side * 4 * k * (riding ? 1 : 0.5); p.sy = 1 - 0.03 * k;
+    },
+  },
   // Embêté (touché 5 fois de suite) : sourcils froncés, « 💢 », il trépigne et agite les nageoires
   angry: {
     look: () => 0,
@@ -643,6 +811,7 @@ class Mascot {
     this.el.innerHTML = `<div class="ms-in">${def.svg()}</div>${FX}`;
     this.inner = this.el.firstChild;
     for (const k of ["head", "face", "cheeks", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "bub-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    this.holdG = this.el.querySelector(".ms-hold"); this.inHands = null; // ce qu'il tient devant lui (classe ms-hold-<nom>) — (this.hold : minuterie de l'appui long)
     this.taps = [];
     if (eng.outfit) this.wear(eng.outfit);
     // Lit (derrière lui) et couverture (devant lui) : seulement la nuit, quand il dort dans la case d'aujourd'hui
@@ -744,6 +913,25 @@ class Mascot {
     return Math.abs(s.x - this.x) > 2 ? [{ type: "walk", x: s.x }, act] : [act];
   }
   setProp(a, kind) { a.side ??= this.dir; this.dir = a.side; this.prop = { kind, k: this.k, x: this.x, side: a.side, act: a }; }
+  // Trajet avec un objet qui le suit (caddie devant lui, scooter sous lui) : { side, x (départ), x1 (arrivée) } — l'objet
+  // tient sur la plateforme et à l'écran tout du long, trajet de PROPS[kind].trip[0] à trip[1] fois sa taille ; null sinon
+  trip(kind, me = this.plat()) {
+    if (!me) return null;
+    const D = PROPS[kind], W = this.size, lo = Math.max(me.x0 - 10, this.eng.v.left), hi = Math.min(me.x1 + 10, this.eng.v.right);
+    const ahead = W * (D.gap + D.w), behind = W * Math.max(0.45, -D.gap, D.round ? D.gap + D.w : 0); // (aller-retour : retourné au départ)
+    for (const side of [this.dir, -this.dir]) {
+      const xs = side > 0 ? clamp(this.x, lo + behind, hi - ahead) : clamp(this.x, lo + ahead, hi - behind);
+      const dist = ((side > 0 ? hi - ahead : lo + ahead) - xs) * side;
+      if (dist >= D.trip[0] * W && xs >= me.x0 && xs <= me.x1) return { side, x: xs, x1: xs + side * Math.min(dist, D.trip[1] * W) };
+    }
+    return null;
+  }
+  tripSteps(kind) {
+    const s = this.trip(kind);
+    if (!s) return [{ type: "idle", dur: 1 }];
+    const act = { type: kind, side: s.side, x1: s.x1 };
+    return Math.abs(s.x - this.x) > 2 ? [{ type: "walk", x: s.x }, act] : [act];
+  }
   busy() { return !!ACTIONS[this.act?.type]?.busy; }
   // Fait faire une action tout de suite (ou juste après celle en cours si elle ne s'interrompt pas ; s'il nage, il sort de l'eau)
   now(steps) {
@@ -814,7 +1002,7 @@ class Mascot {
       this.petT = 0.7; // premier cœur bientôt
       // il s'arrête pour en profiter (pas s'il saute, roule, vole ou nage : seule sa tête s'aplatit ; assis ou endormi, il le reste)
       // (il joue ou cuisine : il continue, seule sa tête s'aplatit)
-      if (!this.busy() && !this.stay && !["sit", "sleep", "nap", "pet", "game", "cook", "bbq"].includes(this.act?.type)) this.now([{ type: "pet" }]);
+      if (!this.busy() && !this.stay && !["sit", "sleep", "nap", "pet", "game", "cook", "bbq", "rice", "pho", "matcha", "beer", "shop", "scooter"].includes(this.act?.type)) this.now([{ type: "pet" }]);
     }
     this.press = Math.min(1, this.press + step / (this.size * RUB_FULL));
     this.rubT = this.clock;
@@ -974,7 +1162,8 @@ class Mascot {
   render() {
     const W = this.size, a = this.act ?? { type: "idle", t: 0 }, A = ACTIONS[a.type] ?? ACTIONS.idle, c = this.clock, u = W / 100, B = this.def.body;
     const breathe = Math.sin(c * 2.4);
-    const p = { sx: 1 - 0.015 * breathe, sy: 1 + 0.025 * breathe, rot: 0, bob: 0, spin: 0, head: 2 * Math.sin(c * 0.9), armL: 0, armR: 0, footL: 0, footR: 0 };
+    // (holdY / holdRot : ce qu'il tient devant lui monte et penche — une gorgée ; sip : niveau du matcha ; blush : joues rouges)
+    const p = { sx: 1 - 0.015 * breathe, sy: 1 + 0.025 * breathe, rot: 0, bob: 0, spin: 0, head: 2 * Math.sin(c * 0.9), armL: 0, armR: 0, footL: 0, footR: 0, holdY: 0, holdRot: 0, sip: 1, blush: 0 };
     if (a.t !== undefined) A.pose?.(this, a, p);
     // Couché sur le côté : tout le corps pivote, il respire lentement, les pattes se relâchent
     if (this.lie > 0.01) {
@@ -1000,15 +1189,21 @@ class Mascot {
     this.el.classList.toggle("ms-sleep", !!A.zzz);
     this.el.classList.toggle("ms-mad", a.type === "angry" || (a.t !== undefined && gameMad(a)));
     this.el.classList.toggle("ms-swim", a.type === "swim" && !!a.wet);
-    const busyHands = a.t !== undefined && (a.type === "cook" || a.type === "bbq"); // spatule dans la nageoire du côté de l'objet
-    this.el.classList.toggle("ms-gaming", a.type === "game" && a.t !== undefined); // manette
+    const busyHands = a.t !== undefined && ["cook", "bbq", "rice"].includes(a.type); // spatule dans la nageoire du côté de l'objet
     this.el.classList.toggle("ms-tool-on-r", busyHands && a.side > 0);
     this.el.classList.toggle("ms-tool-on-l", busyHands && a.side < 0);
+    this.el.classList.toggle("ms-tool-paddle", a.type === "rice"); // (spatule à riz)
+    const inHands = a.t !== undefined ? HOLD_OF[a.type] ?? null : null; // manette, matcha, bière, bol de pho
+    if (inHands !== this.inHands) { if (this.inHands) this.el.classList.remove("ms-hold-" + this.inHands); if (inHands) this.el.classList.add("ms-hold-" + inHands); this.inHands = inHands; }
+    if (inHands) {
+      this.holdG.style.transform = p.holdY || p.holdRot ? `translateY(${p.holdY.toFixed(2)}px) rotate(${p.holdRot.toFixed(1)}deg)` : "";
+      this.el.style.setProperty("--sip", p.sip.toFixed(3));
+    }
     this.el.style.transform = `translate3d(${(this.x - W / 2).toFixed(1)}px, ${(this.y - W * 0.98).toFixed(1)}px, 0)`;
     this.inner.style.transform = `translateY(${down.toFixed(2)}px)` + (p.spin ? ` translateY(${pivot.toFixed(2)}px) rotate(${p.spin.toFixed(1)}deg) translateY(${(-pivot).toFixed(2)}px)` : "")
       + ` rotate(${p.rot.toFixed(2)}deg) scale(${p.sx.toFixed(3)}, ${p.sy.toFixed(3)})`;
     this.head.style.transform = `rotate(${(p.head + look * 0.4).toFixed(2)}deg)` + (f ? ` scale(${(1 + 0.24 * f).toFixed(3)}, ${(1 - 0.42 * f).toFixed(3)})` : "");
-    const ck = Math.round(clamp(f, 0, 1) * 20); // il rougit quand on le frotte
+    const ck = Math.round(clamp(Math.max(f, p.blush), 0, 1) * 20); // il rougit quand on le frotte (et quand il boit une bière)
     if (ck !== this.cheekK) { this.cheekK = ck; this.cheeks.setAttribute("opacity", (0.45 + 0.02 * ck).toFixed(2)); }
     this.face.style.transform = `translateX(${look.toFixed(2)}px) scaleX(${(1 - Math.abs(look) / 90).toFixed(3)})`;
     this.flower.style.transform = `translate(${(-look * 0.5).toFixed(2)}px, ${(Math.abs(look) * 0.15).toFixed(2)}px)`;
@@ -1038,7 +1233,7 @@ class Mascot {
     if (!show) { this.bannerEl.style.visibility = "hidden"; return; }
     const D = PROPS[pr.kind], W = this.size, w = W * D.w, h = w * D.vb[1] / D.vb[0];
     if (this.propKind !== pr.kind) { this.propKind = pr.kind; this.propEl.innerHTML = D.svg; this.propFood = this.propEl.querySelector(".ms-food"); }
-    const near = pr.x + pr.side * W * D.gap, left = pr.side > 0 ? near : near - w;
+    const near = (D.follow ? this.x : pr.x) + pr.side * W * D.gap, left = pr.side > 0 ? near : near - w; // (caddie, scooter : le suit)
     this.propEl.style.width = w.toFixed(1) + "px";
     this.propEl.style.height = h.toFixed(1) + "px";
     this.propEl.style.opacity = this.propK.toFixed(3);
@@ -1046,6 +1241,7 @@ class Mascot {
     const a = pr.act, over = pr.kind === "game" && a.t > a.dur - GAME_END;
     this.propEl.classList.toggle("ms-win", over && !!a.win);
     this.propEl.classList.toggle("ms-lose", over && !a.win);
+    this.propEl.classList.toggle("ms-done", pr.kind === "rice" && a.t > a.dur - YUM); // le riz est prêt : couvercle ouvert
     this.placeBanner(pr, over, near + pr.side * w / 2, P.y - Math.max(h, W) - 8);
     if (this.propFood && D.period) {
       const k = flipK(this.clock, D.period), up = Math.sin(Math.PI * k) * 13;
@@ -1270,7 +1466,8 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
 
 // Aperçu d'une seule pose qui tourne en boucle sur place (page de test) ; dir = -1 : tourné vers la gauche
 // type "bed" : la sieste de la nuit, dans son lit ; type "chat" : il dit une phrase ; cell : largeur d'une case du calendrier
-export function demoPose(box, kind, type, size, dir = 1, cell = Infinity) {
+// loop: false → pas d'animation (on fait avancer et on dessine soi-même : images du widget)
+export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop: animate = true } = {}) {
   injectStyle();
   const lines = ["Drink some water 💧", "You've got this!"];
   const plat = { key: "demo", y: size, x0: size / 2, x1: size / 2, cell };
@@ -1278,7 +1475,9 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity) {
   const m = new Mascot(eng, { ...KINDS[kind], size });
   box.style.position = "relative";
   box.style.width = box.style.height = size + "px";
-  if (["game", "lose", "cook", "bbq"].includes(type)) box.style[dir > 0 ? "marginRight" : "marginLeft"] = size * 1.45 + "px"; // la place de l'objet
+  if (["game", "lose", "cook", "bbq", "rice", "shop"].includes(type)) box.style[dir > 0 ? "marginRight" : "marginLeft"] = size * 1.45 + "px"; // la place de l'objet
+  if (type === "scooter") box.style.margin = `0 ${size * 0.5}px`;
+  if (["shop", "scooter"].includes(type)) m.update = function (dt) { Mascot.prototype.update.call(this, dt); this.x = size / 2; }; // (avance sur place)
   box.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl);
   m.k = "demo"; m.x = size / 2; m.y = size; m.dir = dir;
   if (type === "walk") m.update = function (dt) { this.clock += dt; this.act ??= { type: "walk", t: 0, x: this.x }; this.dir = dir; this.ease(dt); }; // marche sur place
@@ -1304,9 +1503,94 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity) {
     lose: { type: "game", side: dir, dur: 9, win: false },
     cook: { type: "cook", side: dir, dur: 12 },
     bbq: { type: "bbq", side: dir, dur: 12 },
+    rice: { type: "rice", side: dir, dur: 8 },
+    pho: { type: "pho", dur: 12 },
+    matcha: { type: "matcha", dur: 10 },
+    beer: { type: "beer", dur: 10 },
+    shop: { type: "shop", side: dir, x1: m.x + dir * 1e9 },
+    scooter: { type: "scooter", side: dir, x1: m.x + dir * 1e9 },
   }[type] ??{ type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
+  if (!animate) return m;
   let last = performance.now();
   const loop = (t) => { m.update(Math.min(0.05, (t - last) / 1000)); last = t; m.render(); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
   return m;
+}
+
+// ---------- Images du widget « Tino » (une par scène), avec ou sans tenue ----------
+// Chaque scène est posée avec demoPose dans une boîte hors de l'écran, puis ses calques (posés en CSS) sont remis dans un
+// seul SVG : transformations calculées (getComputedStyle), feuille de style de Tino, animations figées ; puis dessinée en
+// PNG. Sert à l'app (images habillées du widget, 18_widget_scenes.sql) et à design/make-tino-widget.html (images de base
+// widget/tino/*.png). Une tenue doit être en adresses data: (une image SVG ne charge rien d'autre). Changer SCENES_V si
+// le dessin de Tino ou les scènes changent (les images habillées sont alors refaites ; refaire aussi les images de base).
+export const SCENES_V = 1;
+export const WIDGET_SCENES = [ // [nom, pose de demoPose, temps de l'action (s), réglages]
+  ["sleep", "bed", 3], ["cook", "cook", 2.2], ["bbq", "bbq", 1], ["rice", "rice", 2], ["pho", "pho", 2, { chop: true }],
+  ["matcha", "matcha", 4], ["beer", "beer", 7, { gulp: true }], ["game", "game", 2], ["shop", "shop", 1.5], ["scooter", "scooter", 1.5],
+  ["wave", "wave", 0.9], ["sit", "sit", 1],
+];
+const SCENE_FREEZE = `* { animation: none !important; transition: none !important; }
+  .ms-sleep .ms-zzz { opacity: 1; } .ms-smoke circle, .ms-steam path { opacity: 0.7; } .ms-wind path { opacity: 0.9; }`;
+function sceneSvg(name, { outfit = null, out = 600 } = {}) {
+  const [, type, t, opt = {}] = WIDGET_SCENES.find((s) => s[0] === name);
+  const host = document.createElement("div"), box = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-10000px;top:0;pointer-events:none";
+  host.append(box);
+  document.body.append(host);
+  try {
+    const SIZE = 110, m = demoPose(box, "tino", type, SIZE, 1, SIZE * 2.4, { loop: false });
+    if (outfit) m.wear(outfit);
+    for (let k = 0; k < Math.round(t / 0.033); k++) m.update(0.033);
+    if (opt.gulp) m.clock = Math.PI / 2 / 1.7; // au milieu d'une gorgée
+    m.render();
+    if (m.bubble) m.hush(true);
+    const mtx = (el) => { // transformation CSS d'un calque → transformation SVG (autour de son transform-origin)
+      const cs = getComputedStyle(el);
+      if (!cs.transform || cs.transform === "none") return "";
+      const [ox, oy] = cs.transformOrigin.split(" ").map(parseFloat);
+      return `translate(${ox} ${oy}) ${cs.transform} translate(${-ox} ${-oy})`;
+    };
+    const visible = (el) => { const cs = getComputedStyle(el); return cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.01; };
+    const layer = (el) => {
+      if (!visible(el)) return "";
+      const cs = getComputedStyle(el), w = parseFloat(cs.width), h = parseFloat(cs.height);
+      let inner;
+      if (el.classList.contains("ms")) { // Tino : .ms-in (dessin) + .ms-fx (z, cœur…)
+        const msIn = el.querySelector(".ms-in");
+        inner = `<g transform="${mtx(msIn)}"><svg width="${w}" height="${h}" viewBox="0 0 100 100" overflow="visible">${msIn.querySelector("svg").innerHTML}</svg></g>`
+          + `<svg width="${w}" height="${h}" viewBox="0 0 100 100" overflow="visible" class="ms-fx">${el.querySelector(".ms-fx").innerHTML}</svg>`;
+      } else {
+        const svg = el.querySelector("svg");
+        if (!svg) return "";
+        inner = `<svg width="${w}" height="${h}" viewBox="${svg.getAttribute("viewBox")}" overflow="visible">${svg.innerHTML}</svg>`;
+      }
+      // (opacité dans le style : la feuille de style met les calques à opacity: 0, que seul le style du calque remplace)
+      return `<g class="${el.className}" style="opacity: ${cs.opacity}; ${el.getAttribute("style")?.match(/--sip:[^;]+/)?.[0] ?? ""}" transform="${mtx(el)}">${inner}</g>`;
+    };
+    const B = box.getBoundingClientRect();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const el of box.children) {
+      if (!visible(el)) continue;
+      for (const r of [el.getBoundingClientRect(), ...[...el.querySelectorAll("svg")].map((s) => s.getBoundingClientRect())]) {
+        if (!r.width) continue;
+        x0 = Math.min(x0, r.left - B.left); y0 = Math.min(y0, r.top - B.top); x1 = Math.max(x1, r.right - B.left); y1 = Math.max(y1, r.bottom - B.top);
+      }
+    }
+    const side = Math.max(x1 - x0, y1 - y0) + 12, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const extra = opt.chop ? ".ms-chop { transform: translateY(-9px); }" : "";
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${out}" height="${out}" viewBox="${cx - side / 2} ${cy - side / 2} ${side} ${side}"><style>${STYLE}${SCENE_FREEZE}${extra}</style>${[...box.children].map(layer).join("")}</svg>`;
+  } finally { host.remove(); }
+}
+// Image PNG (out × out, fond transparent) d'une scène, avec la tenue { head, body, hideFlower } (adresses data:) ou sans
+export async function scenePng(name, { outfit = null, out = 600 } = {}) {
+  injectStyle();
+  const svg = sceneSvg(name, { outfit, out });
+  const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error("couldn't draw the widget picture")); i.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); }); // (onload : decode() ne finit jamais dans une page cachée)
+  const c = document.createElement("canvas");
+  c.width = c.height = out;
+  c.getContext("2d").drawImage(img, 0, 0, out, out);
+  const blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
+  c.width = c.height = 0;
+  if (!blob) throw new Error("couldn't save the widget picture");
+  return blob;
 }

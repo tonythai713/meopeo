@@ -261,6 +261,15 @@ export function createBackend() {
       catch (err) { await sb.storage.from("tino").remove([path]).catch(() => {}); throw err; }
       await this.wearOutfit(layer, row.id);
     },
+    // Images du widget « Tino » avec la tenue portée (supabase/18_widget_scenes.sql) : empreinte de chaque scène rangée,
+    // ranger une image (PNG en base64), tout effacer (plus de tenue : le widget reprend ses images de base)
+    async widgetSceneSigs() {
+      return new Map(must(await sb.from("widget_scenes").select("scene, sig")).map((r) => [r.scene, r.sig]));
+    },
+    async saveWidgetScene(scene, png, sig) {
+      must(await sb.from("widget_scenes").upsert({ scene, png, sig }, { onConflict: "scene", returning: "minimal" }));
+    },
+    async clearWidgetScenes() { must(await sb.from("widget_scenes").delete().gte("scene", "")); },
     // Ce que Tino porte : une seule écriture (le réglage entier)
     async wearOutfit(layer, id) {
       const cur = must(await sb.from("shared_settings").select("value").eq("key", "tino_outfit").maybeSingle())?.value ?? {};
