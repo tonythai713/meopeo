@@ -45,6 +45,7 @@ const STYLE = `
 .ms-bed, .ms-blanket { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ms-bed svg, .ms-blanket svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .ms-bed svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
+.ms-tucked .ms-arm-l, .ms-tucked .ms-arm-r, .ms-tucked .ms-foot-l, .ms-tucked .ms-foot-r { visibility: hidden; }
 .ms-prop { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ms-prop[hidden] { display: none; }
 .ms-prop svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
@@ -203,12 +204,14 @@ const BED = `<svg viewBox="0 0 ${BED_W} ${BED_H}" aria-hidden="true">
   <rect x="9" y="${MATTRESS}" width="98" height="9" rx="4" fill="#f3f0ff" stroke="#d3d0ee" stroke-width="1"/>
   <ellipse cx="93" cy="${MATTRESS - 2}" rx="13" ry="5.5" fill="#ffffff" stroke="#d8dcf0" stroke-width="1"/>
 </svg>`;
-// La couverture (devant Tino) : repère 100 × 110, posée sur le matelas, couvre son corps de ses pieds jusqu'au cou
-// (pieds à gauche) ; sa tête reste dehors
-const BLANKET = `<svg viewBox="0 0 100 110" aria-hidden="true">
-  <path d="M0 110V62Q0 36 18 28Q36 12 58 12Q84 12 90 36L94 110Z" fill="#8fa0ee" stroke="#6f7fd0" stroke-width="2"/>
-  <path d="M77 15Q89 21 90.5 38L94 110H83L80.5 40Q79 25 68 15Z" fill="#f6f4ff" stroke="#d3d0ee" stroke-width="1.5"/>
-  ${[[20, 52], [42, 30], [60, 46], [32, 78], [56, 72], [68, 98], [14, 96], [42, 102]].map(([x, y]) => star(x, y, 4.6, "#ffe8a3")).join("")}
+// La couverture (devant Tino) : repère 100 × 158 (= ses proportions à l'écran, placeBed), posée sur le matelas, couvre
+// TOUT son corps, pieds compris, jusqu'au cou (pieds à gauche) ; le haut suit son corps couché avec de la marge (mesuré :
+// avant, bord trop bas à gauche → ses pieds et son corps dépassaient, vu par Tony) ; sa tête reste dehors.
+// Nageoires et pieds cachés dessous (classe ms-tucked).
+const BLANKET = `<svg viewBox="0 0 100 158" aria-hidden="true">
+  <path d="M2 158V70Q2 46 22 40Q44 33 58 22Q70 10 82 10Q93 10 95 24L100.5 158Z" fill="#8fa0ee" stroke="#6f7fd0" stroke-width="2"/>
+  <path d="M84 10.5Q93 11 95 24L100.5 158H89L85 26Q84.5 15 76 11Z" fill="#f6f4ff" stroke="#d3d0ee" stroke-width="1.5"/>
+  ${[[14, 66], [30, 50], [50, 40], [68, 24], [80, 34], [22, 92], [46, 70], [66, 58], [34, 118], [58, 96], [76, 86], [14, 136], [44, 146], [70, 124], [78, 148]].map(([x, y]) => star(x, y, 4.6, "#ffe8a3")).join("")}
 </svg>`;
 
 // Objets posés sur la ligne à côté de lui (dessinés avec Tino à GAUCHE ; retournés s'il est à droite, sauf l'écran) :
@@ -1253,6 +1256,7 @@ class Mascot {
   placeBed(bw) {
     const P = this.bedAt && this.plat(this.bedAt.k), show = this.bedK > 0.01 && !!P;
     this.bedEl.style.visibility = this.blanketEl.style.visibility = show ? "visible" : "hidden";
+    this.el.classList.toggle("ms-tucked", show && this.bedK * this.lie > 0.5); // (bordé : nageoires et pieds sous la couverture)
     if (!show) return;
     const bh = bw * BED_H / BED_W, x = this.bedAt.x, s = this.side, W = this.size;
     // l'oreiller (x = 93 sur 120) sous sa tête (≈ 0,15 × sa taille du côté de la tête), sans sortir de la case
@@ -1262,11 +1266,11 @@ class Mascot {
     this.bedEl.style.height = bh.toFixed(1) + "px";
     this.bedEl.style.opacity = this.bedK.toFixed(3);
     this.bedEl.style.transform = `translate3d(${(bx - bw / 2).toFixed(1)}px, ${(P.y - bh).toFixed(1)}px, 0) scaleX(${s})`;
-    const kw = W * 0.58, kh = kw * 1.3, top = P.y - bw * (BED_H - MATTRESS) / BED_W + W * 0.08 - kh;
+    const kw = W * 0.6, kh = W * 0.95, top = P.y - bw * (BED_H - MATTRESS) / BED_W + W * 0.08 - kh; // (kh / kw = repère 158 / 100)
     this.blanketEl.style.width = kw.toFixed(1) + "px";
     this.blanketEl.style.height = kh.toFixed(1) + "px";
     this.blanketEl.style.opacity = (this.bedK * this.lie).toFixed(3); // il se lève (on l'a touché) : la couverture s'efface
-    this.blanketEl.style.transform = `translate3d(${(x - s * W * 0.3 - kw / 2).toFixed(1)}px, ${top.toFixed(1)}px, 0) scaleX(${s})`;
+    this.blanketEl.style.transform = `translate3d(${(x - s * kw / 2 - kw / 2).toFixed(1)}px, ${top.toFixed(1)}px, 0) scaleX(${s})`;
   }
 
   // Bannière de fin de partie : centrée entre lui et l'écran, au-dessus d'eux, sans sortir de l'écran ; elle apparaît en
@@ -1523,7 +1527,7 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
 // PNG. Sert à l'app (images habillées du widget, 18_widget_scenes.sql) et à design/make-tino-widget.html (images de base
 // widget/tino/*.png). Une tenue doit être en adresses data: (une image SVG ne charge rien d'autre). Changer SCENES_V si
 // le dessin de Tino ou les scènes changent (les images habillées sont alors refaites ; refaire aussi les images de base).
-export const SCENES_V = 1;
+export const SCENES_V = 2;
 export const WIDGET_SCENES = [ // [nom, pose de demoPose, temps de l'action (s), réglages]
   ["sleep", "bed", 3], ["cook", "cook", 2.2], ["bbq", "bbq", 1], ["rice", "rice", 2], ["pho", "pho", 2, { chop: true }],
   ["matcha", "matcha", 4], ["beer", "beer", 7, { gulp: true }], ["game", "game", 2], ["shop", "shop", 1.5], ["scooter", "scooter", 1.5],
