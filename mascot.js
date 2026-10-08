@@ -63,6 +63,16 @@ const STYLE = `
 .ms-wind path:nth-child(3) { animation-delay: 0.3s; }
 @keyframes ms-wind { from { transform: translateX(8px); opacity: 0; } 30% { opacity: 1; } to { transform: translateX(-8px); opacity: 0; } }
 .ms-lid { transition: transform 0.35s ease-out; }
+/* Il dort couché : il enlève ses habits (la fleur revient même sous un chapeau) */
+.ms-wear-head, .ms-wear-body { transition: opacity 0.4s; }
+.ms-undressed .ms-wear-head, .ms-undressed .ms-wear-body { opacity: 0; }
+.ms-undressed .ms-flower { display: inline !important; }
+/* Vertige (après l'accident de scooter) : petites étoiles qui tournent au-dessus de sa tête */
+.ms-dizzy { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.ms-dizzy-on .ms-dizzy { opacity: 1; animation: ms-spin 0.9s linear infinite; }
+/* Scooter accidenté : les roues s'arrêtent, plus de vent */
+.ms-crashed .ms-wheel { animation: none; }
+.ms-crashed .ms-wind { display: none; }
 .ms-prop.ms-done .ms-lid { transform: rotate(28deg); }
 .ms-scr-hero { animation: ms-hero 1.6s ease-in-out infinite; }
 .ms-scr-obs { animation: ms-obs 1.6s linear infinite; }
@@ -154,6 +164,8 @@ function sealSvg() {
     <ellipse cx="50" cy="36" rx="32" ry="28.5" fill="${fur}" stroke="${line}" stroke-width="1.4"/>
     <path d="M30 13Q33 9 36 12M46 8Q50 5 54 8M64 12Q67 9 70 13" fill="none" stroke="#e3e7f1" stroke-width="1.2" stroke-linecap="round"/>
     <g class="ms-face">
+      <radialGradient id="ms-flush-grad"><stop offset="0" stop-color="#ff5468" stop-opacity="0.9"/><stop offset="1" stop-color="#ff5468" stop-opacity="0"/></radialGradient>
+      <ellipse class="ms-flush" cx="50" cy="45" rx="30" ry="15" fill="url(#ms-flush-grad)" opacity="0"/>
       <g class="ms-cheeks" opacity="0.45"><ellipse cx="27" cy="48" rx="5" ry="2.8" fill="#ffb8ca"/><ellipse cx="73" cy="48" rx="5" ry="2.8" fill="#ffb8ca"/></g>
       <path d="M29 41Q33.5 44 38 41M62 41Q66.5 44 71 41" fill="none" stroke="#2f3038" stroke-width="2.4" stroke-linecap="round"/>
       <path class="ms-brows" d="M28 33.5L38 37M72 33.5L62 37" fill="none" stroke="#2f3038" stroke-width="2.3" stroke-linecap="round"/>
@@ -206,7 +218,7 @@ const BED = `<svg viewBox="0 0 ${BED_W} ${BED_H}" aria-hidden="true">
 </svg>`;
 // La couverture (devant Tino) : repère 100 × 158 (= ses proportions à l'écran, placeBed), posée sur le matelas, couvre
 // TOUT son corps, pieds compris, jusqu'au cou (pieds à gauche) ; le haut suit son corps couché avec de la marge (mesuré :
-// avant, bord trop bas à gauche → ses pieds et son corps dépassaient, vu par Tony) ; sa tête reste dehors.
+// avant, bord trop bas à gauche → ses pieds et son corps dépassaient) ; sa tête reste dehors.
 // Nageoires et pieds cachés dessous (classe ms-tucked).
 const BLANKET = `<svg viewBox="0 0 100 158" aria-hidden="true">
   <path d="M2 158V70Q2 46 22 40Q44 33 58 22Q70 10 82 10Q93 10 95 24L100.5 158Z" fill="#8fa0ee" stroke="#6f7fd0" stroke-width="2"/>
@@ -313,6 +325,7 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
   <g class="ms-bub-at"><g class="ms-bub" fill="rgba(200, 232, 255, 0.35)" stroke="#e6f5ff" stroke-width="1.1"><circle r="2.8"/><circle cx="4" cy="-1" r="1.9"/><circle cx="-2.5" cy="-2" r="1.5"/></g></g>
   <g class="ms-zzz-at"><g class="ms-zzz" fill="#d6e2ff" font-family="system-ui, sans-serif" font-weight="700"><text x="78" y="14" font-size="13">z</text><text x="88" y="3" font-size="10">z</text></g></g>
   <g class="ms-heart-at"><path class="ms-heart" d="M50 -2C47 -7 40 -5 41 0C42 4 50 9 50 9C50 9 58 4 59 0C60 -5 53 -7 50 -2Z" fill="#ff8fb3"/></g>
+  <g class="ms-dizzy-at"><g class="ms-dizzy">${star(-8, 0, 3, "#ffe27a")}${star(7, -3, 2.6, "#ffd23f")}${star(1, 6, 2.8, "#fff1a8")}</g></g>
   <g class="ms-anger-at"><g class="ms-anger" style="transform-box: fill-box; transform-origin: center"><path d="M-7 -2Q-2 -2 -2 -7M2 -7Q2 -2 7 -2M7 2Q2 2 2 7M-2 7Q-2 2 -7 2" fill="none" stroke="#ff4d5e" stroke-width="2.6" stroke-linecap="round"/></g></g>
 </svg>`;
 
@@ -359,6 +372,10 @@ const FOLLOW_MS = 200;  // la page a défilé et il n'est plus à l'écran : il 
 const GRAVITY = 2600;   // il tombe du haut de l'écran (px/s²)
 const GAME_END = 3.4;   // jeu vidéo : la fin de la partie (gagné / perdu, avec sa bannière) dure 3,4 s
 const YUM = 1.5;        // cuisine : c'est prêt, il sautille de joie pendant 1,5 s
+const RED_MS = 120000;  // après une bière, il reste rouge 2 min (heure réelle : même si l'app passe en arrière-plan)
+// Accident de scooter (une fois sur deux) : il pile (BRAKE), salto avant (FLIP) ; puis soit il s'écrase à plat ventre
+// (FLAT), se relève (GETUP), soit il rebondit (BOUNCES : durée, hauteur × sa taille) ; puis la tête lui tourne (DIZZY)
+const CRASH = { BRAKE: 0.14, FLIP: 0.72, FLAT: 1.3, GETUP: 0.5, DIZZY: 1.1, END: 78, BOUNCES: [[0.42, 0.45], [0.3, 0.18]] };
 
 // ---------- Les actions ----------
 // Une action = une entrée de ACTIONS ; en ajouter une = ajouter une entrée. Champs (tous facultatifs) :
@@ -399,6 +416,74 @@ function cooking(kind) {
       if (done) p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.08;
     },
   };
+}
+
+// Accident de scooter : point d'atterrissage (sur sa plateforme et à l'écran), hauteur du salto (sans sortir de l'écran
+// par le haut) ; le scooter reste là où il s'est arrêté (prop.stay)
+function startCrash(m, a, me) {
+  const W = m.size, v = m.eng.v, lo = Math.max(me.x0, v.left + W * 0.5), hi = Math.min(me.x1, v.right - W * 0.5);
+  a.crashT = a.t; a.cx = m.x;
+  a.land = lo <= hi ? clamp(m.x + a.side * 1.55 * W, lo, hi) : m.x; // (devant le scooter, pas dessus)
+  a.land2 = lo <= hi ? clamp(a.land + a.side * 0.3 * W, lo, hi) : a.land; // (en rebondissant, il glisse encore un peu)
+  a.H = clamp(me.y - v.top - 1.7 * W, 0.2 * W, 0.95 * W);
+  if (m.prop?.act === a) { m.prop.x = m.x; m.prop.stay = true; }
+}
+function crashStep(m, a, me) {
+  const C = CRASH, u = a.t - a.crashT, W = m.size;
+  if (u < C.BRAKE) { m.x = a.cx; return false; } // il pile
+  if (u < C.BRAKE + C.FLIP) { // salto avant : de la selle jusqu'au sol, en arc
+    const s = (u - C.BRAKE) / C.FLIP;
+    m.x = lerp(a.cx, a.land, s);
+    m.y = me.y - PROPS.scooter.seat * W * (1 - s) - 4 * a.H * s * (1 - s);
+    return false;
+  }
+  const v = u - C.BRAKE - C.FLIP;
+  if (!a.bounce) { m.x = a.land; return v >= C.FLAT + C.GETUP + C.DIZZY; }
+  let t = v, x = a.land; // il rebondit (de plus en plus bas), en glissant jusqu'à land2
+  for (const [d, h] of C.BOUNCES) {
+    const x2 = x + (a.land2 - a.land) / C.BOUNCES.length;
+    if (t < d) { const s = t / d; m.x = lerp(x, x2, s); m.y = me.y - 4 * h * W * s * (1 - s); return false; }
+    t -= d; x = x2;
+  }
+  m.x = a.land2;
+  return t >= C.DIZZY;
+}
+function crashPose(m, a, p) {
+  const C = CRASH, u = a.t - a.crashT, W = m.size, c = m.clock, s = a.side, end = a.bounce ? 0 : C.END;
+  if (u < C.BRAKE) { // il pile : penché en avant sur la selle
+    p.bob = -PROPS.scooter.seat * W; p.rot = s * 22 * (u / C.BRAKE); p.sy = 0.97;
+    if (s > 0) { p.armR = -55; p.armL = 10; } else { p.armL = 55; p.armR = -10; }
+    return;
+  }
+  if (u < C.BRAKE + C.FLIP) { // salto avant (+ à plat ventre à la fin s'il s'écrase), nageoires qui moulinent
+    const e = smooth((u - C.BRAKE) / C.FLIP);
+    p.spin = s * (22 + (338 + end) * e);
+    p.armL = 70 + 35 * Math.sin(c * 28); p.armR = -(70 + 35 * Math.sin(c * 28 + 1)); p.footL = p.footR = 2.5; p.sy = 1.04; p.sx = 0.96;
+    return;
+  }
+  const v = u - C.BRAKE - C.FLIP, dizzy = (k) => { p.rot = 7 * Math.sin(c * 22) * k; p.head = 10 * Math.sin(c * 14) * k; p.dizzy = k > 0.15; };
+  if (a.bounce) {
+    let t = v, hit = 0, f = 1;
+    for (const [d] of C.BOUNCES) { if (t < d) { hit = Math.max(0, 1 - t / 0.1) * f; break; } t -= d; f *= 0.7; }
+    const bouncing = v < C.BOUNCES.reduce((x, [d]) => x + d, 0);
+    if (!bouncing) hit = Math.max(0, 1 - t / 0.1) * f;
+    p.sy = 1 - 0.28 * hit; p.sx = 1 + 0.2 * hit;
+    if (bouncing) { p.armL = 55 + 25 * Math.sin(c * 24); p.armR = -p.armL; }
+    else dizzy(1 - clamp(t / C.DIZZY, 0, 1));
+    return;
+  }
+  if (v < C.FLAT) { // à plat ventre, un peu écrasé ; les pieds s'agitent
+    const hit = Math.max(0, 1 - v / 0.22);
+    p.spin = s * (360 + end); p.sy = 0.86 - 0.12 * hit; p.sx = 1.08 + 0.08 * hit;
+    p.armL = 70; p.armR = -70; p.footL = 2 * Math.sin(c * 16); p.footR = -p.footL; p.dizzy = v > 0.25;
+    return;
+  }
+  if (v < C.FLAT + C.GETUP) { // il se relève
+    const e = smooth((v - C.FLAT) / C.GETUP);
+    p.spin = s * (360 + end * (1 - e)); p.sy = lerp(0.86, 1, e); p.sx = lerp(1.08, 1, e); p.bob = -Math.sin(Math.PI * e) * W * 0.08; p.dizzy = true;
+    return;
+  }
+  dizzy(1 - clamp((v - C.FLAT - C.GETUP) / C.DIZZY, 0, 1));
 }
 
 const ACTIONS = {
@@ -551,6 +636,8 @@ const ACTIONS = {
   sit: {
     weight: () => 9,
     make: () => [{ type: "sit", dur: rand(4, 8) }],
+    // (assis « pour rester » — appui long — : à la tombée de la nuit, il va dormir couché dans son lit, voir stayStep)
+    step: (m, a) => a.t >= a.dur || (!!a.stay && m.eng.night() && !m.bubble),
     sit: true,
     pose(m, a, p) { p.sy = 0.97 + 0.012 * Math.sin(m.clock * 2.4); p.sx = 1.02; p.armL = -24; p.armR = 24; p.head = 5 * Math.sin(m.clock * 0.7); },
   },
@@ -659,7 +746,14 @@ const ACTIONS = {
     weight: (m) => (!m.eng.meal() && minutesNow() >= 18 * 60 ? 5 : 0),
     make: () => [{ type: "beer", dur: rand(9, 13) }],
     sit: true,
-    step(m, a) { if (!a.hic && a.t > a.dur * 0.65) { a.hic = true; if (!m.bubble) m.say("hic! 🍺", { ms: 1400 }); } return a.t >= a.dur; },
+    step(m, a) {
+      if (a.t > 1.5) { // il a bu : rouge pendant 2 min (même s'il fait autre chose ensuite), d'autant plus qu'il a bu
+        if (Date.now() > m.redUntil) m.redMax = 0;
+        m.redUntil = Date.now() + RED_MS; m.redMax = Math.max(m.redMax, clamp(a.t / a.dur, 0, 1));
+      }
+      if (!a.hic && a.t > a.dur * 0.65) { a.hic = true; if (!m.bubble) m.say("hic! 🍺", { ms: 1400 }); }
+      return a.t >= a.dur;
+    },
     pose(m, a, p) {
       const c = m.clock, gulp = Math.max(0, Math.sin(c * 1.7)) ** 4, tipsy = clamp(a.t / a.dur, 0, 1);
       p.holdY = -7 * gulp; p.holdRot = -14 * gulp; p.head = -6 * gulp; p.armL = -50 - 10 * gulp; p.armR = 50 + 10 * gulp;
@@ -689,14 +783,22 @@ const ACTIONS = {
     },
   },
   // Balade en scooter : il monte sur la selle, accélère le long de sa ligne (vent, roues qui tournent), fait demi-tour au
-  // bout, revient, s'arrête et descend
+  // bout, revient, s'arrête et descend. Une fois sur deux (crash) : accident sur l'aller — le scooter pique du nez, il
+  // passe par-dessus le guidon en salto avant et s'écrase à plat ventre (puis se relève), ou rebondit (bounce) ; étoiles
+  // du vertige ; le scooter reste là où il s'est arrêté et s'efface. Pendant l'accident, il ne s'interrompt pas (busy).
   scooter: {
     weight: (m) => (!m.eng.night() && m.trip("scooter") ? (m.eng.meal() ? 0.5 : 7) : 0),
-    make: (m) => m.tripSteps("scooter"),
-    start(m, a) { m.setProp(a, "scooter"); a.x0 = m.x; a.leg = 0; a.legT = 0.5; },
-    step(m, a, dt) {
+    make(m) {
+      const steps = m.tripSteps("scooter"), a = steps[steps.length - 1];
+      if (a.type === "scooter") { a.crash = Math.random() < 0.5; a.bounce = Math.random() < 0.5; }
+      return steps;
+    },
+    start(m, a) { m.setProp(a, "scooter"); a.x0 = m.x; a.leg = 0; a.legT = 0.5; if (a.crash) a.crashAt ??= lerp(a.x0, a.x1, rand(0.45, 0.65)); },
+    step(m, a, dt, me) {
+      if (a.crashT != null) return crashStep(m, a, me);
       if (a.t < 0.5) return false; // il monte
       if (!a.ended) {
+        if (a.crash && !a.leg && (m.x - a.crashAt) * a.side >= 0) { startCrash(m, a, me); return false; } // boum
         const to = a.leg ? a.x0 : a.x1, d = to - m.x, s = 85 * (m.size / 40) * dt * Math.min(1, (a.t - a.legT) / 0.6); // il accélère
         if (Math.abs(d) > s) { m.x += Math.sign(d) * s; return false; }
         m.x = to;
@@ -706,8 +808,10 @@ const ACTIONS = {
       }
       return a.t >= a.endT + 0.7;
     },
-    look: (m, a) => a.side * LOOK,
+    look: (m, a) => (a.crashT != null && a.t - a.crashT > CRASH.BRAKE + CRASH.FLIP ? 0 : a.side * LOOK),
+    busy: (m, a) => a.crashT != null,
     pose(m, a, p) {
+      if (a.crashT != null) { crashPose(m, a, p); return; }
       const W = m.size, k = smooth(clamp(a.t / 0.45, 0, 1)) * (a.ended ? 1 - smooth(clamp((a.t - a.endT) / 0.5, 0, 1)) : 1), riding = a.t > 0.5 && !a.ended;
       p.bob = -PROPS.scooter.seat * W * k + (riding ? Math.sin(m.clock * 40) * 0.3 : 0); // assis sur la selle (ça vibre un peu)
       if (a.side > 0) { p.armR = -55 * k; p.armL = 10 * k; } else { p.armL = 55 * k; p.armR = -10 * k; }
@@ -813,7 +917,7 @@ class Mascot {
     this.el.mascot = this; // (pour les essais depuis la console : document.querySelector(".ms").mascot)
     this.el.innerHTML = `<div class="ms-in">${def.svg()}</div>${FX}`;
     this.inner = this.el.firstChild;
-    for (const k of ["head", "face", "cheeks", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "bub-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    for (const k of ["head", "face", "cheeks", "flush", "dizzy-at", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "bub-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
     this.holdG = this.el.querySelector(".ms-hold"); this.inHands = null; // ce qu'il tient devant lui (classe ms-hold-<nom>) — (this.hold : minuterie de l'appui long)
     this.taps = [];
     if (eng.outfit) this.wear(eng.outfit);
@@ -838,6 +942,7 @@ class Mascot {
     this.act = null; this.plan = [];
     // tête aplatie : flat (0 = normale, 1 = toute plate, < 0 = étirée en rebondissant), press = ce que le frottement demande
     this.flat = 0; this.flatV = 0; this.press = 0; this.rubT = -9; this.rubbed = false; this.down = null; this.petT = 0; this.cheekK = -1;
+    this.redUntil = 0; this.redMax = 0; this.flushK = 0; // rouge après une bière (heure réelle de fin, jusqu'à quel point) ; opacité affichée
     this.el.addEventListener("click", (ev) => this.tap(ev));
     // appui long → assis / debout (sans menu « copier l'image » du téléphone)
     this.el.addEventListener("contextmenu", (ev) => ev.preventDefault());
@@ -935,7 +1040,10 @@ class Mascot {
     const act = { type: kind, side: s.side, x1: s.x1 };
     return Math.abs(s.x - this.x) > 2 ? [{ type: "walk", x: s.x }, act] : [act];
   }
-  busy() { return !!ACTIONS[this.act?.type]?.busy; }
+  busy() { const b = ACTIONS[this.act?.type]?.busy; return typeof b === "function" ? !!b(this, this.act) : !!b; } // (scooter : seulement pendant l'accident)
+  // Ce qu'il fait quand on lui a demandé de rester (appui long) : assis le jour ; la nuit (et la sieste), couché dans son
+  // lit — jamais assis à côté du lit (« il dort debout malgré le lit » : sans doute un appui long en zoomant)
+  stayStep() { return this.eng.night() && !this.bubble ? { type: "nap", dur: Infinity, bed: true, stay: true } : { type: "sit", dur: Infinity, stay: true }; }
   // Fait faire une action tout de suite (ou juste après celle en cours si elle ne s'interrompt pas ; s'il nage, il sort de l'eau)
   now(steps) {
     if (!this.busy()) { this.plan = steps.slice(1); this.act = steps[0]; return; }
@@ -1026,7 +1134,7 @@ class Mascot {
       this.lastGrumble = pick(pool);
       this.say(this.lastGrumble, { ms: 3800 });
     }
-    const after = this.stay ? [{ type: "sit", dur: Infinity }] : [];
+    const after = this.stay ? [this.stayStep()] : [];
     if (this.act?.type === "swim") { this.act.leave = true; this.plan = [{ type: "angry", dur: 2.6 }, ...after]; return; } // il sort de l'eau, puis râle
     this.act = { type: "angry", dur: 2.6 }; // tout de suite, même s'il était occupé
     this.plan = after;
@@ -1034,7 +1142,7 @@ class Mascot {
 
   toggleStay() {
     this.stay = !this.stay;
-    this.now([this.stay ? { type: "sit", dur: Infinity } : { type: "react" }]);
+    this.now([this.stay ? this.stayStep() : { type: "react" }]);
     this.love();
   }
 
@@ -1078,7 +1186,7 @@ class Mascot {
   think() {
     const me = this.plat(), ctx = { plats: this.eng.plats, today: this.eng.today, lines: this.eng.lines() };
     if (!me) return { type: "idle", dur: 1 };
-    if (this.stay) return this.eng.night() && !this.bubble ? { type: "sleep", dur: Infinity } : { type: "sit", dur: Infinity };
+    if (this.stay) return this.stayStep();
     let name;
     if (this.bubble?.sticky) name = pick(CALM);
     else if (this.eng.night()) { // la nuit : dans la case d'aujourd'hui si elle est à l'écran, sinon là où il est ; couché, dans son lit
@@ -1145,7 +1253,8 @@ class Mascot {
     }
     // Le lit reste tant qu'il est dessus la nuit (un petit saut quand on le touche ne le fait pas disparaître)
     const moving = a && ["walk", "hop", "fly", "roll", "swim", "drop"].includes(a.type);
-    const onBed = this.eng.night() && !!this.bedAt && this.bedAt.k === this.k && Math.abs(this.bedAt.x - this.x) < 4 && !moving;
+    const inBed = !a || a.type === "nap" || ["react", "pet", "angry"].includes(a.type); // (réveillé — assis, debout — : pas de lit)
+    const onBed = this.eng.night() && !!this.bedAt && this.bedAt.k === this.k && Math.abs(this.bedAt.x - this.x) < 4 && !moving && inBed;
     this.bedK += ((onBed ? 1 : 0) - this.bedK) * Math.min(1, dt * 3);
     if (!onBed && this.bedK < 0.01) { this.bedK = 0; if (!this.eng.night()) this.bedAt = null; }
     // L'objet posé à côté de lui apparaît au début de l'action et s'efface quand elle est finie (ou interrompue : on le touche…)
@@ -1166,7 +1275,7 @@ class Mascot {
     const W = this.size, a = this.act ?? { type: "idle", t: 0 }, A = ACTIONS[a.type] ?? ACTIONS.idle, c = this.clock, u = W / 100, B = this.def.body;
     const breathe = Math.sin(c * 2.4);
     // (holdY / holdRot : ce qu'il tient devant lui monte et penche — une gorgée ; sip : niveau du matcha ; blush : joues rouges)
-    const p = { sx: 1 - 0.015 * breathe, sy: 1 + 0.025 * breathe, rot: 0, bob: 0, spin: 0, head: 2 * Math.sin(c * 0.9), armL: 0, armR: 0, footL: 0, footR: 0, holdY: 0, holdRot: 0, sip: 1, blush: 0 };
+    const p = { sx: 1 - 0.015 * breathe, sy: 1 + 0.025 * breathe, rot: 0, bob: 0, spin: 0, head: 2 * Math.sin(c * 0.9), armL: 0, armR: 0, footL: 0, footR: 0, holdY: 0, holdRot: 0, sip: 1, blush: 0, dizzy: false };
     if (a.t !== undefined) A.pose?.(this, a, p);
     // Couché sur le côté : tout le corps pivote, il respire lentement, les pattes se relâchent
     if (this.lie > 0.01) {
@@ -1206,8 +1315,14 @@ class Mascot {
     this.inner.style.transform = `translateY(${down.toFixed(2)}px)` + (p.spin ? ` translateY(${pivot.toFixed(2)}px) rotate(${p.spin.toFixed(1)}deg) translateY(${(-pivot).toFixed(2)}px)` : "")
       + ` rotate(${p.rot.toFixed(2)}deg) scale(${p.sx.toFixed(3)}, ${p.sy.toFixed(3)})`;
     this.head.style.transform = `rotate(${(p.head + look * 0.4).toFixed(2)}deg)` + (f ? ` scale(${(1 + 0.24 * f).toFixed(3)}, ${(1 - 0.42 * f).toFixed(3)})` : "");
-    const ck = Math.round(clamp(Math.max(f, p.blush), 0, 1) * 20); // il rougit quand on le frotte (et quand il boit une bière)
+    // Rouge : quand il boit une bière, et encore 2 min après (s'efface dans les 20 dernières secondes) ; joues aussi quand on le frotte
+    const red = Math.max(p.blush, this.redUntil ? this.redMax * clamp((this.redUntil - Date.now()) / 20000, 0, 1) : 0);
+    const ck = Math.round(clamp(Math.max(f, red), 0, 1) * 20);
     if (ck !== this.cheekK) { this.cheekK = ck; this.cheeks.setAttribute("opacity", (0.45 + 0.02 * ck).toFixed(2)); }
+    const fk = Math.round(red * 20);
+    if (fk !== this.flushK) { this.flushK = fk; this.flush.setAttribute("opacity", (0.045 * fk).toFixed(3)); }
+    this.el.classList.toggle("ms-undressed", !!A.zzz && this.lie > 0.5); // il dort couché : sans ses habits
+    this.el.classList.toggle("ms-dizzy-on", p.dizzy);
     this.face.style.transform = `translateX(${look.toFixed(2)}px) scaleX(${(1 - Math.abs(look) / 90).toFixed(3)})`;
     this.flower.style.transform = `translate(${(-look * 0.5).toFixed(2)}px, ${(Math.abs(look) * 0.15).toFixed(2)}px)`;
     this.arm_l.style.transform = `translateX(${(look * 0.2).toFixed(2)}px) rotate(${p.armL.toFixed(1)}deg)`;
@@ -1222,6 +1337,7 @@ class Mascot {
     this.zzz_at.style.transform = `translate(${zx.toFixed(1)}px, ${zy.toFixed(1)}px)`;
     this.heart_at.style.transform = `translate(${(nx - hx).toFixed(1)}px, ${(ny - hy).toFixed(1)}px)`;
     this.anger_at.style.transform = `translate(${(nx + 24).toFixed(1)}px, ${(ny - 23).toFixed(1)}px)`; // « 💢 » en haut de la tête
+    if (p.dizzy) this.dizzy_at.style.transform = `translate(${nx.toFixed(1)}px, ${(ny - 34).toFixed(1)}px)`; // étoiles au-dessus de la tête
     this.placeBubble((nx - 50) * u, (ny - 30) * u);
     this.placeBed(bw);
     this.placeProp();
@@ -1236,7 +1352,7 @@ class Mascot {
     if (!show) { this.bannerEl.style.visibility = "hidden"; return; }
     const D = PROPS[pr.kind], W = this.size, w = W * D.w, h = w * D.vb[1] / D.vb[0];
     if (this.propKind !== pr.kind) { this.propKind = pr.kind; this.propEl.innerHTML = D.svg; this.propFood = this.propEl.querySelector(".ms-food"); }
-    const near = (D.follow ? this.x : pr.x) + pr.side * W * D.gap, left = pr.side > 0 ? near : near - w; // (caddie, scooter : le suit)
+    const near = (D.follow && !pr.stay ? this.x : pr.x) + pr.side * W * D.gap, left = pr.side > 0 ? near : near - w; // (caddie, scooter : le suit ; accident : reste là)
     this.propEl.style.width = w.toFixed(1) + "px";
     this.propEl.style.height = h.toFixed(1) + "px";
     this.propEl.style.opacity = this.propK.toFixed(3);
@@ -1245,6 +1361,11 @@ class Mascot {
     this.propEl.classList.toggle("ms-win", over && !!a.win);
     this.propEl.classList.toggle("ms-lose", over && !a.win);
     this.propEl.classList.toggle("ms-done", pr.kind === "rice" && a.t > a.dur - YUM); // le riz est prêt : couvercle ouvert
+    if (pr.kind === "scooter") { // accident : il pique du nez (autour de la roue avant) et retombe ; roues arrêtées
+      const crashed = a.crashT != null, svg = this.propEl.firstElementChild, tilt = crashed ? 30 * Math.sin(Math.PI * clamp((a.t - a.crashT) / 0.55, 0, 1)) : 0;
+      this.propEl.classList.toggle("ms-crashed", crashed);
+      if (svg) { svg.style.transformOrigin = "79% 98%"; svg.style.transform = tilt ? `rotate(${tilt.toFixed(1)}deg)` : ""; }
+    }
     this.placeBanner(pr, over, near + pr.side * w / 2, P.y - Math.max(h, W) - 8);
     if (this.propFood && D.period) {
       const k = flipK(this.clock, D.period), up = Math.sin(Math.PI * k) * 13;
@@ -1480,8 +1601,9 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
   box.style.position = "relative";
   box.style.width = box.style.height = size + "px";
   if (["game", "lose", "cook", "bbq", "rice", "shop"].includes(type)) box.style[dir > 0 ? "marginRight" : "marginLeft"] = size * 1.45 + "px"; // la place de l'objet
-  if (type === "scooter") box.style.margin = `0 ${size * 0.5}px`;
-  if (["shop", "scooter"].includes(type)) m.update = function (dt) { Mascot.prototype.update.call(this, dt); this.x = size / 2; }; // (avance sur place)
+  if (["scooter", "crash", "bounce"].includes(type)) box.style.margin = `0 ${size * 0.5}px`;
+  if (type === "tipsy") { m.redUntil = Date.now() + 1e9; m.redMax = 1; } // (rouge après une bière, pour toujours)
+  if (["shop", "scooter", "crash", "bounce"].includes(type)) m.update = function (dt) { Mascot.prototype.update.call(this, dt); this.x = size / 2; }; // (avance sur place)
   box.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl);
   m.k = "demo"; m.x = size / 2; m.y = size; m.dir = dir;
   if (type === "walk") m.update = function (dt) { this.clock += dt; this.act ??= { type: "walk", t: 0, x: this.x }; this.dir = dir; this.ease(dt); }; // marche sur place
@@ -1513,6 +1635,9 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
     beer: { type: "beer", dur: 10 },
     shop: { type: "shop", side: dir, x1: m.x + dir * 1e9 },
     scooter: { type: "scooter", side: dir, x1: m.x + dir * 1e9 },
+    crash: { type: "scooter", side: dir, x1: m.x + dir * 1e9, crash: true, crashAt: m.x, bounce: false }, // (sur place : pas d'élan)
+    bounce: { type: "scooter", side: dir, x1: m.x + dir * 1e9, crash: true, crashAt: m.x, bounce: true },
+    tipsy: { type: "walk", x: m.x },
   }[type] ??{ type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
   if (!animate) return m;
   let last = performance.now();
@@ -1527,7 +1652,7 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
 // PNG. Sert à l'app (images habillées du widget, 18_widget_scenes.sql) et à design/make-tino-widget.html (images de base
 // widget/tino/*.png). Une tenue doit être en adresses data: (une image SVG ne charge rien d'autre). Changer SCENES_V si
 // le dessin de Tino ou les scènes changent (les images habillées sont alors refaites ; refaire aussi les images de base).
-export const SCENES_V = 2;
+export const SCENES_V = 3;
 export const WIDGET_SCENES = [ // [nom, pose de demoPose, temps de l'action (s), réglages]
   ["sleep", "bed", 3], ["cook", "cook", 2.2], ["bbq", "bbq", 1], ["rice", "rice", 2], ["pho", "pho", 2, { chop: true }],
   ["matcha", "matcha", 4], ["beer", "beer", 7, { gulp: true }], ["game", "game", 2], ["shop", "shop", 1.5], ["scooter", "scooter", 1.5],
