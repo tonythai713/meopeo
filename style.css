@@ -68,7 +68,8 @@ input[type=radio], input[type=checkbox] { accent-color: #ffe8a3; width: 18px; he
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px;
   font-size: 1.5em; font-weight: 600; color: #f4f1ff; text-shadow: 0 0 18px rgba(255, 232, 163, 0.35), 0 2px 8px rgba(0, 0, 0, 0.6);
 }
-.mp-date { margin-right: auto; }
+.mp-date { flex: 1 1 0; } /* (prend la place libre : les heures passent sous la date si elles n'ont pas la place à côté) */
+.mp-clocks { display: inline-block; white-space: nowrap; font-size: 0.6em; font-weight: 600; color: rgba(244, 241, 255, 0.9); vertical-align: 0.15em; }
 .mp-who { font-size: 0.55em; font-weight: 600; color: #ffe8a3; }
 .pl-refresh { font-size: 0.55em; font-weight: 600; border-radius: 999px; text-shadow: none; min-width: 40px; }
 

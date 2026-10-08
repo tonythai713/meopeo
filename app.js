@@ -107,7 +107,8 @@ export async function start(backend) {
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
   const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadGrumbles(); loadNotes(); loadSeries(); loadDecor(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) applyTheme(); }); // (minuteries endormies en arrière-plan)
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyTheme(); runClocks(); } }); // (minuteries endormies en arrière-plan)
+  runClocks();
   window.addEventListener("focus", wake);
   window.addEventListener("online", wake);
   window.addEventListener("resize", () => align());
@@ -280,11 +281,31 @@ function bindMsg() {
 }
 
 // ---------- Page principale ----------
+// Heures à côté de la date, les mêmes sur tous les appareils : [repère, nom, fuseau IANA] ; jour de la semaine ajouté
+// quand ce n'est pas le même jour qu'ici
+const CLOCKS = [["🇨🇭", "Switzerland", "Europe/Zurich"], ["🇻🇳", "Vietnam", "Asia/Ho_Chi_Minh"]];
+function clocksHtml(d = new Date()) {
+  return CLOCKS.map(([mark, name, timeZone]) => {
+    try {
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+      const time = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
+      const wd = day === iso(d) ? "" : new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short" }).format(d) + " ";
+      return `<span title="${name}">${mark} ${wd}${time}</span>`;
+    } catch { return ""; } // (fuseau inconnu du navigateur)
+  }).filter(Boolean).join(" · ");
+}
+let clockTimer = 0;
+function runClocks() { // à chaque nouvelle minute (et au retour sur l'app : minuteries endormies en arrière-plan)
+  clearTimeout(clockTimer);
+  const html = clocksHtml();
+  document.querySelectorAll(".mp-clocks").forEach((el) => { if (el.innerHTML !== html) el.innerHTML = html; });
+  clockTimer = setTimeout(runClocks, 60000 - (Date.now() % 60000) + 50);
+}
 function render() {
   if (root.offsetHeight) root.style.minHeight = root.offsetHeight + "px"; // pas de saut de page pendant le réaffichage
   const P = S.partner;
   const off = S.offline ? new Date(S.offline) : null;
-  root.innerHTML = `${off ? `<div class="mp-offline">📴 Offline — showing your tasks as of ${off.getDate()}.${pad(off.getMonth() + 1)} at ${pad(off.getHours())}:${pad(off.getMinutes())}. Changes can't be saved until you're back online.</div>` : ""}<header class="pl-hello"><span class="mp-date">${dayTitle(now)}, ${now.getFullYear()}</span>
+  root.innerHTML = `${off ? `<div class="mp-offline">📴 Offline — showing your tasks as of ${off.getDate()}.${pad(off.getMonth() + 1)} at ${pad(off.getHours())}:${pad(off.getMinutes())}. Changes can't be saved until you're back online.</div>` : ""}<header class="pl-hello"><span class="mp-date">${dayTitle(now)}, ${now.getFullYear()} <span class="mp-clocks">${clocksHtml()}</span></span>
       <span class="mp-who">${esc(S.me.mark)} ${esc(S.me.label)}</span>
       <button class="pl-refresh" data-act="refresh" title="Reload">⟳</button></header>
     <div class="pl-split"><div class="pl-left"></div><div class="pl-right"></div></div>
