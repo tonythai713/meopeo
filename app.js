@@ -817,7 +817,7 @@ async function loadGrumbles() {
   if (box) fillGrumbles(box);
 }
 function fillGrumbles(box) {
-  const head = `<div class="pl-sub">Grumpy lines <span class="pl-legend">— tap Tino 5 times quickly and he snaps one at you (both screens)</span></div>`;
+  const head = `<div class="pl-legend">Tap Tino 5 times quickly and he snaps one of these at you (both screens).</div>`;
   if (S.grumblesOk === false) { box.innerHTML = head + `<div class="pl-legend">Your own grumpy lines aren't available yet — Tony needs to run <code>supabase/13_tino_grumbles.sql</code>. Tino uses his default ones meanwhile.</div>`; return; }
   const who = (g) => (g.by === S.user.id ? S.me : S.partner);
   box.innerHTML = head + `<div class="mp-lines">${S.grumbles.length ? S.grumbles.map((g) => `<div class="mp-line"><span class="mp-line-who" title="${esc(who(g)?.label ?? "")}">${esc(who(g)?.mark ?? "•")}</span><span class="mp-line-text">${esc(g.body)}</span><button type="button" data-grumble="${g.id}" title="Remove this line">✕</button></div>`).join("")
@@ -1575,16 +1575,42 @@ function showTab() {
   if (t !== "calendar") mascots?.refresh(); // Tino vient dans Notes, disparaît dans Tino et Settings (au calendrier : align())
 }
 
+// ---------- Sections repliables (onglets Tino et Settings) ----------
+// Un titre qui ouvre / ferme sa section ; une seule ouverte à la fois par onglet (la page reste une courte liste de titres).
+// La section ouverte le reste quand on revient sur l'onglet, tant que l'app tourne (en mémoire seulement).
+// Le contenu est rempli même fermé (les fill… et les mises à jour en direct ne changent pas).
+const foldOpen = {}; // onglet → clé de la section ouverte
+const fold = (key, title, body, tag = "div") => `<${tag} class="pl-editor-card mp-pane-card mp-fold" data-fold="${key}">
+  <h4><button type="button" class="mp-fold-btn" aria-expanded="false"><span>${title}</span><span class="mp-fold-i" aria-hidden="true">›</span></button></h4>
+  <div class="mp-fold-body">${body}</div></${tag}>`;
+function setupFolds(pane, tab) {
+  const all = [...pane.querySelectorAll(".mp-fold")];
+  const show = (key) => all.forEach((f) => {
+    const on = f.dataset.fold === key;
+    f.classList.toggle("mp-open", on);
+    f.querySelector(".mp-fold-btn").setAttribute("aria-expanded", String(on));
+  });
+  show(foldOpen[tab]);
+  for (const f of all) f.querySelector(".mp-fold-btn").addEventListener("click", () => {
+    const key = f.classList.contains("mp-open") ? null : f.dataset.fold;
+    foldOpen[tab] = key;
+    show(key);
+    if (key) f.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); // titre en haut de l'écran
+  });
+}
+
 // ---------- Onglet 🎣 Tino : tout ce qui le personnalise (le jeu viendra ici) ----------
 function renderTinoPane(pane) {
-  pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><h4>🦭 Tino</h4><div class="mp-tinoset"></div><div class="mp-grumbles"></div></div>
-    <div class="pl-editor-card mp-pane-card"><h4>👒 Tino's wardrobe</h4><div class="mp-wardrobe"></div></div>
-    <div class="pl-editor-card mp-pane-card"><h4>🏖 Decor</h4><div class="mp-decor"></div></div>
-    <div class="pl-editor-card mp-pane-card mp-soon"><h4>🎣 Coming soon</h4><p>Take care of Tino 🍼 and go fishing with him 🎣 — and win things to dress him up.</p></div>`;
+  pane.innerHTML = fold("tino", "🦭 Tino", `<div class="mp-tinoset"></div>`)
+    + fold("grumbles", "💢 Grumpy lines", `<div class="mp-grumbles"></div>`)
+    + fold("wardrobe", "👒 Tino's wardrobe", `<div class="mp-wardrobe"></div>`)
+    + fold("decor", "🏖 Decor", `<div class="mp-decor"></div>`)
+    + `<div class="pl-editor-card mp-pane-card mp-soon"><h4>🎣 Coming soon</h4><p>Take care of Tino 🍼 and go fishing with him 🎣 — and win things to dress him up.</p></div>`;
   fillTinoSettings(pane.querySelector(".mp-tinoset"));
   fillGrumbles(pane.querySelector(".mp-grumbles"));
   fillWardrobe(pane.querySelector(".mp-wardrobe"));
   fillDecor(pane.querySelector(".mp-decor"));
+  setupFolds(pane, "tino");
 }
 
 // Version qui tourne sur cet appareil = celle du cache du service worker (« meopeo-2026-10-07.8 », voir sw.js) : pour savoir
@@ -1602,18 +1628,16 @@ async function appVersion() {
 // ---------- Onglet ⚙ Settings : apparence (cet appareil), compte, notifications, widget, mot de passe ----------
 function renderSettings(pane) {
   const P = S.partner;
-  pane.innerHTML = `<div class="pl-editor-card mp-pane-card"><h4>🎨 Appearance</h4><div class="mp-look"></div></div>
-    <form class="pl-editor-card mp-pane-card"><h4>${esc(S.me.mark)} ${esc(S.me.label)}</h4>
-    <p class="mp-sub">Signed in as ${esc(S.user.email)}<br><span class="pl-legend mp-version">MeoPeo version …</span></p>
-    <h4>🔔 Notifications</h4>
-    <div class="mp-notif">Checking…</div>
-    ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}
-    <h4>📱 Home-screen widget</h4>
-    <div class="mp-widgets">Checking…</div>
-    <h4>🔑 Password</h4>
-    <label>New password<input type="password" name="pw" autocomplete="new-password" minlength="6"></label>
-    <label>Repeat it<input type="password" name="pw2" autocomplete="new-password" minlength="6"></label>
-    <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button><span class="mp-grow"></span><button type="submit" class="mp-cta">Change password</button></div></form>`;
+  pane.innerHTML = fold("look", "🎨 Appearance", `<div class="mp-look"></div>`)
+    + fold("account", `${esc(S.me.mark)} ${esc(S.me.label)}`, `<p class="mp-sub">Signed in as ${esc(S.user.email)}</p>
+      <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button></div>`)
+    + fold("notif", "🔔 Notifications", `<div class="mp-notif">Checking…</div>
+      ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}`)
+    + fold("widget", "📱 Home-screen widget", `<div class="mp-widgets">Checking…</div>`)
+    + fold("password", "🔑 Password", `<label>New password<input type="password" name="pw" autocomplete="new-password" minlength="6"></label>
+      <label>Repeat it<input type="password" name="pw2" autocomplete="new-password" minlength="6"></label>
+      <div class="pl-editor-actions"><span class="mp-grow"></span><button type="submit" class="mp-cta">Change password</button></div>`, "form")
+    + `<p class="pl-legend mp-version">MeoPeo version …</p>`; // (toujours visible : pour savoir quelle version tourne sur un téléphone)
   const f = pane.querySelector("form");
   f.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -1621,12 +1645,13 @@ function renderSettings(pane) {
     if (f.pw.value !== f.pw2.value) { toast("The two passwords are different"); return; }
     if (await guard(() => db.changePassword(f.pw.value), "Couldn't change the password")) { f.pw.value = f.pw2.value = ""; toast("Password changed"); }
   });
-  f.querySelector("[data-act=logout]").addEventListener("click", async () => { location.hash = ""; await logout(); });
+  pane.querySelector("[data-act=logout]").addEventListener("click", async () => { location.hash = ""; await logout(); });
   fillLook(pane.querySelector(".mp-look"));
   appVersion().then((v) => { pane.querySelector(".mp-version").textContent = `MeoPeo version ${v}`; });
-  fillNotif(f.querySelector(".mp-notif"));
-  fillWidgets(f.querySelector(".mp-widgets"));
-  f.notify?.addEventListener("change", async (ev) => {
+  fillNotif(pane.querySelector(".mp-notif"));
+  fillWidgets(pane.querySelector(".mp-widgets"));
+  setupFolds(pane, "settings");
+  pane.querySelector("[name=notify]")?.addEventListener("change", async (ev) => {
     const on = ev.target.checked;
     if (await guard(() => db.updateMyProfile({ notify_partner: on }))) { S.me.notify_partner = on; toast(on ? `You'll be told when ${P.label} adds a task` : `No more notifications for ${P.label}'s new tasks`); }
     else ev.target.checked = !on;

@@ -297,6 +297,20 @@ body.mp-logged:not(.mp-on-calendar) #app, body.mp-logged:not(.mp-on-calendar) .m
 /* Onglets Notes, Tino, Settings : cartes centrées (même style que les anciennes fenêtres) */
 .mp-pane { max-width: 1400px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top)) 12px 0; }
 .mp-pane-card { width: min(680px, 100%); max-height: none; overflow: visible; margin: 0 auto 16px; }
+/* Sections repliables (onglets Tino et Settings) : le titre est un bouton pleine largeur, › tourne quand c'est ouvert */
+.mp-fold { gap: 0; padding: 0; margin-bottom: 10px; scroll-margin-top: calc(env(safe-area-inset-top) + 10px); }
+.mp-fold > h4 > .mp-fold-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 50px; margin: 0; padding: 12px 18px;
+  border: 0; border-radius: 16px; background: transparent; color: inherit; font: inherit; text-align: left;
+}
+.mp-fold > h4 > .mp-fold-btn:hover { background: rgba(255, 255, 255, 0.06); }
+.mp-fold-i { margin-left: auto; font-size: 1.4em; line-height: 1; transition: transform 0.2s; }
+.mp-fold.mp-open .mp-fold-i { transform: rotate(90deg); }
+.mp-fold-body { display: flex; flex-direction: column; gap: 10px; padding: 2px 18px 16px; }
+.mp-fold:not(.mp-open) > .mp-fold-body { display: none; }
+.mp-fold-body > label:not(.mp-check) { display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; color: var(--text-muted); }
+.mp-fold-body > .mp-sub { margin: 0; }
+.mp-pane > .mp-version { text-align: center; margin: 4px auto 16px; color: #f4f1ff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 20, 0.6); } /* (sur le fond : clair et ombré, comme la date) */
 .mp-soon p { margin: 0; color: var(--text-muted); }
 textarea { font: inherit; font-size: 16px; color: var(--text-normal); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--pl-line); border-radius: 8px; padding: 8px; }
 
