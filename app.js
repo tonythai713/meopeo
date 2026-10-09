@@ -2282,7 +2282,8 @@ function fishScene(pane) {
 // niveaux — rassasié, petit creux, très faim — et nos phrases pour chacun (Tino les dit de temps en temps : mascot.js, belly).
 // ⚠️ Mêmes nombres que dans 21_feeding.sql (et data-mock.js) : 100 → 0 en 24 h ; poissons +25 / +45 / +100 ;
 // rassasié ≥ 66, petit creux 33 – 66, très faim < 33 ; plus de repas à partir de 95.
-const BELLY = { perDay: 100, gain: { fish: 25, big_fish: 45, golden_fish: 100 }, full: 66, peckish: 33, max: 95 };
+const BELLY = { perDay: 300, // (25_faster_needs.sql : vide en 8 h → à nourrir ~3 fois par jour ; avant 100 = 24 h)
+   gain: { fish: 25, big_fish: 45, golden_fish: 100 }, full: 66, peckish: 33, max: 95 };
 const FISH = { fish: ["🐟", "a fish", "Fish"], big_fish: ["🐠", "a big fish", "Big fish"], golden_fish: ["✨🐟", "a golden fish", "Golden fish"] };
 const LEVELS = { full: ["😋", "Full"], peckish: ["🙂", "A little peckish"], hungry: ["🥺", "Very hungry"] };
 const DEFAULT_HUNGER = (P) => ({
@@ -2331,7 +2332,7 @@ function fillTummy(box) {
   box.innerHTML = `<div class="mp-tummy-head"><span>${emo} Tino's tummy: <b>${label}</b></span><span class="pl-legend">${Math.round(v)}%</span></div>
     <div class="mp-tummy-bar mp-${level}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(v)}" aria-label="Tino's tummy"><i style="width:${v.toFixed(1)}%"></i></div>
     <span class="mp-row mp-tummy-fish">${Object.entries(FISH).map(([k, [e, , name]]) => `<button type="button" data-feed="${k}" ${!n[k] || full || feedingNow ? "disabled" : ""} title="Feed Tino ${name.toLowerCase()} (+${BELLY.gain[k]})">${e} ×${n[k] ?? 0} · 🍳 Cook & feed</button>`).join("")}</span>
-    <div class="pl-legend">${full ? "He's full — he can eat again a little later. " : ""}Catch fish in 🎣 Fishing to feed him (🦀 crabs and 🥾 boots aren't food). His tummy empties in about a day.</div>`;
+    <div class="pl-legend">${full ? "He's full — he can eat again a little later. " : ""}Catch fish in 🎣 Fishing to feed him (🦀 crabs and 🥾 boots aren't food). His tummy empties in about 8 hours — feed him about 3 times a day.</div>`;
   box.querySelectorAll("[data-feed]").forEach((b) => b.addEventListener("click", () => feedTino(b.dataset.feed, box)));
   tummyTimer = setTimeout(() => document.querySelectorAll(".mp-tummy").forEach((x) => fillTummy(x)), 60000); // (la jauge baisse toute seule)
 }
@@ -2408,7 +2409,7 @@ function fillHungerLines(box) {
 // l'onglet Tino, sous sa faim : « 🧽 Give him a bath » → une baignoire sous le grand Tino, on tape sur lui pour le frotter
 // (SCRUBS fois) → il est propre ET sa couleur pêchée s'en va (wash_tino). Commun aux deux, comme sa faim.
 // ⚠️ Mêmes nombres que dans 23_bath.sql : de propre (0) à très sale (100) en 24 h ; propre < 33, un peu sale < 66.
-const BATH = { perDay: 100, clean: 33, dirty: 66 }, SCRUBS = 6;
+const BATH = { perDay: 200, clean: 33, dirty: 66 }, SCRUBS = 6; // (très sale après 12 h → à laver 2 fois par jour ; avant 100 = 24 h)
 const DIRT = { clean: ["✨", "Clean"], grubby: ["😐", "A bit dirty"], dirty: ["🙈", "Very dirty"] };
 let unsubBath = null, bathSeen = null, dirtTimer = 0, bathing = null;
 const dirtNow = () => (S.bathOk === true && S.bath?.at ? Math.min(100, (BATH.perDay * (Date.now() - Date.parse(S.bath.at))) / 86400e3) : 0);
@@ -2442,7 +2443,7 @@ function fillBath(box) {
   box.innerHTML = `<div class="mp-tummy-head"><span>${emo} Cleanliness: <b>${label}</b></span><span class="pl-legend">${Math.round(clean)}%</span></div>
     <div class="mp-tummy-bar mp-bath-bar mp-${level}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(clean)}" aria-label="Tino's cleanliness"><i style="width:${clean.toFixed(1)}%"></i></div>
     <span class="mp-row"><button type="button" data-bath>🧽 Give him a bath</button></span>
-    <div class="pl-legend">He gets dirtier through the day. A bath also washes off his colour${colorNow() ? " (the one he has now!)" : ""}.</div>`;
+    <div class="pl-legend">He gets dirty in about 12 hours — give him a bath twice a day. A bath also washes off his colour${colorNow() ? " (the one he has now!)" : ""}.</div>`;
   box.querySelector("[data-bath]").addEventListener("click", () => startBath(box));
 }
 // Le bain (sans baignoire : demande de Tony) : chaque toucher sur le grand Tino le frotte au savon (mousse, il fait « boing »), ses taches
