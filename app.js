@@ -77,7 +77,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -105,7 +105,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyTheme(); runClocks(); } }); // (minuteries endormies en arrière-plan)
   runClocks();
@@ -159,6 +159,7 @@ async function boot(user) {
   loadExtras();
   loadOutfits();
   loadCatches();
+  loadFeeding();
   loadGrumbles();
   loadNotes();
   loadDoodles();
@@ -173,6 +174,7 @@ function resubscribe() {
   unsubExtras?.(); unsubExtras = S.user ? db.subscribeTinoExtras(() => loadExtras()) : null;
   unsubOutfits?.(); unsubOutfits = S.user ? db.subscribeOutfits(() => loadOutfits()) : null; // canal à part (sans 12, rien d'autre ne casse)
   unsubCatches?.(); unsubCatches = S.user ? db.subscribeCatches(() => loadCatches()) : null; // pêche (20) : canal à part
+  unsubFeeding?.(); unsubFeeding = S.user ? db.subscribeFeeding(() => loadFeeding()) : null; // nourrir Tino (21) : idem
   unsubGrumbles?.(); unsubGrumbles = S.user ? db.subscribeGrumbles(() => loadGrumbles()) : null; // idem (13)
   unsubNotes?.(); unsubNotes = S.user ? db.subscribeNotes(() => loadNotes()) : null; // idem (14)
   unsubDoodles?.(); unsubDoodles = S.user ? db.subscribeDoodles(() => loadDoodles()) : null; // idem (19)
@@ -248,6 +250,7 @@ function showLogin() {
   unsubExtras?.(); unsubExtras = null; S.lines = []; S.extrasOk = null;
   unsubOutfits?.(); unsubOutfits = null; S.outfits = []; S.worn = { head: null, body: null }; S.outfitsOk = null; applyOutfit();
   unsubCatches?.(); unsubCatches = null; S.catches = []; S.color = null; S.fishingOk = null; lastCatch = null; applyColor(); clearTimeout(fishTimer);
+  unsubFeeding?.(); unsubFeeding = null; S.feeding = null; S.hungerLines = []; S.feedingOk = null; feedSeen = null; clearTimeout(tummyTimer);
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
   unsubNotes?.(); unsubNotes = null; S.notes = []; S.notesOk = null;
   unsubDoodles?.(); unsubDoodles = null; S.doodles = []; S.doodlesOk = null; doodleUi?.el.remove(); doodleUi = null; doodlePng.clear(); doodleSeen = null;
@@ -319,7 +322,7 @@ function render() {
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
@@ -606,7 +609,7 @@ function refreshMascots() {
   if (mascots) return mascots.refresh();
   const layer = document.createElement("div");
   document.body.append(layer);
-  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines });
+  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo });
   syncTinoBubble();
   applyOutfit();
 }
@@ -872,7 +875,8 @@ async function loadOutfits() {
   }
   await applyOutfit();
   const box = document.querySelector(".mp-wardrobe");
-  if (box) fillWardrobe(box);
+  // (pas pendant un renommage, un envoi, ni avec un nom de tenue tapé : la mise à jour en direct l'effacerait)
+  if (box && !renaming && !box.querySelector(".mp-busy") && !box.querySelector("[name=oname]")?.value) fillWardrobe(box);
   refreshFishing();
   scheduleFishTimer();
   syncWidgetScenes();
@@ -1044,6 +1048,12 @@ async function shareFile(blob, name, title) {
   setTimeout(() => URL.revokeObjectURL(a.href), 30000);
 }
 
+// Nom d'une tenue tiré du nom de son fichier (quand on n'en a pas tapé) : sans l'extension, sans ce qui est entre crochets /
+// parenthèses / accolades (« [Pack name] - Bucket Hat.png » → « Bucket Hat »), « _ » → espace, sans
+// séparateurs au début ni à la fin ; 40 caractères au plus (12_tino_outfits.sql)
+const outfitNameOf = (fileName) => String(fileName ?? "").replace(/\.[^.]+$/, "").replace(/\[[^\]]*\]|\([^)]*\)|\{[^}]*\}/g, " ").replace(/_/g, " ")
+  .replace(/\s+/g, " ").replace(/^[\s\-–—:|·.,]+|[\s\-–—:|·.,]+$/g, "").trim().slice(0, 40).trim() || "Outfit";
+let renaming = null; // id de la tenue qu'on est en train de renommer (la garde-robe n'est pas refaite pendant ce temps)
 function fillWardrobe(box) {
   if (S.outfitsOk === false) { box.innerHTML = `<div class="pl-legend">Tino's wardrobe isn't available yet — Tony needs to run <code>supabase/12_tino_outfits.sql</code>.</div>`; return; }
   const who = (o) => (o.by === S.user.id ? S.me : S.partner), fishing = S.fishingOk === true;
@@ -1051,11 +1061,10 @@ function fillWardrobe(box) {
     const on = !inPool && wornOutfit(o.layer)?.id === o.id;
     const when = inPool ? " · in the pool" : fishing ? ` · until ${dayShort(caughtUntil(o))}` : "";
     const thumb = o.anim ? `<span class="mp-othumb" title="Animated"><i data-athumb="${o.id}"></i></span>` : `<img alt="" data-thumb="${o.id}">`;
-    return `<div class="mp-outfit${on ? " on" : ""}${inPool ? " mp-pooled" : ""}">${thumb}<span class="mp-outfit-name">${esc(o.name)} <span class="pl-legend">${o.layer === "head" ? "head" : "body"}${o.anim ? " · animated" : ""} · ${esc(who(o)?.mark ?? "")}${when}</span></span>
-      ${inPool ? "" : `<button type="button" data-wear="${o.id}">${on ? "Take off" : "Wear"}</button>`}<button type="button" data-drop="${o.id}" title="Remove from the wardrobe">✕</button></div>`;
+    return `<div class="mp-outfit${on ? " on" : ""}${inPool ? " mp-pooled" : ""}" data-orow="${o.id}">${thumb}<span class="mp-outfit-name"><span class="mp-oname">${esc(o.name)}</span> <span class="pl-legend">${o.layer === "head" ? "head" : "body"}${o.anim ? " · animated" : ""} · ${esc(who(o)?.mark ?? "")}${when}</span></span>
+      ${inPool ? "" : `<button type="button" data-wear="${o.id}">${on ? "Take off" : "Wear"}</button>`}<button type="button" data-rename="${o.id}" title="Rename">✏️</button><button type="button" data-drop="${o.id}" title="Remove from the wardrobe">✕</button></div>`;
   };
   const wearable = S.outfits.filter(unlocked), pool = fishing ? S.outfits.filter((o) => !unlocked(o)) : [];
-  const myPool = pool.filter((o) => o.by === S.user.id), theirPool = pool.length - myPool.length;
   box.innerHTML = (fishing ? `<div class="pl-legend">🎣 Outfits come from <b>fishing</b>: a new drawing goes into the <b>pool</b>; catch it in the <b>🎣 Fishing</b> tab and you can both dress Tino with it for <b>7 days</b> — then it goes back into the pool.</div>` : "")
     + `<div class="pl-legend">Draw outfits for Tino on a tablet: download the template, draw on a <b>new layer</b> on top of it, then export <b>only your layer</b> as a PNG with a transparent background. Shared: ${esc(S.partner?.label ?? "the other")} sees what Tino wears.</div>
     <div class="pl-legend">✨ It can also <b>move</b>: export your animation as an <b>animated PNG</b> or a <b>GIF</b> with a transparent background, or as a <b>video</b> on a plain background color you don't use in the drawing (it's removed). Square like the template, 10 s max (the rest is cut), plays in a loop.</div>
@@ -1063,7 +1072,8 @@ function fillWardrobe(box) {
     ${fishing ? `<div class="pl-sub">👒 Caught — wear them</div>` : ""}
     <div class="mp-outfits">${wearable.length ? wearable.map((o) => row(o)).join("") : `<div class="pl-empty">${fishing ? "Nothing caught right now — go fishing 🎣" : "No outfits yet."}</div>`}</div>
     ${fishing ? `<div class="pl-sub">🎣 In the pool (${pool.length})</div>
-      <div class="mp-outfits">${myPool.map((o) => row(o, true)).join("")}${theirPool ? `<div class="pl-legend">+ ${theirPool} from ${esc(S.partner?.label ?? "the other")} — a surprise!</div>` : ""}${pool.length ? "" : `<div class="pl-empty">Empty — draw a new outfit!</div>`}</div>` : ""}
+      <div class="mp-outfits">${pool.map((o) => row(o, true)).join("")}${pool.length ? "" : `<div class="pl-empty">Empty — draw a new outfit!</div>`}</div>
+      ${pool.length ? `<div class="pl-legend">One of these comes up when you catch an outfit — ✏️ to rename, ✕ to take it out of the pool.</div>` : ""}` : ""}
     <div class="mp-outfit-add">
       <input type="text" name="oname" maxlength="40" placeholder="Name (e.g. Summer hat)">
       <span class="mp-row"><label class="mp-check"><input type="radio" name="olayer" value="head" checked> On his head</label><label class="mp-check"><input type="radio" name="olayer" value="body"> On his body</label></span>
@@ -1084,8 +1094,31 @@ function fillWardrobe(box) {
     if (await guard(() => db.wearOutfit(o.layer, wornOutfit(o.layer)?.id === o.id ? null : o.id), "Couldn't change Tino's outfit")) { outfitChangedHere = true; loadOutfits(); }
   }));
   box.querySelectorAll("[data-drop]").forEach((b) => b.addEventListener("click", async () => {
-    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Sure? ✕"; return; } // 2e appui pour confirmer
+    const o = S.outfits.find((x) => x.id === b.dataset.drop);
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = o && o.by !== S.user.id ? `Sure? ${S.partner?.label ?? "The other"} loses it too ✕` : "Sure? ✕"; return; } // 2e appui pour confirmer
     if (await guard(() => db.deleteOutfit(b.dataset.drop), "Couldn't remove the outfit")) { outfitChangedHere = true; loadOutfits(); }
+  }));
+  // Renommer : le nom devient un champ (Entrée / ✓ enregistre, Échap / ✕ annule) ; un seul à la fois ; pendant ce temps,
+  // les mises à jour en direct ne refont pas la garde-robe (renaming)
+  box.querySelectorAll("[data-rename]").forEach((b) => b.addEventListener("click", () => {
+    const o = S.outfits.find((x) => x.id === b.dataset.rename), rowEl = b.closest(".mp-outfit");
+    if (!o || box.querySelector(".mp-orename")) return;
+    renaming = o.id;
+    const span = rowEl.querySelector(".mp-oname");
+    span.innerHTML = `<span class="mp-orename"><input type="text" maxlength="40" value="${esc(o.name)}" aria-label="New name" enterkeyhint="done"><button type="button" data-ok title="Save">✓</button><button type="button" data-no title="Cancel">✕</button></span>`;
+    const input = span.querySelector("input");
+    input.focus(); input.select();
+    const close = () => { renaming = null; fillWardrobe(box); };
+    const save = async () => {
+      const name = input.value.trim();
+      if (!name || name === o.name) { close(); return; }
+      input.disabled = true;
+      if (await guard(() => db.renameOutfit(o.id, name), "Couldn't rename the outfit")) { o.name = name; toast(`✏️ Renamed: “${name}”`); outfitChangedHere = true; renaming = null; await loadOutfits(); fillWardrobe(box); }
+      else input.disabled = false;
+    };
+    span.querySelector("[data-ok]").addEventListener("click", save);
+    span.querySelector("[data-no]").addEventListener("click", close);
+    input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); save(); } else if (ev.key === "Escape") close(); });
   }));
   const flower = box.querySelector(".mp-oflower");
   box.querySelectorAll("[name=olayer]").forEach((r) => r.addEventListener("change", () => { flower.hidden = box.querySelector("[name=olayer]:checked").value !== "head"; })); // (seulement pour la tête)
@@ -1095,7 +1128,7 @@ function fillWardrobe(box) {
     const file = input.files[0];
     input.value = "";
     if (!file) return;
-    const name = box.querySelector("[name=oname]").value.trim() || file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "Outfit";
+    const name = box.querySelector("[name=oname]").value.trim() || outfitNameOf(file.name);
     const layer = box.querySelector("[name=olayer]:checked").value;
     if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
     box.querySelector(".mp-filebtn").classList.add("mp-busy");
@@ -1113,6 +1146,7 @@ function fillWardrobe(box) {
       else { await db.wearOutfit(layer, id); toast(`👒 Tino is wearing “${name}”!${anim ? " ✨" : ""}`); } // (sans 20 : il la porte tout de suite, comme avant)
       outfitChangedHere = true; // (images du widget refaites tout de suite)
       await loadOutfits();
+      fillWardrobe(box); // (nom et état remis à zéro)
     } catch (err) {
       const why = /bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql"
         : /anim/i.test(err.message) && /column|schema cache/i.test(err.message) ? "animated outfits aren't set up yet — Tony needs to run supabase/17_outfit_anim.sql"
@@ -1924,13 +1958,17 @@ function setupFolds(pane, tab) {
 
 // ---------- Onglet Tino : Tino en grand (avec ses habits), puis tout ce qui le personnalise ----------
 function renderTinoPane(pane) {
-  pane.innerHTML = `<div class="pl-editor-card mp-pane-card mp-showcase"><div class="mp-show-stage"></div><div class="pl-legend mp-show-cap"></div></div>`
+  pane.innerHTML = `<div class="pl-editor-card mp-pane-card mp-showcase"><div class="mp-show-stage"></div><div class="pl-legend mp-show-cap"></div><div class="mp-tummy"></div></div>`
     + fold("tino", "🦭 Tino", `<div class="mp-tinoset"></div>`)
+    + fold("hunger", "🍽 Hunger lines", `<div class="mp-hunger"></div>`)
     + fold("grumbles", "💢 Grumpy lines", `<div class="mp-grumbles"></div>`)
     + fold("wardrobe", "👒 Tino's wardrobe", `<div class="mp-wardrobe"></div>`)
-    + fold("decor", "🏖 Decor", `<div class="mp-decor"></div>`)
-    + `<div class="pl-editor-card mp-pane-card mp-soon"><h4>🍼 Coming soon</h4><p>Take care of Tino: feed him and more.</p></div>`;
+    + fold("decor", "🏖 Decor", `<div class="mp-decor"></div>`);
   fillShowcase(pane.querySelector(".mp-showcase"));
+  const tummy = pane.querySelector(".mp-tummy");
+  tummy._eater = () => showcase?.m; // (c'est le grand Tino qui mange)
+  fillTummy(tummy);
+  fillHungerLines(pane.querySelector(".mp-hunger"));
   fillTinoSettings(pane.querySelector(".mp-tinoset"));
   fillGrumbles(pane.querySelector(".mp-grumbles"));
   fillWardrobe(pane.querySelector(".mp-wardrobe"));
@@ -1946,8 +1984,13 @@ function fillShowcase(card) {
   const stage = card.querySelector(".mp-show-stage"), box = document.createElement("div");
   stage.append(box);
   const m = demoPose(box, "tino", "idle", matchMedia("(min-width: 700px)").matches ? 180 : 150);
-  m.think = () => { const r = Math.random() * 8; return r < 4 ? { type: "idle", dur: 2 + Math.random() * 3 } : r < 6 ? { type: "wave", dur: 2.2 } : { type: "sit", dur: 3 + Math.random() * 3 }; };
+  m.think = () => {
+    const b = bellyInfo(); // (de temps en temps il dit sa faim : plus souvent quand il a très faim)
+    if (b && !m.bubble && Math.random() < ({ hungry: 0.35, peckish: 0.15, full: 0.1 }[b.level] ?? 0)) return { type: "belly", dur: 4.2 };
+    const r = Math.random() * 8; return r < 4 ? { type: "idle", dur: 2 + Math.random() * 3 } : r < 6 ? { type: "wave", dur: 2.2 } : { type: "sit", dur: 3 + Math.random() * 3 };
+  };
   m.eng.grumbles = grumbleLines;
+  m.eng.belly = bellyInfo;
   showcase = { m, card };
   dressShowcase();
 }
@@ -1966,7 +2009,7 @@ async function dressShowcase(look) {
 // les deux pendant 7 jours ; une couleur : Tino la prend tout de suite, chez les deux, pendant 2 h (pas d'autre couleur
 // pendant ce temps) ; sinon un poisson, une vieille botte… Lancers illimités (choix de Tony, pour l'instant). Tout est commun.
 let unsubCatches = null, fishTimer = 0, lastCatch = null, fishGame = null;
-const JUNK = { fish: ["🐟", "a little fish"], boot: ["🥾", "an old boot"], can: ["🥫", "a tin can"], weed: ["🌿", "some seaweed"], shell: ["🐚", "a shell"], crab: ["🦀", "a grumpy crab"] };
+const JUNK = { fish: ["🐟", "a fish"], big_fish: ["🐠", "a big fish"], golden_fish: ["✨🐟", "a golden fish"], boot: ["🥾", "an old boot"], can: ["🥫", "a tin can"], weed: ["🌿", "some seaweed"], shell: ["🐚", "a shell"], crab: ["🦀", "a grumpy crab"] };
 const colorNow = () => (S.color && Date.parse(S.color.until) > Date.now() ? S.color : null);
 // Couleur pêchée { h, s, l } → pelage et contour (plus foncé) pour mascot.js (variables --ms-fur / --ms-fur-line sur <html>)
 const furOf = (c) => (c ? { fill: `hsl(${c.h}, ${c.s}%, ${c.l}%)`, line: `hsl(${c.h}, ${Math.min(100, c.s + 5)}%, ${Math.max(18, c.l - 24)}%)` } : null);
@@ -1989,9 +2032,10 @@ async function loadCatches() {
   }
   const top = S.catches[0]; // une prise de l'autre arrive en direct : on le dit (pas pour un « rien »)
   if (lastCatch !== null && top && top.id !== lastCatch && top.by !== S.user.id && top.kind !== "junk" && S.partner)
-    toast(`🎣 ${S.partner.mark} ${S.partner.label} caught ${top.kind === "color" ? "a new colour for Tino 🎨" : `“${top.outfitName}” 👒`}`);
+    toast(`🎣 ${S.partner.mark} ${S.partner.label} caught ${top.kind === "color" ? "a new colour for Tino 🎨" : `“${catchName(top)}” 👒`}`);
   lastCatch = top?.id ?? 0;
   fishingChanged(was !== S.fishingOk);
+  loadFeeding(); // (un poisson pêché va dans le seau)
 }
 // Une prise, une fin de couleur ou de tenue : Tino, l'onglet Fishing et les images du widget suivent ; la garde-robe
 // seulement si wardrobe (la pêche apparaît / disparaît, une tenue revient dans la réserve) — une tenue pêchée la refait déjà
@@ -2000,7 +2044,7 @@ function fishingChanged(wardrobe = true) {
   applyColor();
   applyOutfit();
   const box = document.querySelector(".mp-wardrobe");
-  if (box && wardrobe && !box.querySelector(".mp-busy") && !box.querySelector("[name=oname]")?.value) fillWardrobe(box);
+  if (box && wardrobe && !box.querySelector(".mp-busy") && !box.querySelector("[name=oname]")?.value && !renaming) fillWardrobe(box);
   refreshFishing();
   scheduleFishTimer();
   syncWidgetScenes();
@@ -2037,12 +2081,14 @@ function renderFishing(pane) {
   fishGame = fishScene(pane);
   fillFishInfo(pane);
 }
+// Nom d'une tenue pêchée : son nom actuel (elle a pu être renommée), sinon celui gardé avec la prise (tenue retirée)
+const catchName = (c) => S.outfits.find((o) => o.id === c.outfit)?.name ?? c.outfitName;
 const catchRow = (c) => {
   const when = `<span class="pl-legend">· ${tinoWhen(c.at)}</span>`;
-  if (c.kind === "junk") { const [e, n] = JUNK[c.junk] ?? ["🫧", c.junk]; return `<div class="mp-catch">${e} ${whoMark(c.by)} ${n} ${when}</div>`; }
+  if (c.kind === "junk") { const [e, n] = JUNK[c.junk] ?? ["🫧", c.junk]; return `<div class="mp-catch">${e} ${whoMark(c.by)} ${n}${FISH[c.junk] && S.feedingOk === true ? ` <span class="pl-legend">${c.eatenAt ? "· eaten 😋" : "· in the bucket"}</span>` : ""} ${when}</div>`; }
   const live = Date.parse(c.until) > Date.now();
   if (c.kind === "color") return `<div class="mp-catch"><span class="mp-swatch" style="background:${furOf(c.color).fill}"></span> ${whoMark(c.by)} a colour <span class="pl-legend">${live ? `· until ${hourOf(new Date(c.until))}` : "· faded"}</span> ${when}</div>`;
-  return `<div class="mp-catch">👒 ${whoMark(c.by)} “${esc(c.outfitName)}” <span class="pl-legend">${live ? `· until ${dayShort(new Date(c.until))}` : "· back in the pool"}</span> ${when}</div>`;
+  return `<div class="mp-catch">👒 ${whoMark(c.by)} “${esc(catchName(c))}” <span class="pl-legend">${live ? `· until ${dayShort(new Date(c.until))}` : "· back in the pool"}</span> ${when}</div>`;
 };
 function fillFishInfo(pane) {
   const info = pane.querySelector(".mp-fish-info"), list = pane.querySelector(".mp-catches");
@@ -2051,7 +2097,13 @@ function fillFishInfo(pane) {
   info.innerHTML = `<h4>🎨 Tino's colour</h4>
     <div class="mp-fish-line">${c ? `<span class="mp-swatch" style="background:${furOf(c.color).fill}"></span> Caught by ${whoMark(c.by)} — ${timeLeft(c.until)} left (until ${hourOf(new Date(c.until))}). No other colour until then.` : "White, as usual — you might catch a colour! It lasts 2 hours."}</div>
     <h4>👒 Outfits</h4>
-    <div class="mp-fish-line">🎣 ${pool} in the pool · 👒 ${caught} caught — wear them in the Tino tab → Tino's wardrobe</div>`;
+    <div class="mp-fish-line">🎣 ${pool} in the pool · 👒 ${caught} caught — wear them in the Tino tab → Tino's wardrobe</div>
+    <h4>🍽 Tino's tummy</h4><div class="mp-tummy"></div>
+    <h4>🌊 In the water</h4>
+    <div class="mp-fish-line">${S.feedingOk === true ? "🐟 Fish about 1 cast in 2 (🐠 big ones, now and then ✨🐟 a golden one) — food for Tino" : "🐟 Now and then a fish"} · 👒 an outfit from the pool (${pool}) · 🎨 a colour for Tino · 🦀🥾 crabs, boots and other junk</div>`;
+  const tummy = info.querySelector(".mp-tummy");
+  tummy._eater = () => fishGame?.m; // (le Tino de la scène mange)
+  fillTummy(tummy);
   list.innerHTML = S.catches.length ? S.catches.map(catchRow).join("") : `<div class="pl-empty">Nothing caught yet.</div>`;
 }
 // La scène et le jeu : Tino (le vrai, avec sa tenue et sa couleur) assis au bout du ponton, la canne, le fil, le bouchon
@@ -2177,7 +2229,7 @@ function fishScene(pane) {
     prize.setAttribute("opacity", "1");
     const until = c.until ? new Date(c.until) : null;
     out.innerHTML = c.kind === "outfit"
-      ? `<div class="mp-fish-got">${o ? `<img alt="" class="mp-fish-img">` : "👒"}<span>You caught <b>“${esc(c.outfitName)}”</b>! You can both dress Tino with it until <b>${dayShort(until)}</b>.</span></div>
+      ? `<div class="mp-fish-got">${o ? `<img alt="" class="mp-fish-img">` : "👒"}<span>You caught <b>“${esc(catchName(c))}”</b>! You can both dress Tino with it until <b>${dayShort(until)}</b>.</span></div>
          ${o ? `<button type="button" class="mp-cta" data-puton>👒 Put it on Tino</button>` : ""}`
       : c.kind === "color"
         ? `<div class="mp-fish-got"><span class="mp-swatch mp-swatch-big" style="background:${furOf(c.color).fill}"></span><span>A new colour! Tino wears it for <b>2 hours</b> (until ${hourOf(until)}) — for both of you.</span></div>`
@@ -2188,9 +2240,16 @@ function fishScene(pane) {
       ev.target.disabled = true;
       if (await guard(() => db.wearOutfit(o.layer, o.id), "Couldn't change Tino's outfit")) { outfitChangedHere = true; await loadOutfits(); toast(`👒 Tino is wearing “${o.name}”!`); }
     });
-    if (c.kind === "junk") m.say(c.junk === "boot" ? "A boot… again? 😑" : c.junk === "crab" ? "Ouch! 🦀" : "Hmm… 🤔", { ms: 2400 });
-    else { m.now([{ type: "react" }, { type: "sit", dur: Infinity }]); m.love(); }
-    set("done", "🎣 Cast again", c.kind === "junk" ? "Not this time." : "Nice catch! 🎉");
+    const fish = c.kind === "junk" && FISH[c.junk]; // un poisson : bonne nouvelle (de quoi nourrir Tino)
+    if (fish) {
+      out.innerHTML = `<div class="mp-fish-got"><span class="mp-fish-emoji">${fish[0]}</span><span>${fish[1].replace(/^./, (x) => x.toUpperCase())}! ${S.feedingOk === true ? `It goes in Tino's bucket (+${BELLY.gain[c.junk]} for his tummy).` : ""}</span></div>
+        ${S.feedingOk === true ? `<button type="button" class="mp-cta" data-feednow>🍽 Feed Tino now</button>` : ""}`;
+      out._eater = () => m;
+      out.querySelector("[data-feednow]")?.addEventListener("click", (ev) => { ev.target.disabled = true; feedTino(c.junk, out); });
+    }
+    if (c.kind === "junk" && !fish) m.say(c.junk === "boot" ? "A boot… again? 😑" : c.junk === "crab" ? "Ouch! 🦀" : "Hmm… 🤔", { ms: 2400 });
+    else { m.now([{ type: "react" }, { type: "sit", dur: Infinity }]); m.love(); if (fish) m.say(c.junk === "golden_fish" ? "A GOLDEN fish!! ✨" : "A fish! Yum 🐟", { ms: 2400 }); }
+    set("done", "🎣 Cast again", c.kind === "junk" && !fish ? "Not this time." : "Nice catch! 🎉");
   }
   btn.addEventListener("click", () => {
     if (state === "idle" || state === "done") cast();
@@ -2199,9 +2258,111 @@ function fishScene(pane) {
   });
   return {
     dress,
+    m, // (le Tino de la scène : il mange quand on le nourrit d'ici)
     busy: () => ["cast", "wait", "bite", "reel"].includes(state),
     stop() { stopped = true; clearTimeout(timer); host.replaceChildren(); }, // (le Tino de la scène s'arrête avec)
   };
+}
+
+// ---------- Nourrir Tino (supabase/21_feeding.sql) ----------
+// Avec les poissons pêchés (pas les crabes ni le reste). Ventre commun aux deux, qui se vide tout seul avec le temps ; trois
+// niveaux — rassasié, petit creux, très faim — et nos phrases pour chacun (Tino les dit de temps en temps : mascot.js, belly).
+// ⚠️ Mêmes nombres que dans 21_feeding.sql (et data-mock.js) : 100 → 0 en 24 h ; poissons +25 / +45 / +100 ;
+// rassasié ≥ 66, petit creux 33 – 66, très faim < 33 ; plus de repas à partir de 95.
+const BELLY = { perDay: 100, gain: { fish: 25, big_fish: 45, golden_fish: 100 }, full: 66, peckish: 33, max: 95 };
+const FISH = { fish: ["🐟", "a fish", "Fish"], big_fish: ["🐠", "a big fish", "Big fish"], golden_fish: ["✨🐟", "a golden fish", "Golden fish"] };
+const LEVELS = { full: ["😋", "Full"], peckish: ["🙂", "A little peckish"], hungry: ["🥺", "Very hungry"] };
+const DEFAULT_HUNGER = (P) => ({
+  full: ["I'm so full 😋", "That fish was delicious! 🐟", "Yum yum 💕", "*happy tummy pat*"],
+  peckish: ["I could eat a little fish… 🐟", "A snack would be nice 🍤", "Is it fishing time? 🎣"],
+  hungry: ["I'm SO hungry… 🥺", "Feed me please! 🐟🐟", "My tummy is rumbling 😩", `${P?.label ?? "Someone"}, go fishing for me! 🎣`],
+});
+let unsubFeeding = null, feedSeen = null, tummyTimer = 0, feedingNow = false;
+const bellyNow = () => { const b = S.feeding?.belly; return b ? Math.max(0, b.fill - (BELLY.perDay * (Date.now() - Date.parse(b.at))) / 86400e3) : null; };
+const bellyLevel = (v) => (v >= BELLY.full ? "full" : v >= BELLY.peckish ? "peckish" : "hungry");
+const hungerLines = (level) => { const own = S.hungerLines.filter((l) => l.level === level).map((l) => l.body); return own.length ? own : DEFAULT_HUNGER(S.partner)[level]; };
+// Pour mascot.js : son niveau de faim et ses phrases (null sans 21 : il ne parle pas de faim)
+const bellyInfo = () => { const v = S.feedingOk === true ? bellyNow() : null; if (v == null) return null; const level = bellyLevel(v); return { level, lines: hungerLines(level) }; };
+async function loadFeeding() {
+  if (!S.user) return;
+  try {
+    const [f, lines] = await Promise.all([db.listFeeding(), db.listHungerLines()]);
+    S.feeding = f; S.hungerLines = lines; S.feedingOk = true; store.set("feeding." + S.user.id, { f, lines });
+  } catch (err) {
+    if (/does not exist|schema cache|tino_belly|tino_hunger|feed_tino|eaten_at/i.test(err.message)) { S.feedingOk = false; S.feeding = null; S.hungerLines = []; }
+    else { const r = store.get("feeding." + S.user.id, null); if (r) { S.feeding = r.f; S.hungerLines = r.lines; S.feedingOk = true; } } // hors ligne
+  }
+  // L'autre vient de nourrir Tino (pas au démarrage ; repère = date du dernier repas vu) : on le dit, le petit Tino mange aussi
+  const b = S.feeding?.belly;
+  if (b?.at && feedSeen !== null && newerThan(b.at, feedSeen) && b.by && b.by !== S.user.id && S.partner) {
+    toast(`🍽 ${S.partner.mark} ${S.partner.label} fed Tino ${FISH[b.fish]?.[1] ?? "a fish"} ${FISH[b.fish]?.[0] ?? "🐟"}`);
+    mascots?.eat(b.fish);
+  }
+  if (b?.at && (feedSeen === null || newerThan(b.at, feedSeen))) feedSeen = b.at;
+  else if (feedSeen === null) feedSeen = "";
+  feedingChanged();
+}
+// La jauge et le seau (sous le grand Tino, dans Fishing) et les phrases suivent (pas pendant qu'on tape une phrase)
+function feedingChanged() {
+  document.querySelectorAll(".mp-tummy").forEach((b) => fillTummy(b));
+  const h = document.querySelector(".mp-hunger");
+  if (h && ![...h.querySelectorAll("input")].some((i) => i.value)) fillHungerLines(h);
+}
+// La jauge de faim + les poissons du seau (un bouton « Feed » par sorte) ; box._eater() = le Tino qui mange à l'écran
+function fillTummy(box) {
+  if (!box) return;
+  clearTimeout(tummyTimer);
+  if (S.feedingOk === false) { box.innerHTML = `<div class="pl-legend">🍽 Feeding Tino isn't set up yet — Tony needs to run <code>supabase/21_feeding.sql</code>.</div>`; return; }
+  if (S.feedingOk !== true || !S.feeding) { box.innerHTML = ""; return; }
+  const v = bellyNow() ?? 0, level = bellyLevel(v), [emo, label] = LEVELS[level], n = S.feeding.fish ?? {}, full = v >= BELLY.max;
+  box.innerHTML = `<div class="mp-tummy-head"><span>${emo} Tino's tummy: <b>${label}</b></span><span class="pl-legend">${Math.round(v)}%</span></div>
+    <div class="mp-tummy-bar mp-${level}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(v)}" aria-label="Tino's tummy"><i style="width:${v.toFixed(1)}%"></i></div>
+    <span class="mp-row mp-tummy-fish">${Object.entries(FISH).map(([k, [e, , name]]) => `<button type="button" data-feed="${k}" ${!n[k] || full || feedingNow ? "disabled" : ""} title="Feed Tino ${name.toLowerCase()} (+${BELLY.gain[k]})">${e} ×${n[k] ?? 0} · Feed</button>`).join("")}</span>
+    <div class="pl-legend">${full ? "He's full — he can eat again a little later. " : ""}Catch fish in 🎣 Fishing to feed him (🦀 crabs and 🥾 boots aren't food). His tummy empties in about a day.</div>`;
+  box.querySelectorAll("[data-feed]").forEach((b) => b.addEventListener("click", () => feedTino(b.dataset.feed, box)));
+  tummyTimer = setTimeout(() => document.querySelectorAll(".mp-tummy").forEach((x) => fillTummy(x)), 60000); // (la jauge baisse toute seule)
+}
+async function feedTino(kind, box) {
+  if (feedingNow) return;
+  if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
+  feedingNow = true;
+  document.querySelectorAll("[data-feed]").forEach((b) => { b.disabled = true; });
+  let r = null;
+  try { r = await db.feedTino(kind); }
+  catch (err) { toast(/tino is full/i.test(err.message) ? "😋 Tino is full — try again a bit later" : /no fish left/i.test(err.message) ? "🪣 No fish like that left — go fishing!" : `⚠️ Couldn't feed Tino (${err.message})`); }
+  feedingNow = false;
+  if (r) {
+    S.feeding.belly = r; S.feeding.fish[kind] = Math.max(0, (S.feeding.fish[kind] ?? 1) - 1); feedSeen = r.at;
+    box?._eater?.()?.now([{ type: "eat", fish: kind }]);
+    if (currentTab() === "calendar") mascots?.eat(kind);
+    toast(`😋 Yum! Tino ate ${FISH[kind][1]} ${FISH[kind][0]}`);
+  }
+  feedingChanged();
+  loadFeeding();
+}
+// Ce que Tino dit selon sa faim : nos phrases par niveau (liste commune), sinon ses phrases par défaut
+function fillHungerLines(box) {
+  if (!box) return;
+  if (S.feedingOk === false) { box.innerHTML = `<div class="pl-legend">Hunger lines aren't available yet — Tony needs to run <code>supabase/21_feeding.sql</code>.</div>`; return; }
+  const who = (l) => (l.by === S.user.id ? S.me : S.partner), def = DEFAULT_HUNGER(S.partner);
+  box.innerHTML = `<div class="pl-legend">What Tino says now and then, depending on his tummy: full (${BELLY.full}% and up), a little peckish (${BELLY.peckish}–${BELLY.full}%), very hungry (under ${BELLY.peckish}%) — more often when he's very hungry. Shared by both of you.</div>`
+    + Object.entries(LEVELS).map(([lv, [e, label]]) => {
+      const own = S.hungerLines.filter((l) => l.level === lv);
+      return `<div class="pl-sub">${e} ${label}</div>
+        <div class="mp-lines">${own.length ? own.map((l) => `<div class="mp-line"><span class="mp-line-who" title="${esc(who(l)?.label ?? "")}">${esc(who(l)?.mark ?? "•")}</span><span class="mp-line-text">${esc(l.body)}</span><button type="button" data-hdel="${l.id}" title="Remove this line">✕</button></div>`).join("")
+          : `<div class="pl-legend">None yet — Tino says: ${def[lv].map(esc).join(" · ")}</div>`}</div>
+        <div class="mp-row mp-lineadd"><input type="text" data-hlevel="${lv}" maxlength="120" placeholder="Something Tino says when he's ${label.toLowerCase()}…" enterkeyhint="done"><button type="button" data-hadd="${lv}">Add</button></div>`;
+    }).join("");
+  box.querySelectorAll("[data-hdel]").forEach((b) => b.addEventListener("click", async () => {
+    if (await guard(() => db.deleteHungerLine(+b.dataset.hdel), "Couldn't remove the line")) loadFeeding();
+  }));
+  const add = async (lv) => {
+    const field = box.querySelector(`[data-hlevel="${lv}"]`), text = field.value.trim();
+    if (!text) return;
+    if (await guard(() => db.addHungerLine(lv, text), "Couldn't add the line")) { field.value = ""; await loadFeeding(); box.querySelector(`[data-hlevel="${lv}"]`)?.focus(); }
+  };
+  box.querySelectorAll("[data-hadd]").forEach((b) => b.addEventListener("click", () => add(b.dataset.hadd)));
+  box.querySelectorAll("[data-hlevel]").forEach((f) => f.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); add(f.dataset.hlevel); } }));
 }
 
 // Version qui tourne sur cet appareil = celle du cache du service worker (« meopeo-2026-10-07.8 », voir sw.js) : pour savoir

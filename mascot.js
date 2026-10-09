@@ -52,7 +52,16 @@ const STYLE = `
 .ms-prop svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
 .ms-it, .ms-paddle, .ms-tool-paddle .ms-spatula { display: none; }
 .ms[class*="ms-hold-"] .ms-hold, .ms-tool-on-r .ms-tool-r, .ms-tool-on-l .ms-tool-l, .ms-tool-paddle .ms-paddle,
-.ms-hold-controller .ms-it-controller, .ms-hold-matcha .ms-it-matcha, .ms-hold-beer .ms-it-beer, .ms-hold-pho .ms-it-pho { display: inline; }
+.ms-hold-controller .ms-it-controller, .ms-hold-matcha .ms-it-matcha, .ms-hold-beer .ms-it-beer, .ms-hold-pho .ms-it-pho, .ms-hold-fish .ms-it-fish { display: inline; }
+.ms-fishbody { transform: scale(var(--sip, 1)); transform-origin: 50px 76px; fill: #ff9f43; stroke: #d9772a; stroke-width: 1; }
+.ms-fishbody .ms-fin { fill: #ffbe7a; }
+.ms-fish-big .ms-it-fish { transform: scale(1.22); transform-origin: 50px 76px; }
+.ms-fish-big .ms-fishbody { fill: #5aa2ea; stroke: #2f74bd; }
+.ms-fish-big .ms-fishbody .ms-fin { fill: #8fc2f2; }
+.ms-fish-gold .ms-fishbody { fill: #ffd23f; stroke: #d99a14; }
+.ms-fish-gold .ms-fishbody .ms-fin { fill: #fff0a8; }
+.ms-sparkle { display: none; }
+.ms-fish-gold .ms-sparkle { display: inline; animation: ms-anger 0.5s ease-in-out infinite alternate; }
 .ms-hold { transform-origin: 50px 76px; }
 .ms-liquid { transform: scaleY(var(--sip, 1)); }
 .ms-chop { animation: ms-chop 2.2s ease-in-out infinite; }
@@ -134,8 +143,16 @@ const PHO = `<g class="ms-steam" fill="none" stroke="#eef2ff" stroke-width="1.3"
   <ellipse cx="44" cy="71.6" rx="3" ry="1.2" fill="#c9776b"/><ellipse cx="57" cy="72.3" rx="3" ry="1.1" fill="#c9776b"/>
   <circle cx="50" cy="71" r="1" fill="#5fae4f"/><circle cx="61" cy="71.2" r="0.9" fill="#5fae4f"/><circle cx="40" cy="72.6" r="0.9" fill="#5fae4f"/>
   <g class="ms-chop"><path d="M58 74L48 57M61 73.5L51 56.5" stroke="#b07a46" stroke-width="1.4" stroke-linecap="round"/><path d="M50.5 61V70M52 60.5V69" stroke="#fff3d6" stroke-width="1" stroke-linecap="round"/></g>`;
-const HELD = { controller: CONTROLLER, matcha: MATCHA, beer: BEER, pho: PHO };
-const HOLD_OF = { game: "controller", matcha: "matcha", beer: "beer", pho: "pho" }; // action → ce qu'il tient
+// Le poisson qu'on lui donne (21_feeding.sql) : tenu en travers du ventre, il rapetisse à chaque bouchée (--sip)
+const FISH = `<g class="ms-fishbody">
+  <path class="ms-fin" d="M65 76L75 69V83Z"/>
+  <path class="ms-fin" d="M43 69Q50 63 57 69Z"/>
+  <ellipse cx="50" cy="76" rx="17" ry="8"/>
+  <path d="M45 71Q48 76 45 81" fill="none" stroke="rgba(0,0,0,0.18)" stroke-width="1"/>
+  <circle cx="39.5" cy="74.5" r="1.8" fill="#2f3038" stroke="none"/></g>
+  <g class="ms-sparkle" fill="#fff6c2">${star(30, 66, 2.6, "#fff6c2")}${star(70, 66, 2.2, "#fff6c2")}</g>`;
+const HELD = { controller: CONTROLLER, matcha: MATCHA, beer: BEER, pho: PHO, fish: FISH };
+const HOLD_OF = { game: "controller", matcha: "matcha", beer: "beer", pho: "pho", eat: "fish" }; // action → ce qu'il tient
 const spatula = (s) => { const X = (x) => (s > 0 ? x : 100 - x); return `<path d="M${X(87)} 69L${X(112)} 61" stroke="#8a5a3b" stroke-width="2.6" stroke-linecap="round"/>
   <rect x="${s > 0 ? 110 : -22}" y="55" width="12" height="9" rx="1.8" transform="rotate(${-20 * s} ${X(116)} 59.5)" fill="#cfd4e0" stroke="#868ca3" stroke-width="1"/>`; };
 const paddle = (s) => { const X = (x) => (s > 0 ? x : 100 - x); return `<path d="M${X(87)} 69L${X(106)} 62" stroke="#e3d6b8" stroke-width="2.6" stroke-linecap="round"/>
@@ -767,6 +784,43 @@ const ACTIONS = {
       p.rot = 3 * Math.sin(c * 1.3) * tipsy; p.sy = 0.97; p.sx = 1.02; p.blush = tipsy;
     },
   },
+  // Il mange le poisson qu'on vient de lui donner (21_feeding.sql) : assis, le poisson dans les nageoires, il croque
+  // (le poisson rapetisse), puis un cœur. a.fish : fish / big_fish / golden_fish (couleur et taille du poisson)
+  eat: {
+    sit: true,
+    start(m, a) { a.dur ??= 3.4; },
+    step(m, a) { if (!a.ended && a.t >= a.dur - 0.8) { a.ended = true; m.love(); } return a.t >= a.dur; },
+    pose(m, a, p) {
+      const c = m.clock, bite = Math.max(0, Math.sin(c * 8)) ** 3, done = a.t > a.dur - 0.8;
+      p.armL = -50; p.armR = 50; p.sy = 0.97; p.sx = 1.02;
+      p.head = done ? 4 * Math.sin(c * 9) : -5 * bite; p.holdY = done ? 0 : -6 * bite;
+      p.sip = done ? 0 : 1 - 0.75 * clamp(a.t / (a.dur - 0.8), 0, 1);
+      if (done) p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.06;
+    },
+  },
+  // Sa faim (21_feeding.sql) : de temps en temps il dit une phrase de son niveau (rassasié, petit creux, très faim — plus
+  // souvent quand il a très faim), la nageoire sur le ventre ; jamais la nuit, jamais par-dessus une bulle (comme chat)
+  belly: {
+    weight: (m) => { const b = m.eng.belly?.(); return !b || !b.lines.length || m.bubble || m.eng.night() ? 0 : ({ hungry: 6, peckish: 2.5, full: 1.5 }[b.level] ?? 0); },
+    make: () => [{ type: "belly", dur: rand(3.8, 5) }],
+    start(m, a) {
+      const b = m.eng.belly?.();
+      if (!b || m.bubble || !b.lines.length) { a.dur = 0; return; }
+      a.level = b.level;
+      const pool = b.lines.length > 1 ? b.lines.filter((l) => l !== m.lastBelly) : b.lines;
+      m.lastBelly = pick(pool);
+      m.gaze = pick([-LOOK * 0.4, LOOK * 0.4]);
+      m.say(m.lastBelly, { ms: a.dur * 1000 + 600 });
+    },
+    look: (m) => m.gaze,
+    pose(m, a, p) {
+      const c = m.clock, k = smooth(clamp(Math.min(a.t, a.dur - a.t) / 0.3, 0, 1)), rub = Math.sin(c * 6);
+      p.armL = (-38 + 8 * rub) * k; p.armR = (38 - 8 * rub) * k; // les nageoires sur le ventre (il le frotte)
+      if (a.level === "hungry") { p.sy -= 0.04 * k; p.head = (7 + 3 * Math.sin(c * 2)) * k; p.rot = 2.5 * Math.sin(c * 1.6) * k; } // tout mou, la tête basse
+      else if (a.level === "full") { p.bob = -Math.abs(Math.sin(c * 7)) * m.size * 0.04 * k; p.head = 4 * Math.sin(c * 5) * k; } // content
+      else p.head = 3 * Math.sin(c * 3) * k;
+    },
+  },
   // Courses : il pousse un caddie plein le long de sa ligne (le caddie le suit), puis un cœur
   shop: {
     weight: (m) => (m.trip("shop") ? (m.eng.meal() ? 1 : 6) : 0),
@@ -1312,6 +1366,8 @@ class Mascot {
     this.el.classList.toggle("ms-tool-on-r", busyHands && a.side > 0);
     this.el.classList.toggle("ms-tool-on-l", busyHands && a.side < 0);
     this.el.classList.toggle("ms-tool-paddle", a.type === "rice"); // (spatule à riz)
+    this.el.classList.toggle("ms-fish-big", a.type === "eat" && a.fish === "big_fish"); // (poisson qu'il mange : gros, doré)
+    this.el.classList.toggle("ms-fish-gold", a.type === "eat" && a.fish === "golden_fish");
     const inHands = a.t !== undefined ? HOLD_OF[a.type] ?? null : null; // manette, matcha, bière, bol de pho
     if (inHands !== this.inHands) { if (this.inHands) this.el.classList.remove("ms-hold-" + this.inHands); if (inHands) this.el.classList.add("ms-hold-" + inHands); this.inHands = inHands; }
     if (inHands) {
@@ -1464,11 +1520,11 @@ const pageView = () => ({ top: scrollY, bottom: scrollY + innerHeight, left: scr
 // grumbles() : ses phrases râleuses quand on le touche 5 fois de suite
 // siesta() : sa sieste après le repas (12:30 – 13:00 par défaut) — il dort dans son lit, comme la nuit ;
 // meal() : l'heure des repas (11:30 – 12:30 et 18:30 – 19:30 par défaut) — il cuisine ou fait un barbecue (et ne joue pas)
-export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, siesta = isSiesta, meal = isMeal, tapThrough = () => true, lines = () => [], grumbles = () => [] }) {
+export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, siesta = isSiesta, meal = isMeal, tapThrough = () => true, lines = () => [], grumbles = () => [], belly = () => null }) {
   injectStyle();
   layer.classList.add("ms-layer");
   const asleep = () => night() || siesta(); // (la sieste fait tout comme la nuit : case d'aujourd'hui, lit, pas de nage…)
-  const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night: asleep, meal: () => meal() && !asleep(), tapThrough, layer, tapping: null, lines, grumbles };
+  const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night: asleep, meal: () => meal() && !asleep(), tapThrough, layer, tapping: null, lines, grumbles, belly };
   const list = kinds.map((k) => new Mascot(eng, KINDS[k] ?? KINDS.tino));
   const room = Math.max(...list.map((m) => m.size)) * 1.05; // place au-dessus d'une plateforme pour qu'il y tienne
   eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
@@ -1592,6 +1648,8 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     wear(o) { eng.outfit = o; list.forEach((m) => m.wear(o)); },
     hush() { tino?.hush(true); },
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
+    // On l'a nourri (ici ou chez l'autre) : il mange son poisson (pas s'il dort, ni sans animations)
+    eat(fish) { if (tino && !reduce.matches && !eng.night() && !tino.el.hidden) tino.now([{ type: "eat", fish }]); },
     destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); m.propEl.remove(); m.bannerEl.remove(); }); },
   };
 }
@@ -1610,6 +1668,7 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
   if (["game", "lose", "cook", "bbq", "rice", "shop"].includes(type)) box.style[dir > 0 ? "marginRight" : "marginLeft"] = size * 1.45 + "px"; // la place de l'objet
   if (["scooter", "crash", "bounce"].includes(type)) box.style.margin = `0 ${size * 0.5}px`;
   if (type === "tipsy") { m.redUntil = Date.now() + 1e9; m.redMax = 1; } // (rouge après une bière, pour toujours)
+  if (type === "hungry" || type === "full") eng.belly = () => ({ level: type, lines: [type === "hungry" ? "I'm SO hungry… 🥺" : "So full 😋"] });
   if (["shop", "scooter", "crash", "bounce"].includes(type)) m.update = function (dt) { Mascot.prototype.update.call(this, dt); this.x = size / 2; }; // (avance sur place)
   box.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl);
   m.k = "demo"; m.x = size / 2; m.y = size; m.dir = dir;
@@ -1645,6 +1704,11 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
     crash: { type: "scooter", side: dir, x1: m.x + dir * 1e9, crash: true, crashAt: m.x, bounce: false }, // (sur place : pas d'élan)
     bounce: { type: "scooter", side: dir, x1: m.x + dir * 1e9, crash: true, crashAt: m.x, bounce: true },
     tipsy: { type: "walk", x: m.x },
+    eat: { type: "eat", fish: "fish" },
+    eatbig: { type: "eat", fish: "big_fish" },
+    eatgold: { type: "eat", fish: "golden_fish" },
+    hungry: { type: "belly", dur: 4.4 },
+    full: { type: "belly", dur: 4.4 },
   }[type] ??{ type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
   if (!animate) return m;
   let last = performance.now();

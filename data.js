@@ -16,12 +16,15 @@
 //     (supabase/07_tino_messages.sql) ; un message : { id, from, to, body, at: date ISO, seen: date ISO | null }
 //   listTinoLines(), addTinoLine(body), deleteTinoLine(id), getBigTino(), setBigTino(blob, meta), resetBigTino(),
 //   tinoFile(path), subscribeTinoExtras(onChange) → phrases de Tino et grand Tino (supabase/08_tino_extras.sql)
-//   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id),
+//   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id), renameOutfit(id, name),
 //   subscribeOutfits(onChange) → garde-robe du petit Tino (supabase/12_tino_outfits.sql) ; une tenue a aussi caughtAt /
 //     caughtBy (20_fishing.sql : pêchée quand, par qui ; null = dans la réserve)
 //   fishTino() → la prise d'un lancer, listCatches() → { catches (les plus récentes d'abord), color (couleur active | null) },
 //   subscribeCatches(onChange) → la pêche (20_fishing.sql) ; une prise : { id, by, at, kind: "outfit" | "color" | "junk",
 //     outfit, outfitName, color: { h, s, l } | null, junk, until }
+//   listFeeding() → { belly: { fill, at, by, fish } | null, fish: { fish, big_fish, golden_fish } (pas encore mangés) },
+//   feedTino(kind) → le ventre après le repas, listHungerLines(), addHungerLine(level, body), deleteHungerLine(id),
+//   subscribeFeeding(onChange) → nourrir Tino (21_feeding.sql) ; une phrase de faim : { id, by, level, body }
 //   listDecor(), setDecor(blob, { season, layout, light }), deleteDecor({ season, layout, light }),
 //   subscribeDecor(onChange) → décor dessiné, fond d'écran par saison / jour-nuit / format (supabase/16_decor.sql)
 //   listGrumbles(), addGrumble(body), deleteGrumble(id), subscribeGrumbles(onChange) → phrases râleuses (13_tino_grumbles.sql)
@@ -40,7 +43,8 @@ import { SUPABASE_URL, SUPABASE_KEY, VAPID_PUBLIC_KEY } from "./config.js";
 // « * » : marche avant et après 15_recurring.sql (colonne series) — une colonne inconnue ferait échouer tout le chargement
 const TASK_COLS = "*";
 const NOTE_COLS = "id, author, title, body, private, created_at, updated_at, updated_by";
-const toCatch = (r) => ({ id: r.id, by: r.by, at: r.at, kind: r.kind, outfit: r.outfit ?? null, outfitName: r.outfit_name ?? null, color: r.color ?? null, junk: r.junk ?? null, until: r.until ?? null });
+const toCatch = (r) => ({ id: r.id, by: r.by, at: r.at, kind: r.kind, outfit: r.outfit ?? null, outfitName: r.outfit_name ?? null, color: r.color ?? null, junk: r.junk ?? null, until: r.until ?? null, eatenAt: r.eaten_at ?? null });
+const FISH_KINDS = ["fish", "big_fish", "golden_fish"]; // (poissons mangeables : 21_feeding.sql)
 const toNote = (r) => ({ id: r.id, by: r.author, title: r.title, body: r.body, private: !!r.private, at: r.created_at, updated: r.updated_at, updatedBy: r.updated_by });
 
 // Rappel : « AAAA-MM-JJ HH:MM » en heure locale dans l'app, instant absolu (UTC) dans la base
@@ -299,6 +303,29 @@ export function createBackend() {
       ])).map(must);
       return { catches: rows.map(toCatch), color: color ? toCatch(color) : null };
     },
+    // Nourrir Tino (supabase/21_feeding.sql) : canal temps réel à part (sans 21, la pêche marche comme avant)
+    async listFeeding() {
+      const [belly, fish] = (await Promise.all([
+        sb.from("tino_belly").select("fill, at, fed_by, fish").maybeSingle(),
+        sb.from("tino_catches").select("junk").eq("kind", "junk").in("junk", FISH_KINDS).is("eaten_at", null),
+      ])).map(must);
+      const n = { fish: 0, big_fish: 0, golden_fish: 0 };
+      for (const r of fish) n[r.junk]++;
+      return { belly: belly ? { fill: belly.fill, at: belly.at, by: belly.fed_by, fish: belly.fish } : null, fish: n };
+    },
+    async feedTino(kind) { const r = must(await sb.rpc("feed_tino", { p_fish: kind })); return { fill: r.fill, at: r.at, by: r.by, fish: r.fish }; },
+    async listHungerLines() {
+      return must(await sb.from("tino_hunger_lines").select("id, author, level, body").order("id")).map((r) => ({ id: r.id, by: r.author, level: r.level, body: r.body }));
+    },
+    async addHungerLine(level, body) { must(await sb.from("tino_hunger_lines").insert({ level, body })); },
+    async deleteHungerLine(id) { must(await sb.from("tino_hunger_lines").delete().eq("id", id)); },
+    subscribeFeeding(onChange) {
+      const ch = sb.channel("feed-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "tino_belly" }, () => onChange())
+        .on("postgres_changes", { event: "*", schema: "public", table: "tino_hunger_lines" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
     subscribeCatches(onChange) {
       const ch = sb.channel("fish-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "*", schema: "public", table: "tino_catches" }, () => onChange())
@@ -319,6 +346,8 @@ export function createBackend() {
       const cur = must(await sb.from("shared_settings").select("value").eq("key", "tino_outfit").maybeSingle())?.value ?? {};
       must(await sb.from("shared_settings").upsert({ key: "tino_outfit", value: { head: cur.head ?? null, body: cur.body ?? null, [layer]: id } }));
     },
+    // Renommer une tenue (les deux peuvent : 12_tino_outfits.sql) ; 1 à 40 caractères
+    async renameOutfit(id, name) { must(await sb.from("tino_outfits").update({ name }).eq("id", id)); },
     // Supprimer une tenue (la base l'enlève aussi de ce que Tino porte), puis son fichier
     async deleteOutfit(id) {
       const row = must(await sb.from("tino_outfits").select("path").eq("id", id).maybeSingle());

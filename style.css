@@ -363,6 +363,20 @@ textarea { font: inherit; font-size: 16px; color: var(--text-normal); background
 .mp-light .mp-doodle-last, .mp-light .mp-doodle-thumb { background: rgba(255, 255, 255, 0.6); }
 .mp-light .mp-doodle-pad canvas { box-shadow: 0 2px 10px rgba(40, 50, 110, 0.25); }
 
+/* 🍽 Nourrir Tino : jauge de faim (vert / jaune / rouge), poissons du seau ; renommer une tenue */
+.mp-tummy { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.mp-tummy:empty { display: none; }
+.mp-tummy-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.mp-tummy-bar { height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.mp-tummy-bar i { display: block; height: 100%; border-radius: 6px; background: #7ed387; transition: width 0.6s; }
+.mp-tummy-bar.mp-peckish i { background: #ffd166; }
+.mp-tummy-bar.mp-hungry i { background: #ff7b8a; }
+.mp-tummy-fish { margin-top: 0; }
+.mp-light .mp-tummy-bar { background: rgba(40, 50, 110, 0.12); }
+.mp-orename { display: inline-flex; gap: 4px; align-items: center; max-width: 100%; }
+.mp-orename input { width: 11em; min-width: 0; font-size: 16px; padding: 3px 6px; }
+.mp-orename button { min-height: 32px; padding: 2px 8px; }
+
 /* Tâches récurrentes : 🔁 dans les formulaires et les listes ; occurrence passée = estompée (jamais « en retard ») */
 .mp-repeat { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; color: #d9dcff; }
 .mp-rend { display: inline-flex; align-items: center; gap: 4px; font-size: 0.9em; }
