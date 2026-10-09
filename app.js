@@ -615,7 +615,8 @@ function refreshMascots() {
   if (mascots) { presenceChanged(); return mascots.refresh(); }
   const layer = document.createElement("div");
   document.body.append(layer);
-  mascots = mountMascots({ layer, kinds: ["tino", "peo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo });
+  mascots = mountMascots({ layer, kinds: ["tino", "peo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo,
+    home: (kind) => (kind === "peo" ? potSpot() : null), onHome: () => presenceChanged(), together: bothHere });
   syncTinoBubble();
   applyOutfit();
 }
@@ -2516,32 +2517,54 @@ function startBath(box) {
 }
 
 // ---------- La marmite et PeoPeo (présence en direct, sans SQL) ----------
-// À côté du mois, à la place de la case « MeoMeo » : une marmite où PeoPeo (et MeoMeo, plus tard) se cachent. Celui qui a
-// MeoPeo ouvert à l'écran en ce moment sort la tête et guette ; sinon il reste au fond. Toucher la marmite = afficher / cacher
-// les tâches de l'autre (comme la case d'avant). Quand PeoPeo est là, un deuxième PeoPeo se promène aussi sur le calendrier
-// (mascot.js, « peo »), pendant que celui de la marmite garde la tête sortie. Chacun voit les deux.
+// À côté du mois, à la place de la case « MeoMeo » : une marmite dorée (casserole coréenne à ramyeon / tteokbokki) où PeoPeo
+// (et MeoMeo, plus tard) vit. Celui qui a MeoPeo ouvert à l'écran en ce moment y est : sa tête sort et guette (endormie la
+// nuit) ; de temps en temps il saute dehors, se promène sur le calendrier, poursuit Tino… puis y retourne (mascot.js, « peo »,
+// homeTick). Absent : il reste au fond. Toucher la marmite = afficher / cacher les tâches de l'autre (comme la case d'avant).
 let presenceCh = null;
 const personId = (label) => [S.me, S.partner].find((p) => p?.label === label)?.id ?? null;
 const isHere = (id) => !!id && (id === S.user?.id ? !document.hidden : S.online.has(id));
+// MeoMeo et PeoPeo ont l'app ouverte en même temps : les deux téléphones montrent les mêmes actions au même moment (mascot.js,
+// « ensemble ») et Tino reste éveillé, même la nuit
+const bothHere = () => isHere(personId("PeoPeo")) && isHere(personId("MeoMeo"));
+const peoUp = () => isHere(personId("PeoPeo")) && (mascots ? mascots.inPot("peo") : true); // (sa tête sort de la marmite)
 function potButton() {
-  const P = S.partner, peoUp = isHere(personId("PeoPeo"));
+  const P = S.partner;
+  // repère 64 × 60 (y de −8 à 52) ; bord de la marmite : ellipse de centre (32, 24), 26 × 5 ; l'arrière du bord est dessiné
+  // derrière la tête, l'avant devant ; la tête est coupée sous le bord avant (clipPath) : elle est DANS la marmite
   return `<button type="button" class="pl-toggle mp-pot" aria-pressed="${UI.showPartner}" title="${UI.showPartner ? "Hide" : "Show"} ${esc(P.label)}'s tasks on the calendar">
     <svg class="mp-pot-art" viewBox="0 -8 64 60" aria-hidden="true">
-      <ellipse cx="32" cy="27" rx="24" ry="5" fill="#2a2d36"/>
-      <clipPath id="mp-pot-clip"><path d="M-20 -30H84V28H56Q56 48 32 49Q8 48 8 28H-20Z"/></clipPath>
-      <g clip-path="url(#mp-pot-clip)"><g class="mp-pot-peo${peoUp ? " mp-up" : ""}"><svg x="13" y="-12" width="38" height="38">${peoHeadSvg("ms-flush-peo-pot")}</svg></g></g>
-      <path d="M8 28Q8 48 32 49Q56 48 56 28Z" fill="#4a4f5c" stroke="#2a2d36" stroke-width="1.5"/>
-      <path d="M13 34Q32 39 51 34" fill="none" stroke="#6b7180" stroke-width="1.5"/>
-      <ellipse cx="32" cy="28" rx="25" ry="5.5" fill="none" stroke="#6b7180" stroke-width="2.5"/>
-      <path d="M6 30Q1 30 2 35Q3 38 8 37M58 30Q63 30 62 35Q61 38 56 37" fill="none" stroke="#2a2d36" stroke-width="2.5" stroke-linecap="round"/>
+      <defs>
+        <linearGradient id="mp-pot-gold" x1="0" x2="1"><stop offset="0" stop-color="#b9821c"/><stop offset="0.3" stop-color="#f7d675"/><stop offset="0.55" stop-color="#e5ae3e"/><stop offset="1" stop-color="#a86f14"/></linearGradient>
+        <clipPath id="mp-pot-clip"><path d="M-20 -30H84V24H58Q32 34 6 24H-20Z"/></clipPath>
+      </defs>
+      <ellipse cx="32" cy="49" rx="23" ry="2.4" fill="#000" opacity="0.18"/>
+      <ellipse cx="32" cy="24" rx="26" ry="5" fill="#6e4a10"/>
+      <path d="M6 24Q32 14 58 24" fill="none" stroke="#c99230" stroke-width="2.4"/>
+      <g clip-path="url(#mp-pot-clip)"><g class="mp-pot-peo${peoUp() ? " mp-up" : ""}${!bothHere() && (tinoNight() || tinoNap()) ? " ms-sleep" : ""}"><svg x="13" y="-7" width="38" height="38">${peoHeadSvg("ms-flush-peo-pot")}</svg></g></g>
+      <path d="M2 25.5H7.5V29.5H2Q0 29.5 0 27.5Q0 25.5 2 25.5ZM62 25.5H56.5V29.5H62Q64 29.5 64 27.5Q64 25.5 62 25.5Z" fill="#c48a24" stroke="#8a5a10" stroke-width="1"/>
+      <path d="M6 24L7.6 43Q8 47 12.5 47H51.5Q56 47 56.4 43L58 24Q32 34 6 24Z" fill="url(#mp-pot-gold)" stroke="#8a5a10" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M7 31Q32 40 57 31" fill="none" stroke="#a8721a" stroke-width="1.1"/>
+      <g fill="#fff3c4" opacity="0.55"><ellipse cx="17" cy="37" rx="1.6" ry="1.1"/><ellipse cx="24" cy="42" rx="1.4" ry="1"/><ellipse cx="21" cy="34.5" rx="1.2" ry="0.8"/></g>
+      <g fill="#8a5a10" opacity="0.25"><ellipse cx="44" cy="38" rx="1.6" ry="1.1"/><ellipse cx="50" cy="42" rx="1.3" ry="0.9"/><ellipse cx="38" cy="43" rx="1.2" ry="0.8"/></g>
+      <path d="M6 24Q32 34 58 24" fill="none" stroke="#fbe08a" stroke-width="2.4" stroke-linecap="round"/>
     </svg><span class="mp-pot-label">${esc(P.mark)} ${esc(P.label)}</span></button>`;
 }
-// Quelqu'un arrive ou s'en va : la tête dans la marmite et le PeoPeo du calendrier suivent (sans redessiner le calendrier)
-function presenceChanged() {
-  const peoUp = isHere(personId("PeoPeo"));
-  document.querySelectorAll(".mp-pot-peo").forEach((g) => g.classList.toggle("mp-up", peoUp));
-  mascots?.setAway("peo", !peoUp);
+// Le bord de la marmite (coordonnées de la page) : là où PeoPeo saute dehors et revient ; null si elle n'est pas affichée
+function potSpot() {
+  if (currentTab() !== "calendar") return null;
+  const art = root?.querySelector(".mp-pot .mp-pot-art"), r = art?.getBoundingClientRect();
+  if (!r?.width) return null;
+  return { x: r.left + scrollX + r.width / 2, y: r.top + scrollY + r.height * (32 / 60) };
 }
+// Quelqu'un arrive ou s'en va, PeoPeo sort de la marmite ou y retourne, la nuit tombe : la tête dans la marmite suit (sans
+// redessiner le calendrier)
+function presenceChanged() {
+  mascots?.setAway("peo", !isHere(personId("PeoPeo")));
+  const up = peoUp(), asleep = !bothHere() && (tinoNight() || tinoNap());
+  document.querySelectorAll(".mp-pot-peo").forEach((g) => { g.classList.toggle("mp-up", up); g.classList.toggle("ms-sleep", asleep); });
+}
+setInterval(() => { if (!document.hidden) presenceChanged(); }, 60000); // (la nuit tombe : il s'endort dans la marmite)
 
 // Version qui tourne sur cet appareil = celle du cache du service worker (« meopeo-2026-10-07.8 », voir sw.js) : pour savoir
 // si un téléphone a bien reçu une nouvelle version. Sans service worker (PC de test) : « test (no offline copy) ».

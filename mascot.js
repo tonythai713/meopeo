@@ -25,7 +25,7 @@ const STYLE = `
 .ms-arm-r { transform-origin: 75px 59px; }
 .ms-foot-l { transform-origin: 38px 90px; }
 .ms-foot-r { transform-origin: 62px 90px; }
-.ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
+.ms-peo .ms-hold { transform-origin: 49px 71px; } .ms-tool-ladle .ms-ladle { display: inline; } .ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
 .ms-zzz, .ms-heart, .ms-anger, .ms-brows { opacity: 0; }
 .ms-mad .ms-brows { opacity: 1; }
 .ms-mad .ms-anger { animation: ms-anger 0.45s ease-in-out infinite alternate; }
@@ -243,8 +243,8 @@ function peoSvg(gid = "ms-flush-peo") {
   <g class="ms-foot-r">${peoImg("shoe-r", 52.82, 91.07, 10.33, 7.67)}</g>
   ${peoImg("body", 37.3, 49.04, 30.83, 43.83)}
   <g class="ms-wear-body"></g>
-  <g class="ms-hold" display="none"></g>
-  <g class="ms-arm-l">${peoImg("arm-l", 34.63, 57.99, 7.33, 16.17)}</g>
+  <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(49 71) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(49 70) scale(0.55) translate(-51 -76)">${BEER}</g></g>
+  <g class="ms-arm-l"><g class="ms-ladle" display="none"><path d="M37.5 71L36 95" stroke="#8d96a8" stroke-width="2.2" stroke-linecap="round"/><path d="M36 95Q37.5 98 40 96.5" fill="none" stroke="#8d96a8" stroke-width="1.6"/><path d="M37 95.5Q37 100.5 41.5 100.5Q46 100.5 46 95.5Z" fill="#d3d9e4" stroke="#7d8597" stroke-width="1"/></g>${peoImg("arm-l", 34.63, 57.99, 7.33, 16.17)}</g>
   <g class="ms-arm-r">${peoImg("arm-r", 56.33, 58.14, 7.33, 16.17)}</g>
   ${peoHead(gid)}
 </svg>`;
@@ -402,11 +402,11 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 // head : centre de la tête (pour placer les « z », le cœur et la bulle)
 // only : les seules actions qu'il peut faire (les autres — objets, lit, nage, roulade, nourriture… — sont dessinées pour
 // Tino) ; calm : un appui le fait seulement sauter (les phrases râleuses sont celles de Tino)
-const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly"];
+const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo"];
 export const KINDS = {
   peo: {
     name: "PeoPeo", svg: () => peoSvg(), size: 50, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
-    only: PEO_ACTIONS, calm: true,
+    only: PEO_ACTIONS, calm: true, home: true, // home : il vit dans la marmite (voir mountMascots, homeTick)
     body: { cy: 56, support: Array(24).fill(42) },
   },
   tino: {
@@ -434,6 +434,56 @@ const CROUCH = 0.14, LAND = 0.16;                    // saut : accroupi, récept
 const airTime = (dy) => 0.42 + Math.abs(dy) / 500;  // saut : temps en l'air selon la hauteur
 const ROLL = 0.75, ROLL_IN = 0.12, ROLL_OUT = 0.4;   // une roulade (s), élan, petit vertige après
 const TAKEOFF = 0.2;                                 // envol : il prend son élan
+// La marmite (PeoPeo) : temps passé dedans avant de sortir (la 1re fois, puis les suivantes) et dehors avant d'y retourner (s) ;
+// DIVE : il plonge dedans (s)
+// Ensemble (MeoMeo et PeoPeo là en même temps) : une scène toutes les SCENE_S secondes, la même sur les deux téléphones
+// (tirée de son numéro = l'heure commune) ; PeoPeo dans la marmite pendant les POT_SLOTS premières scènes de chaque cycle
+// de SCENE_CYCLE, dehors ensuite
+const SCENE_S = 24, SCENE_CYCLE = 6, POT_SLOTS = 2;
+// Tirage au sort reproductible (mulberry32) : même numéro → mêmes nombres sur les deux téléphones
+function seeded(n) {
+  let a = (Math.imul(n, 2654435761) ^ 0x9e3779b9) >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const pickSeeded = (rnd, list) => { let r = rnd() * list.reduce((x, [w]) => x + w, 0); return list.find(([w]) => (r -= w) < 0)?.[1] ?? list[0][1]; };
+const SOLO = [[3, "game"], [2, "cook"], [2, "bbq"], [2, "rice"], [2, "pho"], [2, "matcha"], [1.5, "beer"], [3, "scooter"], [2, "shop"], [2, "roll"], [1, "swim"], [1, "wave"]];
+const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [2, "chase"], [2, "solo"]];
+// La scène n° k : { k, peoOut, duo (ce que PeoPeo fait avec Tino, ou null), tino (ce que fait Tino), dur, win, crash, bounce }
+function sceneOf(k) {
+  const rnd = seeded(k), peoOut = ((k % SCENE_CYCLE) + SCENE_CYCLE) % SCENE_CYCLE >= POT_SLOTS;
+  let duo = peoOut ? pickSeeded(rnd, DUOS) : "solo", tino;
+  if (duo === "solo") { duo = null; tino = pickSeeded(rnd, SOLO); }
+  else if (duo === "cook") tino = pickSeeded(rnd, [[1, "cook"], [1, "bbq"], [1, "rice"]]);
+  else tino = duo === "chase" ? "wait" : duo;
+  return { k, peoOut, duo, tino, dur: 11 + 5 * rnd(), win: rnd() < 0.6, crash: rnd() < 0.5, bounce: rnd() < 0.5 };
+}
+// Ce que Tino fait pour la scène (là où il est, sur son écran) ; si ce n'est pas possible ici (pas la place…), il se promène
+function tinoScene(m, sc) {
+  const me = m.plat();
+  if (!me) return [];
+  const kind = sc.tino, ctx = { plats: m.eng.plats, today: m.eng.today, lines: m.eng.lines() };
+  if (kind === "wait") return [{ type: "idle", dur: 5 }];
+  if (kind === "beer") return [{ type: "beer", dur: sc.dur, duo: !!sc.duo }];
+  const ok = ["game", "cook", "bbq", "rice"].includes(kind) ? !!m.propSpot(kind) : ["shop", "scooter"].includes(kind) ? !!m.trip(kind) : kind === "swim" ? !!m.swimRow() : true;
+  if (!ok) return ACTIONS.walk.make(m, me, ctx);
+  const st = (ACTIONS[kind].make ?? (() => [{ type: kind }]))(m, me, ctx), last = st[st.length - 1];
+  if (last.type === kind) {
+    if (last.dur != null) last.dur = sc.dur;
+    if (kind === "game") last.win = sc.win;
+    if (kind === "scooter") { last.crash = sc.crash; last.bounce = sc.bounce; last.duo = sc.duo === "scooter"; }
+  }
+  return sc.duo === "scooter" ? [{ type: "idle", dur: 2.5 }, ...st] : st; // (scooter : il attend que PeoPeo arrive)
+}
+// Ce que PeoPeo fait pour la scène : il va vers Tino puis le rejoint (duo) ou le poursuit ; rien de spécial sinon
+function buddyScene(m, sc) {
+  const t = m.eng.buddy?.(m, "tino");
+  if (!sc.duo || !t) return [];
+  const P = t.plat(), side = t.x >= m.x ? 1 : -1;
+  const way = !P || t.k === m.k ? [] : m.pathTo({ k: t.k, x: clamp(t.x - side * m.size, P.x0, P.x1) });
+  return [...way, sc.duo === "chase" ? { type: "chase" } : { type: "duo", kind: sc.duo === "game" || sc.duo === "beer" || sc.duo === "scooter" ? sc.duo : "cook" }, { type: "wave", dur: 1.6 }];
+}
+const CHEERS = 1.5; // bière avec PeoPeo : « chin chin » (s)
+const POT_FIRST = [15, 40], POT_IN = [60, 180], POT_OUT = [60, 150], DIVE = 0.3;
 const LOOK = 8;   // décalage du visage quand il regarde de côté (repère 100)
 const SINK = 12;  // assis : il descend sur la ligne, les pieds pendent en dessous (repère 100)
 const LIE = 85;   // couché sur le côté (degrés)
@@ -822,6 +872,7 @@ const ACTIONS = {
     weight: (m) => (!m.eng.meal() && minutesNow() >= 18 * 60 ? 5 : 0),
     make: () => [{ type: "beer", dur: rand(9, 13) }],
     sit: true,
+    look: (m, a) => (a.with ? a.with * LOOK * 0.7 : 0), // (avec PeoPeo : il le regarde)
     step(m, a) {
       if (a.t > 1.5) { // il a bu : rouge pendant 2 min (même s'il fait autre chose ensuite), d'autant plus qu'il a bu
         if (Date.now() > m.redUntil) m.redMax = 0;
@@ -831,6 +882,12 @@ const ACTIONS = {
       return a.t >= a.dur;
     },
     pose(m, a, p) {
+      const u = a.cheers != null ? a.t - a.cheers : -1;
+      if (u >= 0 && u < CHEERS) { // « chin chin » avec PeoPeo : la chope levée vers lui
+        const k = smooth(clamp(Math.min(u, CHEERS - u) / 0.35, 0, 1));
+        p.holdY = -11 * k; p.holdRot = (a.with ?? 1) * 18 * k; p.armL = -50 - 25 * k; p.armR = 50 + 25 * k; p.sy = 0.97; p.sx = 1.02;
+        return;
+      }
       const c = m.clock, gulp = Math.max(0, Math.sin(c * 1.7)) ** 4, tipsy = clamp(a.t / a.dur, 0, 1);
       p.holdY = -7 * gulp; p.holdRot = -14 * gulp; p.head = -6 * gulp; p.armL = -50 - 10 * gulp; p.armR = 50 + 10 * gulp;
       p.rot = 3 * Math.sin(c * 1.3) * tipsy; p.sy = 0.97; p.sx = 1.02; p.blush = tipsy;
@@ -1015,6 +1072,251 @@ const ACTIONS = {
     busy: true,
   },
 };
+// Les actions « free » quittent les plateformes (la marmite est à côté du mois) : leur x n'est pas ramené sur la plateforme.
+// Il saute hors de la marmite (x0, y0 : le bord de la marmite) sur la plateforme p1, en x1 ; il jaillit d'abord (écrasé → étiré)
+ACTIONS.potOut = {
+  start(m, a) {
+    const P = m.plat(a.p1);
+    a.T = 0.45 + Math.hypot(a.x1 - a.x0, (P?.y ?? a.y0) - a.y0) / 900; a.h = 45;
+    if (a.x1 !== a.x0) m.dir = a.x1 < a.x0 ? -1 : 1;
+  },
+  step(m, a) {
+    const P = m.plat(a.p1);
+    if (!P) return true;
+    const s = clamp(a.t / a.T, 0, 1);
+    m.x = lerp(a.x0, a.x1, s); m.y = lerp(a.y0, P.y, s) - 4 * a.h * s * (1 - s);
+    if (s >= 1) { m.k = a.p1; m.y = P.y; }
+    return a.t >= a.T + LAND;
+  },
+  look: facing,
+  pose(m, a, p) {
+    if (a.t < 0.15) { const k = a.t / 0.15; p.sy = 0.55 + 0.55 * k; p.sx = 0.8 + 0.2 * k; p.armL = 60; p.armR = -60; return; }
+    jumpPose(p, a.t, 0, a.T);
+  },
+  busy: true, free: true,
+};
+// Il retourne dans la marmite : grand saut jusqu'à son bord, puis il plonge dedans (eng.enterPot : caché, la tête ressort)
+ACTIONS.potIn = {
+  start(m, a) {
+    const H = m.eng.home?.(m.def.key);
+    if (!H) { a.cancel = true; return; }
+    a.x0 = m.x; a.y0 = m.y; a.hx = H.x; a.hy = H.y;
+    a.T = 0.5 + Math.hypot(H.x - m.x, H.y - m.y) / 900; a.h = 40 + Math.max(0, m.y - H.y) * 0.15;
+    if (H.x !== m.x) m.dir = H.x < m.x ? -1 : 1;
+  },
+  step(m, a) {
+    if (a.cancel) return true;
+    const H = m.eng.home?.(m.def.key) ?? { x: a.hx, y: a.hy };
+    if (a.t < CROUCH) { m.y = a.y0; return false; }
+    const s = clamp((a.t - CROUCH) / a.T, 0, 1);
+    m.x = lerp(a.x0, H.x, s); m.y = lerp(a.y0, H.y, s) - 4 * a.h * s * (1 - s);
+    if (s < 1) return false;
+    const k = clamp((a.t - CROUCH - a.T) / DIVE, 0, 1);
+    m.y = H.y + m.size * 0.5 * k;
+    if (k >= 1) m.eng.enterPot(m);
+    return k >= 1;
+  },
+  look: facing,
+  pose(m, a, p) {
+    if (a.cancel) return;
+    if (a.t < CROUCH + a.T) { jumpPose(p, a.t, CROUCH, a.T); return; }
+    const k = clamp((a.t - CROUCH - a.T) / DIVE, 0, 1);
+    p.sy = 1 - 0.6 * k; p.sx = 1 - 0.35 * k; p.armL = 70; p.armR = -70; p.footL = p.footR = 2;
+  },
+  busy: true, free: true,
+};
+// PeoPeo poursuit Tino : Tino s'enfuit en courant (flee) vers le bout de la ligne, PeoPeo court derrière (moins vite) ;
+// quand Tino s'arrête, il halète (pant) et PeoPeo fait coucou. Tino doit être libre (pas occupé, pas endormi, pas « reste »)
+const CHASE_FREE = [undefined, "idle", "walk", "sit", "wave", "chat"];
+const canFlee = (t) => !!t && !t.busy() && !t.stay && !t.bubble?.sticky && !t.eng.night() && CHASE_FREE.includes(t.act?.type);
+ACTIONS.chase = {
+  weight(m) {
+    const t = m.eng.buddy?.(m, "tino");
+    return canFlee(t) && (t.k === m.k || m.eng.visible(t.plat())) ? 9 : 0;
+  },
+  make(m) {
+    const t = m.eng.buddy?.(m, "tino"), side = t.x >= m.x ? 1 : -1, go = { type: "chase" }, after = { type: "wave", dur: 1.8 };
+    if (t.k === m.k) return [go, after];
+    const P = t.plat();
+    return [...m.pathTo({ k: t.k, x: clamp(t.x - side * m.size, P.x0, P.x1) }), go, after];
+  },
+  start(m, a) {
+    const t = m.eng.buddy?.(m, "tino"), P = m.plat();
+    if (!canFlee(t) || t.k !== m.k || !P) { a.skip = true; return; }
+    const lo = Math.max(P.x0, m.eng.v.left + 20), hi = Math.min(P.x1, m.eng.v.right - 20);
+    let away = t.x >= m.x ? 1 : -1, end = away > 0 ? hi : lo;
+    if (Math.abs(end - t.x) < 60) { away = -away; end = away > 0 ? hi : lo; } // (coincé au bout : il file de l'autre côté, en passant devant lui)
+    t.now([{ type: "flee", x: end }, { type: "pant", dur: rand(3, 4) }]);
+    a.tino = t;
+  },
+  step(m, a, dt, me) {
+    if (a.skip) return true;
+    const t = a.tino, fleeing = t.act?.type === "flee" && t.k === m.k;
+    if (fleeing) {
+      const away = t.act.x >= t.x ? 1 : -1, d = t.x - away * t.size * 1.1 - m.x, sp = 70 * (m.size / 40) * dt;
+      if (Math.abs(d) > 1) { m.dir = d < 0 ? -1 : 1; m.x = clamp(m.x + clamp(d, -sp, sp), me.x0, me.x1); }
+    }
+    return (!fleeing && a.t > 0.4) || a.t > 8;
+  },
+  look: facing,
+  pose(m, a, p) { // il court : grandes enjambées, bras qui balancent fort
+    const ph = m.clock * 17;
+    p.rot = m.dir * 6 + 4 * Math.sin(ph); p.bob = -Math.abs(Math.sin(ph)) * m.size * 0.09; p.armL = 40 * Math.sin(ph); p.armR = 40 * Math.sin(ph);
+    p.footL = -Math.max(0, Math.sin(ph)) * 4.5; p.footR = -Math.max(0, -Math.sin(ph)) * 4.5;
+  },
+};
+// Avec Tino (duo) : PeoPeo le rejoint quand il joue, cuisine, boit une bière ou fait la sieste, ou l'invite à le faire
+// (Tino libre) — jeu vidéo, cuisine, bière (le soir), scooter. kind : game / cook / beer / squish / scooter ; ref : l'action
+// de Tino qu'il accompagne (fini quand elle se termine) ; here : arrivé à sa place. Places (px) : jeu = de l'autre côté de
+// Tino (face à l'écran) ; cuisine = de l'autre côté de l'objet, face à Tino, il touille avec la grande louche ; bière = à
+// côté, face à face (chin chin, puis ils boivent ; il rougit aussi) ; sieste = à côté, il tapote la tête de Tino, qui
+// s'aplatit (Tino dort toujours) ; scooter = assis derrière Tino sur la selle (derrière lui à l'écran) ; si Tino a un
+// accident, PeoPeo vole aussi (salto, à plat ventre ou rebonds, vertige).
+const DUO_OF = { game: "game", cook: "cook", bbq: "cook", rice: "cook", beer: "beer", nap: "squish", sleep: "squish" };
+const duoLeft = (ta) => (ta?.t !== undefined && ta.dur != null ? ta.dur - ta.t : 0);
+const joinable = (ta) => !!ta && !!DUO_OF[ta.type] && ta.t !== undefined && duoLeft(ta) > 5 && !ta.stay && ta.dur !== Infinity;
+function duoInvite(m, t) { // ce que PeoPeo propose à Tino (libre) : null s'il n'y a rien de possible
+  const opts = [], meal = m.eng.meal(), now = minutesNow();
+  if (!meal && t.propSpot("game")) opts.push([3, "game"]);
+  for (const k of ["cook", "bbq", "rice"]) if (t.propSpot(k)) opts.push([meal ? 4 : 0.6, k]);
+  if (!meal && now >= 17 * 60) opts.push([5, "beer"]);
+  if (t.trip("scooter")) opts.push([meal ? 0.5 : 3, "scooter"]);
+  return opts.length ? weighted(opts) : null;
+}
+ACTIONS.duo = {
+  weight(m) {
+    const t = m.eng.buddy?.(m, "tino");
+    if (!t || m.eng.night() || !(t.k === m.k || m.eng.visible(t.plat()))) return 0;
+    if (joinable(t.act)) return DUO_OF[t.act.type] === "squish" ? 14 : 22;
+    return canFlee(t) && duoInvite(m, t) ? 8 : 0;
+  },
+  make(m) {
+    const t = m.eng.buddy?.(m, "tino"), P = t.plat(), side = t.x >= m.x ? 1 : -1;
+    const go = joinable(t.act) ? { type: "duo", kind: DUO_OF[t.act.type] } : { type: "duo", invite: duoInvite(m, t) };
+    if (!go.kind && !go.invite) return [{ type: "idle", dur: 1 }];
+    go.kind ??= go.invite === "scooter" ? "scooter" : DUO_OF[go.invite];
+    const way = t.k === m.k ? [] : m.pathTo({ k: t.k, x: clamp(t.x - side * m.size, P.x0, P.x1) });
+    return [...way, go, { type: "wave", dur: 1.6 }];
+  },
+  start(m, a) {
+    const t = m.eng.buddy?.(m, "tino");
+    if (!t || t.k !== m.k) { a.skip = true; return; }
+    a.tino = t;
+    if (a.invite) {
+      if (!canFlee(t)) { a.skip = true; return; }
+      const steps = a.invite === "beer" ? [{ type: "beer", dur: rand(11, 15) }] : ACTIONS[a.invite].make(t, t.plat());
+      const last = steps[steps.length - 1];
+      if (last.type !== a.invite) { a.skip = true; return; }
+      last.duo = true;
+      t.now(steps);
+    }
+  },
+  step(m, a, dt, me) {
+    if (a.skip) return true;
+    const t = a.tino;
+    if (a.crashT != null) return crashStep(m, a, me); // (accident de scooter : il vole aussi)
+    if (!t || t.away || t.inPot || t.el.hidden || t.k !== m.k) return true;
+    if (!a.ref) {
+      const ta = t.act;
+      if (ta?.t !== undefined && (a.kind === "scooter" ? ta.type === "scooter" && ta.duo : DUO_OF[ta.type] === a.kind)) a.ref = ta;
+      else if (a.t > 6) return true;
+      else { duoWalk(m, a, t.x - Math.sign(t.x - m.x || 1) * m.size * 0.7, dt, me); return false; } // il le suit en attendant
+    }
+    const r = a.ref;
+    if (t.act !== r) return true; // Tino a fini (ou on l'a interrompu)
+    let x;
+    if (a.kind === "game") { a.dir = r.side; x = t.x - r.side * 36; }
+    else if (a.kind === "cook") { const D = PROPS[r.type]; a.dir = -r.side; x = t.x + r.side * ((D.gap + D.w / 2) * t.size + 22); }
+    else if (a.kind === "scooter") {
+      if (r.crashT != null) { // il vole aussi, un peu plus loin que Tino (pas sur lui)
+        a.side = r.side; a.bounce = Math.random() < 0.5; a.riding = false; startCrash(m, a, me);
+        a.land = clamp(a.land + a.side * 24, me.x0, me.x1); a.land2 = clamp(a.land2 + a.side * 24, me.x0, me.x1);
+        return false;
+      }
+      a.dir = r.side; x = t.x - r.side * 8;
+      if (r.t >= 0.5 || a.riding) { a.riding = !r.ended; a.here = true; m.x = lerp(m.x, clamp(x, me.x0, me.x1), Math.min(1, dt * 12)); m.dir = a.dir; return false; }
+    } else { // bière, sieste : à côté de lui, du côté où il est (ou de l'autre s'il n'y a pas la place)
+      const gap = a.kind === "beer" ? 27 : 24;
+      if (!a.bs) { a.bs = Math.sign(m.x - t.x) || 1; if (t.x + a.bs * gap < me.x0 || t.x + a.bs * gap > me.x1) a.bs = -a.bs; }
+      a.dir = -a.bs; x = t.x + a.bs * gap;
+      if (a.kind === "beer") r.with = a.bs;
+    }
+    if (!a.here) { if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; if (a.kind === "beer") r.cheers = r.t; } return false; }
+    m.x = clamp(x, me.x0, me.x1); m.dir = a.dir;
+    const u = a.t - a.hereT;
+    if (a.kind === "beer") {
+      if (u > 0.7 && !a.clink) { a.clink = true; if (!m.bubble) m.say("Chin chin! 🍻", { ms: 1800 }); m.love(); t.love(); }
+      if (u > CHEERS + 1) { if (Date.now() > m.redUntil) m.redMax = 0; m.redUntil = Date.now() + RED_MS; m.redMax = Math.max(m.redMax, clamp(u / 10, 0, 1)); }
+    }
+    if (a.kind === "squish") {
+      const pat = Math.max(0, Math.sin(m.clock * 5)) ** 2;
+      t.squishTo = 0.55 * pat; t.squishUntil = t.clock + 0.15;
+      if (pat > 0.95 && m.clock - (a.heartT ?? -9) > 1.6) { a.heartT = m.clock; t.love(); }
+    }
+    return false;
+  },
+  busy: (m, a) => a.crashT != null || !!a.riding,
+  sit: (m, a) => (a.here && (a.kind === "game" || a.kind === "beer")) || !!a.riding,
+  hold: (m, a) => (a.here && a.crashT == null ? { game: "controller", beer: "beer" }[a.kind] : null),
+  ladle: (m, a) => a.here && a.kind === "cook",
+  look: facing,
+  pose(m, a, p) {
+    if (a.crashT != null) { crashPose(m, a, p); return; }
+    if (!a.here) { if (a.moving) ACTIONS.walk.pose(m, a, p); return; }
+    const c = m.clock, r = a.ref, t = a.tino;
+    if (a.kind === "game") {
+      if (!r.ended) { p.armL = -40 + 7 * Math.sin(c * 23); p.armR = 40 + 7 * Math.sin(c * 19 + 1); p.head = 3 * Math.sin(c * 4.3); p.rot = a.dir * 2; p.sy = 0.97; p.sx = 1.02; }
+      else if (r.win) { p.armL = 150 + 15 * Math.sin(c * 10); p.armR = -p.armL; p.bob = -Math.abs(Math.sin(c * 10)) * m.size * 0.1; p.head = 6 * Math.sin(c * 12); }
+      else { p.armL = -40; p.armR = -150; p.head = 10; p.sy = 0.95; } // perdu : la main sur la tête
+    } else if (a.kind === "cook") { // il touille avec la grande louche
+      p.armL = 80 + 10 * Math.sin(c * 5); p.armR = 12; p.head = 5 + 2 * Math.sin(c * 5); p.rot = -2;
+      if (t?.act === r && r.ended) { p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.06; p.armR = -40; } // c'est prêt !
+    } else if (a.kind === "beer") {
+      const u = a.t - a.hereT;
+      if (u < CHEERS) { const k = smooth(clamp(Math.min(u, CHEERS - u) / 0.35, 0, 1)); p.holdY = -9 * k; p.holdRot = -18 * k; p.armL = -40 + 30 * k; p.armR = 40 + 10 * k; p.sy = 0.97; }
+      else { const gulp = Math.max(0, Math.sin(c * 1.5 + 1)) ** 4; p.holdY = -6 * gulp; p.holdRot = -12 * gulp; p.head = -5 * gulp; p.armL = -40; p.armR = 40; p.sy = 0.97; p.blush = clamp(u / 10, 0, 1); }
+    } else if (a.kind === "squish") { // il tapote la tête de Tino (qui dort)
+      const pat = Math.max(0, Math.sin(c * 5)) ** 2;
+      p.armL = 95 - 30 * pat; p.armR = 10; p.rot = -4 * pat; p.head = 4;
+    } else if (a.kind === "scooter") { // assis derrière Tino, les mains devant lui (il le tient)
+      const k = smooth(clamp((r.t - 0.1) / 0.45, 0, 1)) * (r.ended ? 1 - smooth(clamp((r.t - r.endT) / 0.5, 0, 1)) : 1);
+      p.bob = -PROPS.scooter.seat * t.size * k + (a.riding ? Math.sin(c * 40) * 0.3 : 0); p.armL = 35 * k; p.armR = 10 * k; p.rot = -a.dir * 3 * k; p.behind = true;
+    }
+  },
+};
+// Il marche jusqu'à x (un peu plus vite que d'habitude) ; true quand il y est
+function duoWalk(m, a, x, dt, me) {
+  const d = clamp(x, me.x0, me.x1) - m.x, sp = 40 * (m.size / 40) * dt;
+  a.moving = Math.abs(d) > 2;
+  if (!a.moving) { m.x += d; return true; }
+  m.dir = d < 0 ? -1 : 1; m.x += clamp(d, -sp, sp);
+  return false;
+}
+// Tino s'enfuit (poursuivi par PeoPeo) : il court vite en agitant les nageoires
+ACTIONS.flee = {
+  step(m, a, dt, me) {
+    const d = clamp(a.x, me.x0, me.x1) - m.x, sp = 95 * (m.size / 40) * dt;
+    if (d) m.dir = d < 0 ? -1 : 1;
+    if (Math.abs(d) <= sp || a.t > 5) { m.x += clamp(d, -sp, sp); return true; }
+    m.x += Math.sign(d) * sp;
+  },
+  look: facing,
+  pose(m, a, p) {
+    const ph = m.clock * 20;
+    p.rot = m.dir * 7 + 5 * Math.sin(ph); p.bob = -Math.abs(Math.sin(ph)) * m.size * 0.1;
+    p.armL = 65 + 25 * Math.sin(ph); p.armR = -(65 + 25 * Math.sin(ph + 1));
+    p.footL = -Math.max(0, Math.sin(ph)) * 3.5; p.footR = -Math.max(0, -Math.sin(ph)) * 3.5;
+  },
+};
+// … puis il halète, essoufflé (il souffle vite, la tête qui bat, « huff… huff… 💦 »)
+ACTIONS.pant = {
+  start(m, a) { if (!m.bubble) m.say("huff… huff… 💦", { ms: a.dur * 1000 }); },
+  look: () => 0,
+  pose(m, a, p) {
+    const c = m.clock, k = smooth(clamp((a.dur - a.t) / 0.6, 0, 1)), b = Math.abs(Math.sin(c * 9)) * k;
+    p.sy = 1 - 0.06 * b; p.sx = 1 + 0.045 * b; p.head = 8 * k + 4 * Math.sin(c * 9) * k; p.armL = -26 * k; p.armR = 26 * k; p.rot = 2 * Math.sin(c * 4.5) * k;
+  },
+};
 const CALM =["idle", "sit", "wave"]; // quand il a un message à dire, il reste là pour qu'on puisse le lire
 
 class Mascot {
@@ -1053,6 +1355,7 @@ class Mascot {
     this.k = null; this.x = 0; this.y = 0; this.dir = 1; this.side = 1; this.clock = rand(0, 10);
     this.look = 0; this.gaze = 0; this.sink = 0; this.lie = 0; this.stay = false; this.bubble = null; this.bedK = 0; this.bedAt = null;
     this.act = null; this.plan = [];
+    this.inPot = !!def.home; this.potT = rand(...POT_FIRST); this.outT = 0; // (PeoPeo : dans la marmite, et pour combien de temps)
     // tête aplatie : flat (0 = normale, 1 = toute plate, < 0 = étirée en rebondissant), press = ce que le frottement demande
     this.flat = 0; this.flatV = 0; this.press = 0; this.rubT = -9; this.rubbed = false; this.down = null; this.petT = 0; this.cheekK = -1;
     this.redUntil = 0; this.redMax = 0; this.flushK = 0; // rouge après une bière (heure réelle de fin, jusqu'à quel point) ; opacité affichée
@@ -1226,7 +1529,7 @@ class Mascot {
       this.petT = 0.7; // premier cœur bientôt
       // il s'arrête pour en profiter (pas s'il saute, roule, vole ou nage : seule sa tête s'aplatit ; assis ou endormi, il le reste)
       // (il joue ou cuisine : il continue, seule sa tête s'aplatit)
-      if (!this.busy() && !this.stay && !["sit", "sleep", "nap", "pet", "game", "cook", "bbq", "rice", "pho", "matcha", "beer", "shop", "scooter"].includes(this.act?.type)) this.now([{ type: "pet" }]);
+      if (!this.busy() && !this.stay && !["sit", "sleep", "nap", "pet", "game", "cook", "bbq", "rice", "pho", "matcha", "beer", "shop", "scooter", "duo"].includes(this.act?.type)) this.now([{ type: "pet" }]);
     }
     this.press = Math.min(1, this.press + step / (this.size * RUB_FULL));
     this.rubT = this.clock;
@@ -1302,6 +1605,7 @@ class Mascot {
     if (this.stay) return this.stayStep();
     let name;
     if (this.bubble?.sticky) name = pick(CALM);
+    else if (this.eng.together?.()) name = weighted(["idle", "walk", "sit", "wave", "hop"].map((n) => [ACTIONS[n].weight?.(this, ctx) ?? 0, n])); // (ensemble : la scène commune viendra)
     else if (this.eng.night() && this.def.only) return { type: "sleep", dur: Infinity }; // (PeoPeo : il dort assis, là où il est)
     else if (this.eng.night()) { // la nuit : dans la case d'aujourd'hui si elle est à l'écran, sinon là où il est ; couché, dans son lit
       const t = ctx.today, T = t && this.plat(t.k);
@@ -1355,10 +1659,12 @@ class Mascot {
   ease(dt) {
     const a = this.act, A = a && ACTIONS[a.type];
     this.look += ((A?.look ? A.look(this, a) : 0) - this.look) * Math.min(1, dt * 7);
-    this.sink += ((A?.sit ? 1 : 0) - this.sink) * Math.min(1, dt * 6);
+    const sits = typeof A?.sit === "function" ? A.sit(this, a) : A?.sit;
+    this.sink += ((sits ? 1 : 0) - this.sink) * Math.min(1, dt * 6);
     this.lie += ((A?.lie ? 1 : 0) - this.lie) * Math.min(1, dt * (A?.lie ? 3 : 6));
     // Tête aplatie : suit le frottement ; quand on le lâche, elle revient comme un ressort (s'étire un peu : « boing »)
     if (this.rubbing()) { this.flat += (this.press - this.flat) * Math.min(1, dt * 14); this.flatV = 0; }
+    else if (this.clock < (this.squishUntil ?? 0)) { this.flat += (this.squishTo - this.flat) * Math.min(1, dt * 12); this.flatV = 0; } // (PeoPeo lui écrase la tête)
     else {
       this.press = 0;
       this.flatV += (-180 * this.flat - 9 * this.flatV) * dt;
@@ -1423,7 +1729,9 @@ class Mascot {
     this.el.classList.toggle("ms-fish-gold", a.type === "eat" && a.fish === "golden_fish" && !a.burnt); // (un poisson doré cuit reste doré)
     this.el.classList.toggle("ms-fish-cooked", a.type === "eat" && !!a.cooked && !a.burnt && a.fish !== "golden_fish"); // (cuit / brûlé : 24_cooking.sql)
     this.el.classList.toggle("ms-fish-burnt", a.type === "eat" && !!a.burnt);
-    const inHands = a.t !== undefined ? HOLD_OF[a.type] ?? null : null; // manette, matcha, bière, bol de pho
+    const inHands = a.t !== undefined ? (A.hold ? A.hold(this, a) : HOLD_OF[a.type]) ?? null : null; // manette, matcha, bière, bol de pho
+    this.el.classList.toggle("ms-tool-ladle", a.t !== undefined && !!A.ladle?.(this, a)); // (PeoPeo : la grande louche)
+    const z = p.behind ? "-1" : ""; if (this.el.style.zIndex !== z) this.el.style.zIndex = z; // (passager du scooter : derrière Tino)
     if (inHands !== this.inHands) { if (this.inHands) this.el.classList.remove("ms-hold-" + this.inHands); if (inHands) this.el.classList.add("ms-hold-" + inHands); this.inHands = inHands; }
     if (inHands) {
       this.holdG.style.transform = p.holdY || p.holdRot ? `translateY(${p.holdY.toFixed(2)}px) rotate(${p.holdRot.toFixed(1)}deg)` : "";
@@ -1575,14 +1883,75 @@ const pageView = () => ({ top: scrollY, bottom: scrollY + innerHeight, left: scr
 // grumbles() : ses phrases râleuses quand on le touche 5 fois de suite
 // siesta() : sa sieste après le repas (12:30 – 13:00 par défaut) — il dort dans son lit, comme la nuit ;
 // meal() : l'heure des repas (11:30 – 12:30 et 18:30 – 19:30 par défaut) — il cuisine ou fait un barbecue (et ne joue pas)
-export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, siesta = isSiesta, meal = isMeal, tapThrough = () => true, lines = () => [], grumbles = () => [], belly = () => null }) {
+export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, siesta = isSiesta, meal = isMeal, tapThrough = () => true, lines = () => [], grumbles = () => [], belly = () => null, home = () => null, onHome = () => {}, together = () => false }) {
   injectStyle();
   layer.classList.add("ms-layer");
-  const asleep = () => night() || siesta(); // (la sieste fait tout comme la nuit : case d'aujourd'hui, lit, pas de nage…)
-  const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night: asleep, meal: () => meal() && !asleep(), tapThrough, layer, tapping: null, lines, grumbles, belly };
+  // (la sieste fait tout comme la nuit : case d'aujourd'hui, lit, pas de nage…) ; ensemble (MeoMeo et PeoPeo là) : Tino reste éveillé
+  const asleep = () => !together() && (night() || siesta());
+  const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night: asleep, meal: () => meal() && !asleep(), tapThrough, layer, tapping: null, lines, grumbles, belly, home, together, sceneK: null };
+  const slotNow = () => Math.floor(Date.now() / 1000 / SCENE_S);
+  let sceneCache = null;
+  const scene = (k) => (sceneCache?.k === k ? sceneCache : (sceneCache = sceneOf(k)));
   const list = kinds.map((k) => new Mascot(eng, { ...(KINDS[k] ?? KINDS.tino), key: KINDS[k] ? k : "tino" }));
   const room = Math.max(...list.map((m) => m.size)) * 1.05; // place au-dessus d'une plateforme pour qu'il y tienne
   eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
+  // L'autre personnage (key), s'il est à l'écran (pas parti, pas dans la marmite)
+  eng.buddy = (m, key) => list.find((x) => x !== m && x.def.key === key && !x.away && !x.inPot && !x.el.hidden) ?? null;
+  const hideAll = (m, h) => { m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = h; if (m.bubble) m.bubble.el.hidden = h; };
+  // Il plonge dans la marmite (fin de potIn) : caché, sa tête ressort de la marmite (onHome → l'app)
+  eng.enterPot = (m) => {
+    m.inPot = true; m.act = null; m.plan = []; m.potT = rand(...POT_IN); m.stay = false;
+    m.hush(true); m.dropProp(); hideAll(m, true);
+    onHome(m.def.key, true);
+  };
+  // Il saute hors de la marmite (H : son bord) sur la plateforme visible juste en dessous
+  const leavePot = (m, H) => {
+    const V = eng.plats.filter((q) => eng.visible(q)), below = V.filter((q) => q.y > H.y - 10 && H.x >= q.x0 - 80 && H.x <= q.x1 + 80);
+    const P = below[0] ?? nearestPlat(V, H.y, H.x);
+    if (!P) return false;
+    m.inPot = false; m.placed = true; m.plan = []; m.sink = m.lie = 0; m.bedAt = null; m.bedK = 0; m.flat = m.flatV = 0;
+    m.k = P.key; m.x = H.x; m.y = H.y; m.outT = rand(...POT_OUT);
+    m.act = { type: "potOut", x0: H.x, y0: H.y, p1: P.key, x1: clamp(H.x - rand(10, 70), P.x0, P.x1) };
+    hideAll(m, false);
+    onHome(m.def.key, false);
+    return true;
+  };
+  // La marmite (home) : dedans, il en sort au bout de potT (si elle est à l'écran, le jour, avec des plateformes) ; dehors, au
+  // bout de outT — ou à la nuit — il y retourne (si elle est à l'écran ; sinon il attend), pas au milieu d'une poursuite.
+  // Ensemble : c'est la scène commune qui dit s'il est dedans ou dehors (et en sortant, il fait tout de suite sa part de la scène)
+  const homeTick = (m, dt) => {
+    if (!m.def.home || m.away || !eng.plats.length) return;
+    const H = home(m.def.key), seen = !!H && H.y >= eng.v.top && H.y <= eng.v.bottom;
+    if (together()) {
+      const sc = scene(slotNow());
+      if (m.inPot) { if (sc.peoOut && seen && !reduce.matches && leavePot(m, H)) m.plan = buddyScene(m, sc); }
+      else if (!sc.peoOut && seen && !m.busy() && m.act?.type !== "potIn") m.now([{ type: "potIn" }]);
+      return;
+    }
+    if (m.inPot) {
+      if ((m.potT -= dt) > 0 || !seen || eng.night() || reduce.matches) return;
+      leavePot(m, H);
+      return;
+    }
+    if (m.busy() || m.stay || ["chase", "potIn", "duo"].includes(m.act?.type)) return;
+    if ((m.outT -= dt) > 0 && !eng.night()) return;
+    if (seen) m.now([{ type: "potIn" }]);
+  };
+  // Ensemble : à chaque nouvelle scène (toutes les SCENE_S s, à la même seconde sur les deux téléphones), Tino commence la
+  // sienne et PeoPeo (s'il est dehors) la sienne — juste après l'action en cours si elle ne s'interrompt pas
+  const sceneTick = () => {
+    if (!together()) { eng.sceneK = null; return; }
+    const k = slotNow();
+    if (k === eng.sceneK) return;
+    eng.sceneK = k;
+    const sc = scene(k);
+    list.forEach((m) => {
+      if (m.away || m.inPot || m.el.hidden || reduce.matches) return;
+      const st = m.def.home ? buddyScene(m, sc) : tinoScene(m, sc);
+      m.stay = false;
+      if (st.length) m.now(st);
+    });
+  };
   list.forEach((m) => layer.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl));
   const reduce = matchMedia("(prefers-reduced-motion: reduce)");
   let raf = 0, last = 0;
@@ -1599,14 +1968,14 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     const t = today();
     eng.today = t && eng.byKey.has(t.key) ? { k: t.key, x: t.x } : null;
     list.forEach((m, i) => {
-      const off = !eng.plats.length || m.away;
+      const off = !eng.plats.length || m.away || m.inPot;
       m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = off;
       if (m.bubble) m.bubble.el.hidden = off;
       if (off) return;
       if (!m.placed || moved) { m.place(i); return; }
       if (!eng.byKey.has(m.k)) m.k = nearestPlat(eng.plats, prev.get(m.k)?.y ?? m.y, m.x).key;
       const P = m.plat();
-      m.x = clamp(m.x, P.x0, P.x1);
+      if (!ACTIONS[m.act?.type]?.free) m.x = clamp(m.x, P.x0, P.x1); // (pas en sautant vers / depuis la marmite)
       if (!m.busy()) m.y = P.y;
     });
   }
@@ -1614,7 +1983,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   function refresh() {
     measure();
     list.forEach((m) => {
-      if (!eng.plats.length || m.away) return;
+      if (!eng.plats.length || m.away || m.inPot) return;
       if (reduce.matches) still(m);
       m.render();
     });
@@ -1637,7 +2006,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
 
   // Il n'est plus à l'écran (la page a défilé) et le défilement est fini : il revient (pas au milieu d'un saut ou d'un vol)
   function follow(m) {
-    if (m.el.hidden || ["drop", "fly", "hop"].includes(m.act?.type) || performance.now() - eng.scrollT < FOLLOW_MS || inView(m)) return;
+    if (m.el.hidden || ["drop", "fly", "hop", "potIn", "potOut"].includes(m.act?.type) || performance.now() - eng.scrollT < FOLLOW_MS || inView(m)) return;
     m.dropIn(m.y > eng.v.bottom ? "bottom" : "top");
   }
 
@@ -1650,7 +2019,8 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       measure();
       if (!eng.plats.length) { raf = 0; return; }
     } else eng.v = view();
-    list.forEach((m) => { if (m.away) return; follow(m); m.update(dt); m.render(); });
+    sceneTick();
+    list.forEach((m) => { homeTick(m, dt); if (m.away || m.inPot) return; follow(m); m.update(dt); m.render(); });
     raf = requestAnimationFrame(frame);
   }
 
@@ -1708,11 +2078,14 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       const m = list.find((x) => x.def.key === kind);
       if (!m || m.away === !!away) return;
       m.away = !!away;
-      if (m.away) { m.hush(true); m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = true; return; }
+      if (m.away) { m.hush(true); hideAll(m, true); return; }
+      if (m.def.home) { m.inPot = true; m.act = null; m.plan = []; m.potT = rand(...POT_FIRST); onHome(kind, true); return; } // (il revient : dans la marmite)
       m.placed = false; // (au prochain mesurage : la case d'aujourd'hui si elle est à l'écran, sinon il tombe du haut)
       refresh(); run();
     },
     hush() { tino?.hush(true); },
+    inPot(kind) { return !!list.find((x) => x.def.key === kind)?.inPot; },
+    scene() { return together() ? scene(slotNow()) : null; }, // (essais : la scène commune en cours) // (PeoPeo est dans la marmite : sa tête en sort)
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
     // On l'a nourri (ici ou chez l'autre) : il mange son poisson (pas s'il dort, ni sans animations)
     eat(fish, opt = {}) { if (tino && !reduce.matches && !eng.night() && !tino.el.hidden) tino.now([{ type: "eat", fish, ...opt }]); },
