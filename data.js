@@ -22,7 +22,7 @@
 //   fishTino() → la prise d'un lancer, listCatches() → { catches (les plus récentes d'abord), color (couleur active | null) },
 //   subscribeCatches(onChange) → la pêche (20_fishing.sql) ; une prise : { id, by, at, kind: "outfit" | "color" | "junk",
 //     outfit, outfitName, color: { h, s, l } | null, junk, until }
-//   listFeeding() → { belly: { fill, at, by, fish } | null, fish: { fish, big_fish, golden_fish } (pas encore mangés) },
+//   listFeeding() → { belly: { fill, at, by, fish, burnt } | null, fish: { fish, big_fish, golden_fish } (pas encore mangés) },
 //   feedTino(kind) → le ventre après le repas, listHungerLines(), addHungerLine(level, body), deleteHungerLine(id),
 //   subscribeFeeding(onChange) → nourrir Tino (21_feeding.sql) ; une phrase de faim : { id, by, level, body }
 //   getBath() → { at, by } (dernier bain), washTino() → { at, by, washedColour }, subscribeBath(onChange) → laver Tino (23_bath.sql)
@@ -307,14 +307,14 @@ export function createBackend() {
     // Nourrir Tino (supabase/21_feeding.sql) : canal temps réel à part (sans 21, la pêche marche comme avant)
     async listFeeding() {
       const [belly, fish] = (await Promise.all([
-        sb.from("tino_belly").select("fill, at, fed_by, fish").maybeSingle(),
+        sb.from("tino_belly").select("*").maybeSingle(), // (« * » : marche avant et après 24, qui ajoute burnt)
         sb.from("tino_catches").select("junk").eq("kind", "junk").in("junk", FISH_KINDS).is("eaten_at", null),
       ])).map(must);
       const n = { fish: 0, big_fish: 0, golden_fish: 0 };
       for (const r of fish) n[r.junk]++;
-      return { belly: belly ? { fill: belly.fill, at: belly.at, by: belly.fed_by, fish: belly.fish } : null, fish: n };
+      return { belly: belly ? { fill: belly.fill, at: belly.at, by: belly.fed_by, fish: belly.fish, burnt: !!belly.burnt } : null, fish: n };
     },
-    async feedTino(kind) { const r = must(await sb.rpc("feed_tino", { p_fish: kind })); return { fill: r.fill, at: r.at, by: r.by, fish: r.fish }; },
+    async feedTino(kind) { const r = must(await sb.rpc("feed_tino", { p_fish: kind })); return { fill: r.fill, at: r.at, by: r.by, fish: r.fish, burnt: !!r.burnt }; }, // (burnt : 24_cooking.sql, 1 fois sur 10)
     async listHungerLines() {
       return must(await sb.from("tino_hunger_lines").select("id, author, level, body").order("id")).map((r) => ({ id: r.id, by: r.author, level: r.level, body: r.body }));
     },

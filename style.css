@@ -581,3 +581,30 @@ a { color: var(--text-accent); }
   background: radial-gradient(circle at 35% 30%, #fff 0 30%, rgba(225, 242, 255, 0.85) 60%, rgba(200, 228, 255, 0.4)); box-shadow: 0 0 0 1px rgba(170, 205, 235, 0.6);
   animation: mp-foam var(--d, 0.8s) ease-out forwards; }
 @keyframes mp-foam { from { opacity: 1; transform: translate(-50%, -50%) scale(0.4); } to { opacity: 0; transform: translate(-50%, -160%) scale(1.15); } }
+
+/* Cuire le poisson (24) : poêle, flammes, fumée ; le poisson dore (ou noircit) */
+.mp-cooking .mp-tummy-fish, .mp-cooking [data-feednow] { display: none; }
+.mp-cook { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 12px; background: rgba(255, 170, 90, 0.12); animation: mp-in 0.2s ease-out; }
+.mp-cook svg { width: 110px; flex: none; overflow: visible; }
+.mp-cook-msg { font-size: 0.92em; font-weight: 600; }
+.mp-flames path { fill: #ff8a3d; transform-box: fill-box; transform-origin: center bottom; animation: mp-flame 0.35s ease-in-out infinite alternate; }
+.mp-flames path:nth-child(2n) { fill: #ffc145; animation-delay: 0.15s; }
+@keyframes mp-flame { from { transform: scaleY(0.75); } to { transform: scaleY(1.1); } }
+.mp-cook-fish { fill: #9fb6c9; stroke: #6e8597; stroke-width: 1; transition: fill 2.4s, stroke 2.4s; animation: mp-sizzle 0.18s ease-in-out infinite alternate; }
+@keyframes mp-sizzle { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+.mp-cooked .mp-cook-fish { fill: #d99a4e; stroke: #9a5f22; }
+.mp-burnt .mp-cook-fish { fill: #2a2522; stroke: #111; transition-duration: 0.6s; }
+.mp-smoke circle { fill: rgba(220, 225, 235, 0.55); animation: mp-smoke 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.mp-burnt .mp-smoke circle { fill: rgba(60, 60, 66, 0.75); animation-duration: 1s; }
+@keyframes mp-smoke { from { opacity: 0.8; transform: translateY(6px) scale(0.6); } to { opacity: 0; transform: translateY(-22px) scale(1.6); } }
+/* Bain : le savon qu'on frotte, la mousse qui reste collée, le rinçage */
+.mp-soap { position: absolute; z-index: 5; width: 34px; height: 22px; border-radius: 8px; pointer-events: none; transform: translate(-50%, -50%);
+  background: linear-gradient(160deg, #ffd6e8, #ff9fc8); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.7), 0 2px 4px rgba(0, 0, 20, 0.25);
+  animation: mp-rub 0.85s ease-in-out forwards; }
+@keyframes mp-rub { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(-12deg); } 12% { opacity: 1; } 25%, 65% { transform: translate(-80%, -50%) rotate(-18deg); } 45%, 85% { transform: translate(-20%, -45%) rotate(-6deg); } 100% { opacity: 0; transform: translate(-50%, -50%) rotate(-12deg); } }
+.mp-foam-stick { animation: mp-foam-pop 0.3s ease-out forwards; }
+@keyframes mp-foam-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.2); } to { opacity: 0.95; transform: translate(-50%, -50%) scale(1); } }
+.mp-foam-stick.mp-rinse { animation: mp-foam-rinse 0.8s ease-in forwards; }
+@keyframes mp-foam-rinse { from { opacity: 0.95; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, 40%) scale(0.6); } }
+.mp-drop { position: absolute; top: 0; z-index: 5; width: 5px; height: 9px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: #8fd0ff; pointer-events: none; animation: mp-drop 0.9s ease-in forwards; }
+@keyframes mp-drop { from { opacity: 0; transform: translateY(-10px); } 15% { opacity: 1; } to { opacity: 0; transform: translateY(150px); } }

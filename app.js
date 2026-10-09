@@ -2256,7 +2256,7 @@ function fishScene(pane) {
     const fish = c.kind === "junk" && FISH[c.junk]; // un poisson : bonne nouvelle (de quoi nourrir Tino)
     if (fish) {
       out.innerHTML = `<div class="mp-fish-got"><span class="mp-fish-emoji">${fish[0]}</span><span>${fish[1].replace(/^./, (x) => x.toUpperCase())}! ${S.feedingOk === true ? `It goes in Tino's bucket (+${BELLY.gain[c.junk]} for his tummy).` : ""}</span></div>
-        ${S.feedingOk === true ? `<button type="button" class="mp-cta" data-feednow>🍽 Feed Tino now</button>` : ""}`;
+        ${S.feedingOk === true ? `<button type="button" class="mp-cta" data-feednow>🍳 Cook it and feed Tino</button>` : ""}`;
       out._eater = () => m;
       out.querySelector("[data-feednow]")?.addEventListener("click", (ev) => { ev.target.disabled = true; feedTino(c.junk, out); });
     }
@@ -2308,8 +2308,8 @@ async function loadFeeding() {
   // L'autre vient de nourrir Tino (pas au démarrage ; repère = date du dernier repas vu) : on le dit, le petit Tino mange aussi
   const b = S.feeding?.belly;
   if (b?.at && feedSeen !== null && newerThan(b.at, feedSeen) && b.by && b.by !== S.user.id && S.partner) {
-    toast(`🍽 ${S.partner.mark} ${S.partner.label} fed Tino ${FISH[b.fish]?.[1] ?? "a fish"} ${FISH[b.fish]?.[0] ?? "🐟"}`);
-    mascots?.eat(b.fish);
+    toast(`🍽 ${S.partner.mark} ${S.partner.label} fed Tino ${b.burnt ? "a burnt fish 😖" : `${FISH[b.fish]?.[1] ?? "a fish"} ${FISH[b.fish]?.[0] ?? "🐟"}`}`);
+    mascots?.eat(b.fish, { cooked: true, burnt: !!b.burnt });
   }
   if (b?.at && (feedSeen === null || newerThan(b.at, feedSeen))) feedSeen = b.at;
   else if (feedSeen === null) feedSeen = "";
@@ -2317,7 +2317,7 @@ async function loadFeeding() {
 }
 // La jauge et le seau (sous le grand Tino, dans Fishing) et les phrases suivent (pas pendant qu'on tape une phrase)
 function feedingChanged() {
-  document.querySelectorAll(".mp-tummy").forEach((b) => fillTummy(b));
+  document.querySelectorAll(".mp-tummy").forEach((b) => { if (!b.classList.contains("mp-cooking")) fillTummy(b); }); // (pas pendant une cuisson)
   const h = document.querySelector(".mp-hunger");
   if (h && ![...h.querySelectorAll("input")].some((i) => i.value)) fillHungerLines(h);
 }
@@ -2330,25 +2330,50 @@ function fillTummy(box) {
   const v = bellyNow() ?? 0, level = bellyLevel(v), [emo, label] = LEVELS[level], n = S.feeding.fish ?? {}, full = v >= BELLY.max;
   box.innerHTML = `<div class="mp-tummy-head"><span>${emo} Tino's tummy: <b>${label}</b></span><span class="pl-legend">${Math.round(v)}%</span></div>
     <div class="mp-tummy-bar mp-${level}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(v)}" aria-label="Tino's tummy"><i style="width:${v.toFixed(1)}%"></i></div>
-    <span class="mp-row mp-tummy-fish">${Object.entries(FISH).map(([k, [e, , name]]) => `<button type="button" data-feed="${k}" ${!n[k] || full || feedingNow ? "disabled" : ""} title="Feed Tino ${name.toLowerCase()} (+${BELLY.gain[k]})">${e} ×${n[k] ?? 0} · Feed</button>`).join("")}</span>
+    <span class="mp-row mp-tummy-fish">${Object.entries(FISH).map(([k, [e, , name]]) => `<button type="button" data-feed="${k}" ${!n[k] || full || feedingNow ? "disabled" : ""} title="Feed Tino ${name.toLowerCase()} (+${BELLY.gain[k]})">${e} ×${n[k] ?? 0} · 🍳 Cook & feed</button>`).join("")}</span>
     <div class="pl-legend">${full ? "He's full — he can eat again a little later. " : ""}Catch fish in 🎣 Fishing to feed him (🦀 crabs and 🥾 boots aren't food). His tummy empties in about a day.</div>`;
   box.querySelectorAll("[data-feed]").forEach((b) => b.addEventListener("click", () => feedTino(b.dataset.feed, box)));
   tummyTimer = setTimeout(() => document.querySelectorAll(".mp-tummy").forEach((x) => fillTummy(x)), 60000); // (la jauge baisse toute seule)
 }
+// On cuit le poisson avant de le donner (24_cooking.sql) : une poêle sur le feu, le poisson grésille et dore (~2,8 s) ;
+// 1 fois sur 10 la fumée le grille et il devient noir (tirage fait par la base, pendant la cuisson) — Tino le mange quand
+// même, en grimaçant (il nourrit deux fois moins)
+const COOK_MS = 2800;
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 async function feedTino(kind, box) {
   if (feedingNow) return;
   if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
   feedingNow = true;
   document.querySelectorAll("[data-feed]").forEach((b) => { b.disabled = true; });
+  const pan = document.createElement("div");
+  pan.className = "mp-cook";
+  pan.innerHTML = `<svg viewBox="0 0 140 78" aria-hidden="true">
+      <g class="mp-smoke">${[[56, 22], [70, 16], [84, 22], [64, 10], [78, 8]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${5 + (i % 3)}" style="animation-delay:${i * 0.25}s"/>`).join("")}</g>
+      <g class="mp-flames">${[48, 62, 76, 90].map((x) => `<path d="M${x} 76Q${x - 6} 66 ${x} 58Q${x + 6} 66 ${x} 76Z"/>`).join("")}</g>
+      <path d="M118 49L138 42" stroke="#555a66" stroke-width="5" stroke-linecap="round"/>
+      <ellipse cx="70" cy="52" rx="50" ry="9" fill="#3b3f4a"/><path d="M20 50Q22 62 70 62Q118 62 120 50Z" fill="#2c2f38"/>
+      <g class="mp-cook-fish"><path d="M88 46L98 39V53Z"/><ellipse cx="68" cy="46" rx="22" ry="8"/><circle cx="54" cy="44.5" r="1.8" fill="#2f3038"/></g>
+    </svg><span class="mp-cook-msg">🍳 Cooking ${FISH[kind][1]}… it sizzles!</span>`;
+  box?.classList.add("mp-cooking");
+  box?.append(pan);
   let r = null;
-  try { r = await db.feedTino(kind); }
+  try { [r] = await Promise.all([db.feedTino(kind), sleepMs(COOK_MS)]); }
   catch (err) { toast(/tino is full/i.test(err.message) ? "😋 Tino is full — try again a bit later" : /no fish left/i.test(err.message) ? "🪣 No fish like that left — go fishing!" : `⚠️ Couldn't feed Tino (${err.message})`); }
+  if (r) {
+    pan.classList.add(r.burnt ? "mp-burnt" : "mp-cooked");
+    pan.querySelector(".mp-cook-msg").textContent = r.burnt ? "💨 Oh no! The smoke grilled it — it's all black…" : "✨ Nicely cooked!";
+    await sleepMs(1400);
+  }
+  pan.remove();
+  box?.classList.remove("mp-cooking");
   feedingNow = false;
   if (r) {
     S.feeding.belly = r; S.feeding.fish[kind] = Math.max(0, (S.feeding.fish[kind] ?? 1) - 1); feedSeen = r.at;
-    box?._eater?.()?.now([{ type: "eat", fish: kind }]);
-    if (currentTab() === "calendar") mascots?.eat(kind);
-    toast(`😋 Yum! Tino ate ${FISH[kind][1]} ${FISH[kind][0]}`);
+    const meal = { type: "eat", fish: kind, cooked: true, burnt: !!r.burnt }, eater = box?._eater?.();
+    eater?.now([meal]);
+    if (r.burnt) setTimeout(() => eater?.say("Bleh… burnt! 😖", { ms: 2600 }), 3500);
+    if (currentTab() === "calendar") mascots?.eat(kind, { cooked: true, burnt: !!r.burnt });
+    toast(r.burnt ? `😖 Tino ate the burnt fish anyway… (half as filling)` : `😋 Yum! Tino ate ${FISH[kind][1]}, nicely cooked ${FISH[kind][0]}`);
   }
   feedingChanged();
   loadFeeding();
@@ -2437,26 +2462,43 @@ function startBath(box) {
   sc.card.classList.add("mp-bathing");
   const say = (t) => { const b = box.querySelector(".mp-bath-msg") ?? box.appendChild(Object.assign(document.createElement("div"), { className: "pl-legend mp-bath-msg" })); b.textContent = t; };
   box.querySelector("[data-bath]").disabled = true;
-  say(`🧽 Tap Tino to scrub him! (0/${SCRUBS})`);
-  const end = () => { stage.removeEventListener("click", scrub, true); tub.remove(); sc.card.classList.remove("mp-bathing"); sc.card.style.removeProperty("--ms-dirt"); bathing = null; };
+  say(`🧼 Tap Tino to rub the soap on him! (0/${SCRUBS})`);
+  const end = () => { stage.removeEventListener("click", scrub, true); tub.remove(); stage.querySelectorAll(".mp-foam-stick, .mp-soap").forEach((f) => f.remove()); sc.card.classList.remove("mp-bathing"); sc.card.style.removeProperty("--ms-dirt"); bathing = null; };
   async function scrub(ev) {
     ev.stopPropagation(); ev.preventDefault(); // (pas le saut / la colère du toucher habituel)
     if (done) return;
     n++;
-    const r = stage.getBoundingClientRect();
-    for (let i = 0; i < 4; i++) {
-      const f = document.createElement("i");
-      f.className = "mp-foam";
-      f.style.left = `${ev.clientX - r.left + (Math.random() - 0.5) * 50}px`; f.style.top = `${ev.clientY - r.top + (Math.random() - 0.5) * 30}px`;
-      f.style.setProperty("--d", `${0.5 + Math.random() * 0.6}s`); f.style.width = f.style.height = `${8 + Math.random() * 14}px`;
+    const r = stage.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    // le savon : il apparaît là où on touche et frotte (va-et-vient), puis s'en va
+    const soap = document.createElement("i");
+    soap.className = "mp-soap";
+    soap.style.left = `${x}px`; soap.style.top = `${y}px`;
+    stage.append(soap);
+    setTimeout(() => soap.remove(), 900);
+    // la mousse : elle reste collée sur lui (jusqu'au rinçage) ; quelques bulles s'envolent
+    for (let i = 0; i < 6; i++) {
+      const f = document.createElement("i"), stick = i < 4;
+      f.className = stick ? "mp-foam mp-foam-stick" : "mp-foam";
+      f.style.left = `${x + (Math.random() - 0.5) * (stick ? 34 : 50)}px`; f.style.top = `${y + (Math.random() - 0.5) * (stick ? 24 : 30)}px`;
+      f.style.setProperty("--d", `${0.5 + Math.random() * 0.6}s`); f.style.width = f.style.height = `${(stick ? 10 : 7) + Math.random() * 12}px`;
       stage.append(f);
-      setTimeout(() => f.remove(), 1300);
+      if (!stick) setTimeout(() => f.remove(), 1300);
     }
     sc.m.flat = 0.45; sc.m.flatV = 0; // (il fait « boing » sous la brosse)
     sc.card.style.setProperty("--ms-dirt", (dirt0 * (1 - n / SCRUBS)).toFixed(2)); // ses taches pâlissent
-    say(n < SCRUBS ? `🧽 Scrub scrub… (${n}/${SCRUBS})` : "🚿 Rinsing…");
+    say(n < SCRUBS ? `🧼 Scrub scrub… (${n}/${SCRUBS})` : "🚿 Rinsing…");
     if (n < SCRUBS) return;
     done = true;
+    // rinçage : des gouttes tombent, la mousse s'en va
+    for (let i = 0; i < 14; i++) {
+      const d = document.createElement("i");
+      d.className = "mp-drop";
+      d.style.left = `${r.width / 2 + (Math.random() - 0.5) * 120}px`; d.style.animationDelay = `${Math.random() * 0.6}s`;
+      stage.append(d);
+      setTimeout(() => d.remove(), 1600);
+    }
+    stage.querySelectorAll(".mp-foam-stick").forEach((f) => f.classList.add("mp-rinse"));
+    await sleepMs(900);
     let w = null;
     try { w = await db.washTino(); }
     catch (err) { toast(/wash_tino|schema cache|does not exist/i.test(err.message) ? "⚠️ Tony needs to run supabase/23_bath.sql" : `⚠️ Couldn't give Tino a bath (${err.message})`); }

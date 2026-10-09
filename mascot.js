@@ -60,6 +60,8 @@ const STYLE = `
 .ms-fish-big .ms-fishbody { fill: #5aa2ea; stroke: #2f74bd; }
 .ms-fish-big .ms-fishbody .ms-fin { fill: #8fc2f2; }
 .ms-fish-gold .ms-fishbody { fill: #ffd23f; stroke: #d99a14; }
+.ms-fish-cooked .ms-fishbody { fill: #d99a4e; stroke: #9a5f22; } .ms-fish-cooked .ms-fishbody .ms-fin { fill: #e8b878; } /* poisson cuit (24) */
+.ms-fish-burnt .ms-fishbody { fill: #2a2522; stroke: #111; } .ms-fish-burnt .ms-fishbody .ms-fin { fill: #3d3531; } .ms-fish-burnt .ms-sparkle { display: none !important; } /* brûlé */
 .ms-fish-gold .ms-fishbody .ms-fin { fill: #fff0a8; }
 .ms-sparkle { display: none; }
 .ms-fish-gold .ms-sparkle { display: inline; animation: ms-anger 0.5s ease-in-out infinite alternate; }
@@ -1370,7 +1372,9 @@ class Mascot {
     this.el.classList.toggle("ms-tool-on-l", busyHands && a.side < 0);
     this.el.classList.toggle("ms-tool-paddle", a.type === "rice"); // (spatule à riz)
     this.el.classList.toggle("ms-fish-big", a.type === "eat" && a.fish === "big_fish"); // (poisson qu'il mange : gros, doré)
-    this.el.classList.toggle("ms-fish-gold", a.type === "eat" && a.fish === "golden_fish");
+    this.el.classList.toggle("ms-fish-gold", a.type === "eat" && a.fish === "golden_fish" && !a.burnt); // (un poisson doré cuit reste doré)
+    this.el.classList.toggle("ms-fish-cooked", a.type === "eat" && !!a.cooked && !a.burnt && a.fish !== "golden_fish"); // (cuit / brûlé : 24_cooking.sql)
+    this.el.classList.toggle("ms-fish-burnt", a.type === "eat" && !!a.burnt);
     const inHands = a.t !== undefined ? HOLD_OF[a.type] ?? null : null; // manette, matcha, bière, bol de pho
     if (inHands !== this.inHands) { if (this.inHands) this.el.classList.remove("ms-hold-" + this.inHands); if (inHands) this.el.classList.add("ms-hold-" + inHands); this.inHands = inHands; }
     if (inHands) {
@@ -1652,7 +1656,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     hush() { tino?.hush(true); },
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
     // On l'a nourri (ici ou chez l'autre) : il mange son poisson (pas s'il dort, ni sans animations)
-    eat(fish) { if (tino && !reduce.matches && !eng.night() && !tino.el.hidden) tino.now([{ type: "eat", fish }]); },
+    eat(fish, opt = {}) { if (tino && !reduce.matches && !eng.night() && !tino.el.hidden) tino.now([{ type: "eat", fish, ...opt }]); },
     destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); m.propEl.remove(); m.bannerEl.remove(); }); },
   };
 }
