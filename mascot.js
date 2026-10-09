@@ -7,7 +7,8 @@
 // ou la souris bouton enfoncé sur lui) = sa tête s'aplatit, puis rebondit quand on le lâche.
 
 const STYLE = `
-.ms-fur { fill: var(--ms-fur, #ffffff); stroke: var(--ms-fur-line, #c9d0e2); } /* couleur pêchée : variables posées par l'app sur la racine (html) ; jamais de chevrons ici : ce style va aussi dans les images SVG du widget */
+.ms-fur { fill: var(--ms-fur, #ffffff); stroke: var(--ms-fur-line, #c9d0e2); }
+.ms-dirt { opacity: var(--ms-dirt, 0); } /* saleté (laver Tino) : variable posée par l'app, 0 = propre */ /* couleur pêchée : variables posées par l'app sur la racine (html) ; jamais de chevrons ici : ce style va aussi dans les images SVG du widget */
 .ms-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .ms { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; will-change: transform;
   -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; }
@@ -174,13 +175,15 @@ function sealSvg() {
   <g class="ms-foot-r"><ellipse class="ms-fur" cx="62" cy="95" rx="8.5" ry="4.5" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
   <path d="M34 58C26 52 13 55 14 65C15 73 22 75 27 74C24 80 22 90 30 95C37 99 45 96 50 92C55 96 63 99 70 95C78 90 76 80 73 74C78 75 85 73 86 65C87 55 74 52 66 58Z" fill="#f7f0de" stroke="#dacfb4" stroke-width="1.3"/>
   ${stars}
+  <g class="ms-dirt" opacity="0" fill="#8a6a48"><ellipse cx="33" cy="84" rx="4.5" ry="3" opacity="0.45"/><ellipse cx="62" cy="70" rx="3.2" ry="2.4" opacity="0.4"/><ellipse cx="55" cy="88" rx="2.6" ry="2" opacity="0.4"/><ellipse cx="70" cy="82" rx="2.2" ry="1.8" opacity="0.35"/></g>
   <g class="ms-wear-body"></g>
   <g class="ms-hold" display="none">${Object.entries(HELD).map(([k, svg]) => `<g class="ms-it ms-it-${k}">${svg}</g>`).join("")}</g>
-  <g class="ms-arm-l">${tools(-1)}<ellipse class="ms-fur" cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
-  <g class="ms-arm-r">${tools(1)}<ellipse class="ms-fur" cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/></g>
+  <g class="ms-arm-l">${tools(-1)}<ellipse class="ms-fur" cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/><g class="ms-dirt" opacity="0" fill="#8a6a48"><ellipse cx="15" cy="66" rx="2.6" ry="2" opacity="0.5"/></g></g>
+  <g class="ms-arm-r">${tools(1)}<ellipse class="ms-fur" cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/><g class="ms-dirt" opacity="0" fill="#8a6a48"><ellipse cx="85" cy="58" rx="2.2" ry="1.8" opacity="0.45"/></g></g>
   <g class="ms-head">
     <ellipse class="ms-fur" cx="50" cy="36" rx="32" ry="28.5" fill="${fur}" stroke="${line}" stroke-width="1.4"/>
     <path d="M30 13Q33 9 36 12M46 8Q50 5 54 8M64 12Q67 9 70 13" fill="none" stroke="#e3e7f1" stroke-width="1.2" stroke-linecap="round"/>
+    <g class="ms-dirt" opacity="0" fill="#8a6a48"><ellipse cx="38" cy="22" rx="4.2" ry="3" opacity="0.55"/><ellipse cx="42" cy="25" rx="2.2" ry="1.6" opacity="0.4"/><ellipse cx="66" cy="26" rx="3.4" ry="2.6" opacity="0.5"/><ellipse cx="57" cy="13" rx="2.4" ry="1.8" opacity="0.45"/><ellipse cx="76" cy="40" rx="2.6" ry="2" opacity="0.4"/><ellipse cx="24" cy="36" rx="2.4" ry="3" opacity="0.45"/></g>
     <g class="ms-face">
       <radialGradient id="ms-flush-grad"><stop offset="0" stop-color="#ff5468" stop-opacity="0.9"/><stop offset="1" stop-color="#ff5468" stop-opacity="0"/></radialGradient>
       <ellipse class="ms-flush" cx="50" cy="45" rx="30" ry="15" fill="url(#ms-flush-grad)" opacity="0"/>

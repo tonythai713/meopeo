@@ -25,6 +25,7 @@
 //   listFeeding() → { belly: { fill, at, by, fish } | null, fish: { fish, big_fish, golden_fish } (pas encore mangés) },
 //   feedTino(kind) → le ventre après le repas, listHungerLines(), addHungerLine(level, body), deleteHungerLine(id),
 //   subscribeFeeding(onChange) → nourrir Tino (21_feeding.sql) ; une phrase de faim : { id, by, level, body }
+//   getBath() → { at, by } (dernier bain), washTino() → { at, by, washedColour }, subscribeBath(onChange) → laver Tino (23_bath.sql)
 //   listDecor(), setDecor(blob, { season, layout, light }), deleteDecor({ season, layout, light }),
 //   subscribeDecor(onChange) → décor dessiné, fond d'écran par saison / jour-nuit / format (supabase/16_decor.sql)
 //   listGrumbles(), addGrumble(body), deleteGrumble(id), subscribeGrumbles(onChange) → phrases râleuses (13_tino_grumbles.sql)
@@ -319,6 +320,15 @@ export function createBackend() {
     },
     async addHungerLine(level, body) { must(await sb.from("tino_hunger_lines").insert({ level, body })); },
     async deleteHungerLine(id) { must(await sb.from("tino_hunger_lines").delete().eq("id", id)); },
+    // Laver Tino (supabase/23_bath.sql) : le dernier bain (la saleté se calcule avec le temps) ; le bain enlève la couleur
+    async getBath() { const r = must(await sb.from("tino_bath").select("at, washed_by").maybeSingle()); return r ? { at: r.at, by: r.washed_by } : null; },
+    async washTino() { const r = must(await sb.rpc("wash_tino")); return { at: r.at, by: r.by, washedColour: !!r.washed_colour }; },
+    subscribeBath(onChange) {
+      const ch = sb.channel("bath-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "tino_bath" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
     subscribeFeeding(onChange) {
       const ch = sb.channel("feed-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "*", schema: "public", table: "tino_belly" }, () => onChange())

@@ -77,7 +77,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -105,7 +105,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyTheme(); runClocks(); } }); // (minuteries endormies en arrière-plan)
   runClocks();
@@ -160,6 +160,7 @@ async function boot(user) {
   loadOutfits();
   loadCatches();
   loadFeeding();
+  loadBath();
   loadGrumbles();
   loadNotes();
   loadDoodles();
@@ -175,6 +176,7 @@ function resubscribe() {
   unsubOutfits?.(); unsubOutfits = S.user ? db.subscribeOutfits(() => loadOutfits()) : null; // canal à part (sans 12, rien d'autre ne casse)
   unsubCatches?.(); unsubCatches = S.user ? db.subscribeCatches(() => loadCatches()) : null; // pêche (20) : canal à part
   unsubFeeding?.(); unsubFeeding = S.user ? db.subscribeFeeding(() => loadFeeding()) : null; // nourrir Tino (21) : idem
+  unsubBath?.(); unsubBath = S.user ? db.subscribeBath(() => loadBath()) : null; // laver Tino (23) : idem
   unsubGrumbles?.(); unsubGrumbles = S.user ? db.subscribeGrumbles(() => loadGrumbles()) : null; // idem (13)
   unsubNotes?.(); unsubNotes = S.user ? db.subscribeNotes(() => loadNotes()) : null; // idem (14)
   unsubDoodles?.(); unsubDoodles = S.user ? db.subscribeDoodles(() => loadDoodles()) : null; // idem (19)
@@ -251,6 +253,7 @@ function showLogin() {
   unsubOutfits?.(); unsubOutfits = null; S.outfits = []; S.worn = { head: null, body: null }; S.outfitsOk = null; applyOutfit();
   unsubCatches?.(); unsubCatches = null; S.catches = []; S.color = null; S.fishingOk = null; lastCatch = null; applyColor(); clearTimeout(fishTimer);
   unsubFeeding?.(); unsubFeeding = null; S.feeding = null; S.hungerLines = []; S.feedingOk = null; feedSeen = null; clearTimeout(tummyTimer);
+  unsubBath?.(); unsubBath = null; S.bath = null; S.bathOk = null; bathSeen = null; applyDirt();
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
   unsubNotes?.(); unsubNotes = null; S.notes = []; S.notesOk = null;
   unsubDoodles?.(); unsubDoodles = null; S.doodles = []; S.doodlesOk = null; doodleUi?.el.remove(); doodleUi = null; doodlePng.clear(); doodleSeen = null;
@@ -322,7 +325,7 @@ function render() {
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
@@ -1921,7 +1924,7 @@ function showTab() {
   nav?.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === t ? "page" : "false"));
   for (const [id, p] of Object.entries(panes)) p.hidden = !logged || id !== t;
   if (t !== "fishing") { fishGame?.stop(); fishGame = null; } // (animations des onglets qu'on quitte : arrêtées)
-  if (t !== "tino" && showcase) { showcase.card.remove(); showcase = null; }
+  if (t !== "tino" && showcase) { bathing?.end(); showcase.card.remove(); showcase = null; }
   if (!logged) return;
   if (t === "calendar") { placeBigTino(); align(); } // de retour : Tino, son lit, le grand Tino et les colonnes se remettent en place
   else if (t === "notes") renderNotes(panes.notes);
@@ -1958,7 +1961,7 @@ function setupFolds(pane, tab) {
 
 // ---------- Onglet Tino : Tino en grand (avec ses habits), puis tout ce qui le personnalise ----------
 function renderTinoPane(pane) {
-  pane.innerHTML = `<div class="pl-editor-card mp-pane-card mp-showcase"><div class="mp-show-stage"></div><div class="pl-legend mp-show-cap"></div><div class="mp-tummy"></div></div>`
+  pane.innerHTML = `<div class="pl-editor-card mp-pane-card mp-showcase"><div class="mp-show-stage"></div><div class="pl-legend mp-show-cap"></div><div class="mp-tummy"></div><div class="mp-bath"></div></div>`
     + fold("tino", "🦭 Tino", `<div class="mp-tinoset"></div>`)
     + fold("hunger", "🍽 Hunger lines", `<div class="mp-hunger"></div>`)
     + fold("grumbles", "💢 Grumpy lines", `<div class="mp-grumbles"></div>`)
@@ -1968,6 +1971,7 @@ function renderTinoPane(pane) {
   const tummy = pane.querySelector(".mp-tummy");
   tummy._eater = () => showcase?.m; // (c'est le grand Tino qui mange)
   fillTummy(tummy);
+  fillBath(pane.querySelector(".mp-bath"));
   fillHungerLines(pane.querySelector(".mp-hunger"));
   fillTinoSettings(pane.querySelector(".mp-tinoset"));
   fillGrumbles(pane.querySelector(".mp-grumbles"));
@@ -2110,7 +2114,7 @@ function fillFishInfo(pane) {
 function fishScene(pane) {
   const host = pane.querySelector(".mp-fish-scene"), btn = pane.querySelector(".mp-fish-btn"), out = pane.querySelector(".mp-fish-out");
   const say = (t) => { pane.querySelector(".mp-fish-msg").textContent = t; };
-  const W = 360, H = 200, DOCK = 104, TX = 92, SEA = 118, BASE = [TX + 19, DOCK - 23], TIP = [196, 30];
+  const W = 360, H = 200, DOCK = 104, TX = 92, SEA = 118, ROD = [85, -51]; // ROD : du bas de la canne (dans sa patte droite) au bout
   const day = daylight().day, reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const waves = (y, a, c) => `<path d="M0 ${y}${Array.from({ length: 13 }, (_, i) => ` q15 ${-a} 30 0 t30 0`).join("")}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/>`;
   host.innerHTML = `<svg class="mp-fish-svg" viewBox="0 0 ${W} ${H}" aria-hidden="true">
@@ -2128,8 +2132,8 @@ function fishScene(pane) {
     ${[24, 52, 80, 108].map((x) => `<line x1="${x}" y1="${DOCK + 1}" x2="${x}" y2="${DOCK + 8}" stroke="#7d5536" stroke-width="1"/>`).join("")}
     <ellipse class="mp-ripple" cx="0" cy="${SEA + 2}" rx="10" ry="2.6" fill="none" stroke="#fff" stroke-width="1.2" opacity="0"/>
     <path class="mp-line" d="" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="0.9"/>
-    <g class="mp-rod"><line x1="${BASE[0]}" y1="${BASE[1]}" x2="${TIP[0]}" y2="${TIP[1]}" stroke="#5b3a22" stroke-width="2.6" stroke-linecap="round"/>
-      <circle cx="${BASE[0] + 8}" cy="${BASE[1] - 5}" r="3.2" fill="#c9ced8" stroke="#7d8291" stroke-width="1"/></g>
+    <g class="mp-rod"><line x1="-3" y1="2" x2="${ROD[0]}" y2="${ROD[1]}" stroke="#5b3a22" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="8" cy="-5" r="3.2" fill="#c9ced8" stroke="#7d8291" stroke-width="1"/></g>
     <g class="mp-float"><circle r="4.2" fill="#fff" stroke="#c22" stroke-width="0.8"/><path d="M-4.2 0A4.2 4.2 0 0 1 4.2 0Z" fill="#e33"/><line y1="-4" y2="-9" stroke="#333" stroke-width="0.9"/></g>
     <text class="mp-bang" x="${TX + 14}" y="${DOCK - 66}" font-size="22" font-weight="800" fill="#ff4d5e" opacity="0" text-anchor="middle">!</text>
     <g class="mp-prize" opacity="0"></g>
@@ -2147,14 +2151,23 @@ function fishScene(pane) {
   dress();
   // État du jeu ; la boucle d'animation s'arrête quand l'onglet est quitté
   let state = "idle", t0 = performance.now(), fx = 260, angle = 0, timer = 0, stopped = false, prizeAt = null;
-  const rot = ([x, y], a) => { const r = (a * Math.PI) / 180, dx = x - BASE[0], dy = y - BASE[1]; return [BASE[0] + dx * Math.cos(r) - dy * Math.sin(r), BASE[1] + dx * Math.sin(r) + dy * Math.cos(r)]; };
+  // La canne part de sa patte droite, mesurée à chaque image (elle suit Tino quand il respire, saute…) ; la patte est
+  // dessinée par-dessus le bas de la canne : il la tient
+  const paw = box.querySelector(".ms-arm-r > ellipse");
+  let base = [TX + 19, DOCK - 12];
+  const pawAt = () => {
+    const p = paw?.getBoundingClientRect(), r = svg.getBoundingClientRect();
+    if (p?.width && r.width) base = [((p.left + p.width / 2 - r.left) / r.width) * W, ((p.top + p.height * 0.6 - r.top) / r.height) * H];
+    return base;
+  };
+  const rot = ([x, y], a) => { const r = (a * Math.PI) / 180; return [x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r)]; };
   const set = (st, label, text, disabled = false) => { state = st; t0 = performance.now(); btn.textContent = label; btn.disabled = disabled; btn.classList.toggle("mp-fish-now", st === "bite"); if (text) say(text); };
   function frame(now) {
     if (stopped || !svg.isConnected) return;
     const t = (now - t0) / 1000, wob = reduce ? 0 : Math.sin(now / 320);
     angle = state === "cast" ? (t < 0.25 ? -38 * (t / 0.25) : t < 0.45 ? -38 + 50 * ((t - 0.25) / 0.2) : 12 - 12 * Math.min(1, (t - 0.45) / 0.3))
       : state === "reel" ? -10 + 4 * Math.sin(t * 18) : state === "bite" ? -4 : 0;
-    const tip = rot(TIP, angle);
+    const b = pawAt(), d = rot(ROD, angle), tip = [b[0] + d[0], b[1] + d[1]];
     let fp; // position du bouchon
     if (state === "idle" || state === "done") fp = [tip[0] + 2, tip[1] + 34 + 2 * wob];
     else if (state === "cast") { const s = Math.max(0, Math.min(1, (t - 0.35) / 0.55)); fp = s <= 0 ? [tip[0] + 2, tip[1] + 34] : [tip[0] + (fx - tip[0]) * s, tip[1] + 34 + (SEA - tip[1] - 34) * s - 60 * s * (1 - s)]; if (s >= 1 && state === "cast") wait(); }
@@ -2162,7 +2175,7 @@ function fishScene(pane) {
     else if (state === "bite") fp = [fx + (reduce ? 0 : 1.6 * Math.sin(now / 35)), SEA + 6 + (reduce ? 0 : 1.5 * Math.sin(now / 60))];
     else { const s = Math.min(1, t / 0.9); fp = [fx + (tip[0] + 2 - fx) * s, SEA + (tip[1] + 34 - SEA) * s - 30 * s * (1 - s)]; }
     if (state === "reel" || state === "done") prizeAt = fp; // la prise pend au bout du fil
-    rod.setAttribute("transform", `rotate(${angle.toFixed(1)} ${BASE[0]} ${BASE[1]})`);
+    rod.setAttribute("transform", `translate(${b[0].toFixed(1)} ${b[1].toFixed(1)}) rotate(${angle.toFixed(1)})`);
     fl.setAttribute("transform", `translate(${fp[0].toFixed(1)} ${fp[1].toFixed(1)})`);
     const sag = state === "wait" || state === "early" ? 22 : state === "bite" || state === "reel" ? 2 : 8;
     line.setAttribute("d", `M${tip[0].toFixed(1)} ${tip[1].toFixed(1)} Q${((tip[0] + fp[0]) / 2).toFixed(1)} ${((tip[1] + fp[1]) / 2 + sag).toFixed(1)} ${fp[0].toFixed(1)} ${(fp[1] - 9).toFixed(1)}`);
@@ -2363,6 +2376,103 @@ function fillHungerLines(box) {
   };
   box.querySelectorAll("[data-hadd]").forEach((b) => b.addEventListener("click", () => add(b.dataset.hadd)));
   box.querySelectorAll("[data-hlevel]").forEach((f) => f.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); add(f.dataset.hlevel); } }));
+}
+
+// ---------- Laver Tino (supabase/23_bath.sql) ----------
+// Il se salit au fil du temps (taches de boue sur lui, partout : calendrier, grand Tino, bouton d'onglet) ; on le lave dans
+// l'onglet Tino, sous sa faim : « 🧽 Give him a bath » → une baignoire sous le grand Tino, on tape sur lui pour le frotter
+// (SCRUBS fois) → il est propre ET sa couleur pêchée s'en va (wash_tino). Commun aux deux, comme sa faim.
+// ⚠️ Mêmes nombres que dans 23_bath.sql : de propre (0) à très sale (100) en 24 h ; propre < 33, un peu sale < 66.
+const BATH = { perDay: 100, clean: 33, dirty: 66 }, SCRUBS = 6;
+const DIRT = { clean: ["✨", "Clean"], grubby: ["😐", "A bit dirty"], dirty: ["🙈", "Very dirty"] };
+let unsubBath = null, bathSeen = null, dirtTimer = 0, bathing = null;
+const dirtNow = () => (S.bathOk === true && S.bath?.at ? Math.min(100, (BATH.perDay * (Date.now() - Date.parse(S.bath.at))) / 86400e3) : 0);
+const dirtLevel = (v) => (v < BATH.clean ? "clean" : v < BATH.dirty ? "grubby" : "dirty");
+const dirtOpacity = (v) => (v < 8 ? 0 : Math.min(0.9, 0.15 + 0.75 * (v / 100)));
+// Les taches de Tino (variable --ms-dirt sur <html>, comme la couleur) ; se refait toutes les minutes (il se salit)
+function applyDirt() {
+  clearTimeout(dirtTimer);
+  const o = dirtOpacity(dirtNow()), r = document.documentElement.style;
+  if (o) r.setProperty("--ms-dirt", o.toFixed(2)); else r.removeProperty("--ms-dirt");
+  if (S.bathOk === true) dirtTimer = setTimeout(() => { applyDirt(); document.querySelectorAll(".mp-bath").forEach((b) => { if (!bathing) fillBath(b); }); }, 60000);
+}
+async function loadBath() {
+  if (!S.user) return;
+  try { S.bath = await db.getBath(); S.bathOk = true; store.set("bath." + S.user.id, S.bath); }
+  catch (err) {
+    if (/does not exist|schema cache|tino_bath|wash_tino/i.test(err.message)) { S.bathOk = false; S.bath = null; }
+    else { const r = store.get("bath." + S.user.id, null); if (r) { S.bath = r; S.bathOk = true; } } // hors ligne
+  }
+  const b = S.bath; // l'autre vient de le laver (pas au démarrage) : on le dit
+  if (b?.at && bathSeen !== null && b.at !== bathSeen && b.by && b.by !== S.user.id && S.partner) toast(`🛁 ${S.partner.mark} ${S.partner.label} gave Tino a bath — he's squeaky clean ✨`);
+  bathSeen = b?.at ?? "";
+  applyDirt();
+  if (!bathing) document.querySelectorAll(".mp-bath").forEach((x) => fillBath(x));
+}
+function fillBath(box) {
+  if (!box) return;
+  if (S.bathOk === false) { box.innerHTML = `<div class="pl-legend">🛁 Bath time isn't set up yet — Tony needs to run <code>supabase/23_bath.sql</code>.</div>`; return; }
+  if (S.bathOk !== true) { box.innerHTML = ""; return; }
+  const v = dirtNow(), level = dirtLevel(v), [emo, label] = DIRT[level], clean = 100 - v;
+  box.innerHTML = `<div class="mp-tummy-head"><span>${emo} Cleanliness: <b>${label}</b></span><span class="pl-legend">${Math.round(clean)}%</span></div>
+    <div class="mp-tummy-bar mp-bath-bar mp-${level}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(clean)}" aria-label="Tino's cleanliness"><i style="width:${clean.toFixed(1)}%"></i></div>
+    <span class="mp-row"><button type="button" data-bath>🧽 Give him a bath</button></span>
+    <div class="pl-legend">He gets dirtier through the day. A bath also washes off his colour${colorNow() ? " (the one he has now!)" : ""}.</div>`;
+  box.querySelector("[data-bath]").addEventListener("click", () => startBath(box));
+}
+// Le bain : une baignoire sous le grand Tino ; chaque toucher sur la scène le frotte (mousse, il fait « boing »), ses taches
+// pâlissent ; au bout de SCRUBS, il est lavé pour de vrai (wash_tino)
+function startBath(box) {
+  const sc = showcase;
+  if (!sc?.card.isConnected || bathing) return;
+  if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
+  const stage = sc.card.querySelector(".mp-show-stage"), dirt0 = dirtOpacity(dirtNow());
+  let n = 0, done = false;
+  const tub = document.createElement("div");
+  tub.className = "mp-tub";
+  tub.innerHTML = `<svg viewBox="0 0 200 70" aria-hidden="true"><ellipse cx="100" cy="14" rx="96" ry="12" fill="#e9f6ff"/><path d="M6 14H194L182 56Q178 64 168 64H32Q22 64 18 56Z" fill="#ffffff" stroke="#b9cfe6" stroke-width="2"/>
+    <g fill="#ffffff" stroke="#d6e6f5" stroke-width="1.5">${[[30, 10, 10], [52, 6, 12], [76, 9, 9], [124, 8, 11], [150, 5, 10], [172, 10, 9]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join("")}</g>
+    <rect x="34" y="62" width="10" height="7" rx="3" fill="#b9cfe6"/><rect x="156" y="62" width="10" height="7" rx="3" fill="#b9cfe6"/></svg>`;
+  stage.append(tub);
+  sc.card.classList.add("mp-bathing");
+  const say = (t) => { const b = box.querySelector(".mp-bath-msg") ?? box.appendChild(Object.assign(document.createElement("div"), { className: "pl-legend mp-bath-msg" })); b.textContent = t; };
+  box.querySelector("[data-bath]").disabled = true;
+  say(`🧽 Tap Tino to scrub him! (0/${SCRUBS})`);
+  const end = () => { stage.removeEventListener("click", scrub, true); tub.remove(); sc.card.classList.remove("mp-bathing"); sc.card.style.removeProperty("--ms-dirt"); bathing = null; };
+  async function scrub(ev) {
+    ev.stopPropagation(); ev.preventDefault(); // (pas le saut / la colère du toucher habituel)
+    if (done) return;
+    n++;
+    const r = stage.getBoundingClientRect();
+    for (let i = 0; i < 4; i++) {
+      const f = document.createElement("i");
+      f.className = "mp-foam";
+      f.style.left = `${ev.clientX - r.left + (Math.random() - 0.5) * 50}px`; f.style.top = `${ev.clientY - r.top + (Math.random() - 0.5) * 30}px`;
+      f.style.setProperty("--d", `${0.5 + Math.random() * 0.6}s`); f.style.width = f.style.height = `${8 + Math.random() * 14}px`;
+      stage.append(f);
+      setTimeout(() => f.remove(), 1300);
+    }
+    sc.m.flat = 0.45; sc.m.flatV = 0; // (il fait « boing » sous la brosse)
+    sc.card.style.setProperty("--ms-dirt", (dirt0 * (1 - n / SCRUBS)).toFixed(2)); // ses taches pâlissent
+    say(n < SCRUBS ? `🧽 Scrub scrub… (${n}/${SCRUBS})` : "🚿 Rinsing…");
+    if (n < SCRUBS) return;
+    done = true;
+    let w = null;
+    try { w = await db.washTino(); }
+    catch (err) { toast(/wash_tino|schema cache|does not exist/i.test(err.message) ? "⚠️ Tony needs to run supabase/23_bath.sql" : `⚠️ Couldn't give Tino a bath (${err.message})`); }
+    end();
+    if (w) {
+      S.bath = { at: w.at, by: w.by }; bathSeen = w.at;
+      if (w.washedColour && S.color) S.color = { ...S.color, until: new Date().toISOString() };
+      applyDirt(); applyColor(); outfitChangedHere = true; fishingChanged(false);
+      sc.m.love(); sc.m.now([{ type: "wave", dur: 2 }]);
+      toast(`🛁 Tino is squeaky clean! ✨${w.washedColour ? " His colour washed off too." : ""}`);
+      loadCatches();
+    }
+    fillBath(box);
+  }
+  stage.addEventListener("click", scrub, true);
+  bathing = { end };
 }
 
 // Version qui tourne sur cet appareil = celle du cache du service worker (« meopeo-2026-10-07.8 », voir sw.js) : pour savoir

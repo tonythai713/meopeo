@@ -1,7 +1,7 @@
 // Service worker de MeoPeo : l'app s'ouvre même sans réseau (ses fichiers sont gardés sur le téléphone).
 // ⚠️ À CHAQUE publication d'une nouvelle version : changer VERSION, sinon les téléphones gardent l'ancienne.
 // Les données (Supabase : tâches, connexion, temps réel) ne passent JAMAIS par ce cache.
-const VERSION = "2026-10-09.2";
+const VERSION = "2026-10-09.3";
 const CACHE = "meopeo-" + VERSION;
 const SHELL = [
   "./", "index.html", "app.js", "mascot.js", "bigtino.js", "data.js", "config.js", "style.css", "manifest.webmanifest",

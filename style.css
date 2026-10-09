@@ -566,3 +566,18 @@ a { color: var(--text-accent); }
 .mp-light .mp-fish-img { background: repeating-conic-gradient(rgba(40, 50, 110, 0.12) 0 25%, rgba(40, 50, 110, 0.03) 0 50%) 0 0 / 10px 10px; }
 .mp-light .mp-fish-btn.mp-fish-now { animation-name: mp-now-light; }
 @keyframes mp-now-light { from { transform: scale(1); } to { transform: scale(1.04); box-shadow: 0 0 16px rgba(217, 165, 32, 0.8); } }
+
+/* Laver Tino : jauge de propreté (même barre que la faim), baignoire et mousse sous le grand Tino */
+.mp-bath { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.mp-bath:empty { display: none; }
+.mp-bath-bar.mp-clean i { background: #6ec6ff; }
+.mp-bath-bar.mp-grubby i { background: #c9a36b; }
+.mp-bath-bar.mp-dirty i { background: #8a6a48; }
+.mp-show-stage { position: relative; }
+.mp-bathing .mp-show-stage { cursor: pointer; }
+.mp-tub { position: absolute; left: 50%; bottom: -2px; width: 210px; transform: translateX(-50%); pointer-events: none; z-index: 3; animation: mp-in 0.3s ease-out; }
+.mp-tub svg { display: block; width: 100%; height: auto; }
+.mp-foam { position: absolute; z-index: 4; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 30%, #fff 0 30%, rgba(225, 242, 255, 0.85) 60%, rgba(200, 228, 255, 0.4)); box-shadow: 0 0 0 1px rgba(170, 205, 235, 0.6);
+  animation: mp-foam var(--d, 0.8s) ease-out forwards; }
+@keyframes mp-foam { from { opacity: 1; transform: translate(-50%, -50%) scale(0.4); } to { opacity: 0; transform: translate(-50%, -160%) scale(1.15); } }
