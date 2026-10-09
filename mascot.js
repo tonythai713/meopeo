@@ -25,7 +25,7 @@ const STYLE = `
 .ms-arm-r { transform-origin: 75px 59px; }
 .ms-foot-l { transform-origin: 38px 90px; }
 .ms-foot-r { transform-origin: 62px 90px; }
-.ms-peo .ms-hold { transform-origin: 49px 71px; } .ms-tool-ladle .ms-ladle { display: inline; } .ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
+.ms-peo .ms-hold { transform-origin: 49px 71px; } .ms-dreaming { opacity: 0.55; filter: grayscale(0.55) brightness(1.15) drop-shadow(0 0 5px rgba(205, 220, 255, 0.85)); } /* en rêve (pas là) */ .ms-tool-ladle .ms-ladle { display: inline; } .ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
 .ms-zzz, .ms-heart, .ms-anger, .ms-brows { opacity: 0; }
 .ms-mad .ms-brows { opacity: 1; }
 .ms-mad .ms-anger { animation: ms-anger 0.45s ease-in-out infinite alternate; }
@@ -483,6 +483,8 @@ function buddyScene(m, sc) {
   return [...way, sc.duo === "chase" ? { type: "chase" } : { type: "duo", kind: sc.duo === "game" || sc.duo === "beer" || sc.duo === "scooter" ? sc.duo : "cook" }, { type: "wave", dur: 1.6 }];
 }
 const CHEERS = 1.5; // bière avec PeoPeo : « chin chin » (s)
+// En rêve (il n'a pas l'app ouverte) : bien plus rarement dehors (1re fois, puis les suivantes ; durée dehors)
+const DREAM_FIRST = [60, 150], DREAM_IN = [300, 600], DREAM_OUT = [40, 80];
 const POT_FIRST = [15, 40], POT_IN = [60, 180], POT_OUT = [60, 150], DIVE = 0.3;
 const LOOK = 8;   // décalage du visage quand il regarde de côté (repère 100)
 const SINK = 12;  // assis : il descend sur la ligne, les pieds pendent en dessous (repère 100)
@@ -625,7 +627,7 @@ const ACTIONS = {
     weight: () => 30,
     make: (m, me) => [{ type: "walk", x: clamp(m.x + rand(30, 120) * pick([-1, 1]), me.x0, me.x1) }],
     step(m, a, dt, me) {
-      const d = clamp(a.x, me.x0, me.x1) - m.x, s = 26 * (m.size / 40) * dt;
+      const d = clamp(a.x, me.x0, me.x1) - m.x, s = 26 * (m.size / 40) * dt * (m.dream ? 0.45 : 1); // (en rêve : lentement)
       if (d) m.dir = d < 0 ? -1 : 1;
       if (Math.abs(d) <= s) { m.x += d; return true; }
       m.x += Math.sign(d) * s;
@@ -635,6 +637,7 @@ const ACTIONS = {
       const ph = m.clock * 11;
       p.rot = 5 * Math.sin(ph); p.bob = -Math.abs(Math.sin(ph)) * m.size * 0.06; p.armL = p.armR = 16 * Math.sin(ph); p.sx = p.sy = 1;
       p.footL = -Math.max(0, Math.sin(ph)) * 3; p.footR = -Math.max(0, -Math.sin(ph)) * 3; // un pied puis l'autre
+      if (m.dream) { p.armL = 78 + 4 * Math.sin(ph); p.armR = 74 + 4 * Math.sin(ph + 1); p.rot = 2 * Math.sin(ph * 0.5); p.bob *= 0.5; } // (somnambule : bras tendus)
     },
   },
   // Il saute sur une plateforme proche, au-dessus ou au-dessous (ligne du calendrier, haut d'une carte ou d'une tâche)
@@ -1186,13 +1189,14 @@ function duoInvite(m, t) { // ce que PeoPeo propose à Tino (libre) : null s'il 
 ACTIONS.duo = {
   weight(m) {
     const t = m.eng.buddy?.(m, "tino");
+    if (m.dream) return t && (t.k === m.k || m.eng.visible(t.plat())) && ["nap", "sleep"].includes(t.act?.type) && t.act.t !== undefined ? 16 : 0;
     if (!t || m.eng.night() || !(t.k === m.k || m.eng.visible(t.plat()))) return 0;
     if (joinable(t.act)) return DUO_OF[t.act.type] === "squish" ? 14 : 22;
     return canFlee(t) && duoInvite(m, t) ? 8 : 0;
   },
   make(m) {
     const t = m.eng.buddy?.(m, "tino"), P = t.plat(), side = t.x >= m.x ? 1 : -1;
-    const go = joinable(t.act) ? { type: "duo", kind: DUO_OF[t.act.type] } : { type: "duo", invite: duoInvite(m, t) };
+    const go = m.dream ? { type: "duo", kind: "squish", limit: rand(8, 14) } : joinable(t.act) ? { type: "duo", kind: DUO_OF[t.act.type] } : { type: "duo", invite: duoInvite(m, t) };
     if (!go.kind && !go.invite) return [{ type: "idle", dur: 1 }];
     go.kind ??= go.invite === "scooter" ? "scooter" : DUO_OF[go.invite];
     const way = t.k === m.k ? [] : m.pathTo({ k: t.k, x: clamp(t.x - side * m.size, P.x0, P.x1) });
@@ -1223,7 +1227,7 @@ ACTIONS.duo = {
       else { duoWalk(m, a, t.x - Math.sign(t.x - m.x || 1) * m.size * 0.7, dt, me); return false; } // il le suit en attendant
     }
     const r = a.ref;
-    if (t.act !== r) return true; // Tino a fini (ou on l'a interrompu)
+    if (t.act !== r || (a.limit && a.t > a.limit)) return true; // Tino a fini (ou on l'a interrompu) ; en rêve : un moment seulement
     let x;
     if (a.kind === "game") { a.dir = r.side; x = t.x - r.side * 36; }
     else if (a.kind === "cook") { const D = PROPS[r.type]; a.dir = -r.side; x = t.x + r.side * ((D.gap + D.w / 2) * t.size + 22); }
@@ -1476,6 +1480,7 @@ class Mascot {
     const t = performance.now();
     this.taps = [...this.taps.filter((x) => t - x < TEASE_MS), t];
     if (this.taps.length >= TEASE_TAPS && !this.def.calm) { this.taps = []; this.grumble(); } // trop c'est trop
+    else if (this.dream) { if (!this.bubble) this.say(`💤 ${this.def.name} isn't here right now`, { ms: 2800 }); } // (en rêve : ce n'est pas vraiment lui)
     else { if (this.act?.type !== "swim") this.now([{ type: "react" }]); this.love(); } // dans l'eau : juste un cœur, il continue
     this.el.style.pointerEvents = "none";
     const under = document.elementFromPoint(ev.clientX, ev.clientY);
@@ -1605,6 +1610,7 @@ class Mascot {
     if (this.stay) return this.stayStep();
     let name;
     if (this.bubble?.sticky) name = pick(CALM);
+    else if (this.dream) name = weighted(["idle", "walk", "sit", "sleep", "duo"].map((n) => [ACTIONS[n].weight?.(this, ctx) ?? 0, n])); // (somnambule)
     else if (this.eng.together?.()) name = weighted(["idle", "walk", "sit", "wave", "hop"].map((n) => [ACTIONS[n].weight?.(this, ctx) ?? 0, n])); // (ensemble : la scène commune viendra)
     else if (this.eng.night() && this.def.only) return { type: "sleep", dur: Infinity }; // (PeoPeo : il dort assis, là où il est)
     else if (this.eng.night()) { // la nuit : dans la case d'aujourd'hui si elle est à l'écran, sinon là où il est ; couché, dans son lit
@@ -1718,7 +1724,8 @@ class Mascot {
     const bw = this.bedK > 0.001 ? this.bedWidth() : 0, onMattress = this.bedK * bw * (BED_H - MATTRESS) / BED_W; // dans son lit : posé sur le matelas
     const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * (this.def.sink ?? SINK) * u + lift - onMattress;
     const mir = this.def.facesLeft && this.dir > 0 ? -1 : 1, look = this.look * mir; // (PeoPeo regarde vers la gauche : retourné en entier quand il va à droite)
-    this.el.classList.toggle("ms-sleep", !!A.zzz);
+    this.el.classList.toggle("ms-sleep", !!A.zzz || !!this.dream);
+    this.el.classList.toggle("ms-dreaming", !!this.dream);
     this.el.classList.toggle("ms-mad", a.type === "angry" || (a.t !== undefined && gameMad(a)));
     this.el.classList.toggle("ms-swim", a.type === "swim" && !!a.wet);
     const busyHands = a.t !== undefined && ["cook", "bbq", "rice"].includes(a.type); // spatule dans la nageoire du côté de l'objet
@@ -1900,7 +1907,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   const hideAll = (m, h) => { m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = h; if (m.bubble) m.bubble.el.hidden = h; };
   // Il plonge dans la marmite (fin de potIn) : caché, sa tête ressort de la marmite (onHome → l'app)
   eng.enterPot = (m) => {
-    m.inPot = true; m.act = null; m.plan = []; m.potT = rand(...POT_IN); m.stay = false;
+    m.inPot = true; m.act = null; m.plan = []; m.potT = rand(...(m.dream ? DREAM_IN : POT_IN)); m.stay = false;
     m.hush(true); m.dropProp(); hideAll(m, true);
     onHome(m.def.key, true);
   };
@@ -1922,6 +1929,12 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   const homeTick = (m, dt) => {
     if (!m.def.home || m.away || !eng.plats.length) return;
     const H = home(m.def.key), seen = !!H && H.y >= eng.v.top && H.y <= eng.v.bottom;
+    if (m.dream) { // somnambule : rarement dehors, un moment, même la nuit
+      if (m.inPot) { if ((m.potT -= dt) <= 0 && seen && !reduce.matches && leavePot(m, H)) m.outT = rand(...DREAM_OUT); return; }
+      if (m.busy() || m.stay || m.act?.type === "potIn") return;
+      if ((m.outT -= dt) <= 0 && seen) m.now([{ type: "potIn" }]);
+      return;
+    }
     if (together()) {
       const sc = scene(slotNow());
       if (m.inPot) { if (sc.peoOut && seen && !reduce.matches && leavePot(m, H)) m.plan = buddyScene(m, sc); }
@@ -2081,6 +2094,17 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       if (m.away) { m.hush(true); hideAll(m, true); return; }
       if (m.def.home) { m.inPot = true; m.act = null; m.plan = []; m.potT = rand(...POT_FIRST); onHome(kind, true); return; } // (il revient : dans la marmite)
       m.placed = false; // (au prochain mesurage : la case d'aujourd'hui si elle est à l'écran, sinon il tombe du haut)
+      refresh(); run();
+    },
+    // PeoPeo n'a pas l'app ouverte (on) / est là : en rêve, pâle et transparent, il vit au ralenti (voir homeTick)
+    setDream(kind, on) {
+      const m = list.find((x) => x.def.key === kind);
+      if (!m || m.dream === !!on) return;
+      m.dream = !!on; m.away = false;
+      if (m.inPot) m.potT = rand(...(on ? DREAM_FIRST : POT_FIRST));
+      else m.outT = on ? Math.min(m.outT, rand(...DREAM_OUT)) : rand(...POT_OUT);
+      if (on) { m.stay = false; m.hush(true); m.now([{ type: "idle", dur: 1 }]); }
+      onHome(kind, m.inPot);
       refresh(); run();
     },
     hush() { tino?.hush(true); },

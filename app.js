@@ -2520,14 +2520,16 @@ function startBath(box) {
 // À côté du mois, à la place de la case « MeoMeo » : une marmite dorée (casserole coréenne à ramyeon / tteokbokki) où PeoPeo
 // (et MeoMeo, plus tard) vit. Celui qui a MeoPeo ouvert à l'écran en ce moment y est : sa tête sort et guette (endormie la
 // nuit) ; de temps en temps il saute dehors, se promène sur le calendrier, poursuit Tino… puis y retourne (mascot.js, « peo »,
-// homeTick). Absent : il reste au fond. Toucher la marmite = afficher / cacher les tâches de l'autre (comme la case d'avant).
+// homeTick). Absent : il est « en rêve » — pâle et transparent, les yeux fermés, dans la marmite aussi ; il en sort rarement,
+// en somnambule (setDream). Toucher la marmite = afficher / cacher les tâches de l'autre (comme la case d'avant).
 let presenceCh = null;
 const personId = (label) => [S.me, S.partner].find((p) => p?.label === label)?.id ?? null;
 const isHere = (id) => !!id && (id === S.user?.id ? !document.hidden : S.online.has(id));
 // MeoMeo et PeoPeo ont l'app ouverte en même temps : les deux téléphones montrent les mêmes actions au même moment (mascot.js,
 // « ensemble ») et Tino reste éveillé, même la nuit
 const bothHere = () => isHere(personId("PeoPeo")) && isHere(personId("MeoMeo"));
-const peoUp = () => isHere(personId("PeoPeo")) && (mascots ? mascots.inPot("peo") : true); // (sa tête sort de la marmite)
+const peoUp = () => (mascots ? mascots.inPot("peo") : true); // (sa tête sort de la marmite — pâle, en rêve, s'il n'est pas là)
+const peoDream = () => !isHere(personId("PeoPeo"));
 function potButton() {
   const P = S.partner;
   // repère 64 × 60 (y de −8 à 52) ; bord de la marmite : ellipse de centre (32, 24), 26 × 5 ; l'arrière du bord est dessiné
@@ -2536,12 +2538,13 @@ function potButton() {
     <svg class="mp-pot-art" viewBox="0 -8 64 60" aria-hidden="true">
       <defs>
         <linearGradient id="mp-pot-gold" x1="0" x2="1"><stop offset="0" stop-color="#b9821c"/><stop offset="0.3" stop-color="#f7d675"/><stop offset="0.55" stop-color="#e5ae3e"/><stop offset="1" stop-color="#a86f14"/></linearGradient>
+        <filter id="mp-pot-dream"><feColorMatrix type="saturate" values="0.25"/></filter>
         <clipPath id="mp-pot-clip"><path d="M-20 -30H84V24H58Q32 34 6 24H-20Z"/></clipPath>
       </defs>
       <ellipse cx="32" cy="49" rx="23" ry="2.4" fill="#000" opacity="0.18"/>
       <ellipse cx="32" cy="24" rx="26" ry="5" fill="#6e4a10"/>
       <path d="M6 24Q32 14 58 24" fill="none" stroke="#c99230" stroke-width="2.4"/>
-      <g clip-path="url(#mp-pot-clip)"><g class="mp-pot-peo${peoUp() ? " mp-up" : ""}${!bothHere() && (tinoNight() || tinoNap()) ? " ms-sleep" : ""}"><svg x="13" y="-7" width="38" height="38">${peoHeadSvg("ms-flush-peo-pot")}</svg></g></g>
+      <g clip-path="url(#mp-pot-clip)"><g class="mp-pot-peo${peoUp() ? " mp-up" : ""}${peoDream() ? " mp-dream" : ""}${peoDream() || (!bothHere() && (tinoNight() || tinoNap())) ? " ms-sleep" : ""}"><svg x="13" y="-7" width="38" height="38">${peoHeadSvg("ms-flush-peo-pot")}</svg></g></g>
       <path d="M2 25.5H7.5V29.5H2Q0 29.5 0 27.5Q0 25.5 2 25.5ZM62 25.5H56.5V29.5H62Q64 29.5 64 27.5Q64 25.5 62 25.5Z" fill="#c48a24" stroke="#8a5a10" stroke-width="1"/>
       <path d="M6 24L7.6 43Q8 47 12.5 47H51.5Q56 47 56.4 43L58 24Q32 34 6 24Z" fill="url(#mp-pot-gold)" stroke="#8a5a10" stroke-width="1.2" stroke-linejoin="round"/>
       <path d="M7 31Q32 40 57 31" fill="none" stroke="#a8721a" stroke-width="1.1"/>
@@ -2560,9 +2563,9 @@ function potSpot() {
 // Quelqu'un arrive ou s'en va, PeoPeo sort de la marmite ou y retourne, la nuit tombe : la tête dans la marmite suit (sans
 // redessiner le calendrier)
 function presenceChanged() {
-  mascots?.setAway("peo", !isHere(personId("PeoPeo")));
-  const up = peoUp(), asleep = !bothHere() && (tinoNight() || tinoNap());
-  document.querySelectorAll(".mp-pot-peo").forEach((g) => { g.classList.toggle("mp-up", up); g.classList.toggle("ms-sleep", asleep); });
+  mascots?.setDream("peo", peoDream()); // (pas là : en rêve — pâle, il sort rarement, en somnambule)
+  const up = peoUp(), dream = peoDream(), asleep = dream || (!bothHere() && (tinoNight() || tinoNap()));
+  document.querySelectorAll(".mp-pot-peo").forEach((g) => { g.classList.toggle("mp-up", up); g.classList.toggle("mp-dream", dream); g.classList.toggle("ms-sleep", asleep); });
 }
 setInterval(() => { if (!document.hidden) presenceChanged(); }, 60000); // (la nuit tombe : il s'endort dans la marmite)
 
