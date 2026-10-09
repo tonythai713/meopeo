@@ -2006,7 +2006,7 @@ async function dressShowcase(look) {
 // ---------- Onglet 🎣 Fishing : la pêche (supabase/20_fishing.sql) ----------
 // Tino pêche au bout d'un ponton : on lance, on attend que le bouchon plonge, on ferre vite. Ce qu'on attrape est tiré au
 // sort par la base (fish_tino) au moment où on ferre : on ne le sait qu'en le sortant de l'eau. Une tenue : portable par
-// les deux pendant 7 jours ; une couleur : Tino la prend tout de suite, chez les deux, pendant 2 h (pas d'autre couleur
+// les deux pendant 7 jours ; une couleur : Tino la prend tout de suite, chez les deux, pendant 30 min (22 ; avant 2 h) (pas d'autre couleur
 // pendant ce temps) ; sinon un poisson, une vieille botte… Lancers illimités (choix de Tony, pour l'instant). Tout est commun.
 let unsubCatches = null, fishTimer = 0, lastCatch = null, fishGame = null;
 const JUNK = { fish: ["🐟", "a fish"], big_fish: ["🐠", "a big fish"], golden_fish: ["✨🐟", "a golden fish"], boot: ["🥾", "an old boot"], can: ["🥫", "a tin can"], weed: ["🌿", "some seaweed"], shell: ["🐚", "a shell"], crab: ["🦀", "a grumpy crab"] };
@@ -2049,7 +2049,7 @@ function fishingChanged(wardrobe = true) {
   scheduleFishTimer();
   syncWidgetScenes();
 }
-// Prochaine fin (couleur après 2 h, tenue après 7 jours) : tout se remet à jour à ce moment-là si l'app est ouverte
+// Prochaine fin (couleur après 30 min, tenue après 7 jours) : tout se remet à jour à ce moment-là si l'app est ouverte
 function scheduleFishTimer() {
   clearTimeout(fishTimer);
   if (S.fishingOk !== true) return;
@@ -2095,7 +2095,7 @@ function fillFishInfo(pane) {
   if (!info || !list) return;
   const c = colorNow(), pool = S.outfits.filter((o) => !unlocked(o)).length, caught = S.outfits.filter((o) => o.caughtAt && unlocked(o)).length;
   info.innerHTML = `<h4>🎨 Tino's colour</h4>
-    <div class="mp-fish-line">${c ? `<span class="mp-swatch" style="background:${furOf(c.color).fill}"></span> Caught by ${whoMark(c.by)} — ${timeLeft(c.until)} left (until ${hourOf(new Date(c.until))}). No other colour until then.` : "White, as usual — you might catch a colour! It lasts 2 hours."}</div>
+    <div class="mp-fish-line">${c ? `<span class="mp-swatch" style="background:${furOf(c.color).fill}"></span> Caught by ${whoMark(c.by)} — ${timeLeft(c.until)} left (until ${hourOf(new Date(c.until))}). No other colour until then.` : "White, as usual — you might catch a colour! It lasts 30 minutes."}</div>
     <h4>👒 Outfits</h4>
     <div class="mp-fish-line">🎣 ${pool} in the pool · 👒 ${caught} caught — wear them in the Tino tab → Tino's wardrobe</div>
     <h4>🍽 Tino's tummy</h4><div class="mp-tummy"></div>
@@ -2232,7 +2232,7 @@ function fishScene(pane) {
       ? `<div class="mp-fish-got">${o ? `<img alt="" class="mp-fish-img">` : "👒"}<span>You caught <b>“${esc(catchName(c))}”</b>! You can both dress Tino with it until <b>${dayShort(until)}</b>.</span></div>
          ${o ? `<button type="button" class="mp-cta" data-puton>👒 Put it on Tino</button>` : ""}`
       : c.kind === "color"
-        ? `<div class="mp-fish-got"><span class="mp-swatch mp-swatch-big" style="background:${furOf(c.color).fill}"></span><span>A new colour! Tino wears it for <b>2 hours</b> (until ${hourOf(until)}) — for both of you.</span></div>`
+        ? `<div class="mp-fish-got"><span class="mp-swatch mp-swatch-big" style="background:${furOf(c.color).fill}"></span><span>A new colour! Tino wears it for <b>30 minutes</b> (until ${hourOf(until)}) — for both of you.</span></div>`
         : `<div class="mp-fish-got"><span class="mp-fish-emoji">${(JUNK[c.junk] ?? ["🫧"])[0]}</span><span>${(JUNK[c.junk] ?? ["", "Something odd"])[1].replace(/^./, (x) => x.toUpperCase())}… Try again!</span></div>`;
     out.hidden = false;
     if (o) picture.then((u) => { const im = out.querySelector(".mp-fish-img"); if (im) im.src = u; }).catch(() => {});
