@@ -25,7 +25,10 @@ const STYLE = `
 .ms-arm-r { transform-origin: 75px 59px; }
 .ms-foot-l { transform-origin: 38px 90px; }
 .ms-foot-r { transform-origin: 62px 90px; }
-.ms-peo .ms-hold { transform-origin: 49px 71px; } .ms-dreaming { opacity: 0.55; filter: grayscale(0.55) brightness(1.15) drop-shadow(0 0 5px rgba(205, 220, 255, 0.85)); } /* en rêve (pas là) */ .ms-tool-ladle .ms-ladle { display: inline; } .ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
+.ms-peo .ms-hold { transform-origin: 49px 71px; } .ms-thread { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+.ms-thread .ms-thread-core { stroke-dasharray: 3 5; animation: ms-thread 1.6s linear infinite; }
+@keyframes ms-thread { to { stroke-dashoffset: -16; } }
+.ms-dreaming { opacity: 0.55; filter: grayscale(0.55) brightness(1.15) drop-shadow(0 0 5px rgba(205, 220, 255, 0.85)); } /* en rêve (pas là) */ .ms-tool-ladle .ms-ladle { display: inline; } .ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
 .ms-zzz, .ms-heart, .ms-anger, .ms-brows { opacity: 0; }
 .ms-mad .ms-brows { opacity: 1; }
 .ms-mad .ms-anger { animation: ms-anger 0.45s ease-in-out infinite alternate; }
@@ -1899,6 +1902,29 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
   // L'autre personnage (key), s'il est à l'écran (pas parti, pas dans la marmite)
   eng.buddy = (m, key) => list.find((x) => x !== m && x.def.key === key && !x.away && !x.inPot && !x.el.hidden) ?? null;
+  // Le fil de l'âme (PeoPeo absent : son âme se promène, son corps dort dans la marmite) : de sa tête dans la marmite à
+  // l'âme, en coordonnées de la page, redessiné à chaque image ; ondule doucement
+  const thread = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  thread.setAttribute("class", "ms-thread");
+  thread.setAttribute("aria-hidden", "true");
+  thread.innerHTML = '<path class="ms-thread-glow" fill="none" stroke="rgba(190, 215, 255, 0.28)" stroke-width="6" stroke-linecap="round"/>'
+    + '<path class="ms-thread-mid" fill="none" stroke="rgba(215, 232, 255, 0.55)" stroke-width="2" stroke-linecap="round"/>'
+    + '<path class="ms-thread-core" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"/>';
+  layer.append(thread);
+  const threadPaths = [...thread.querySelectorAll("path")];
+  let threadOn = false;
+  const drawThread = () => {
+    const m = list.find((x) => x.def.home);
+    const H = m && m.dream && !m.inPot && !m.away && !m.el.hidden && !reduce.matches ? home(m.def.key) : null;
+    if (!H) { if (threadOn) { thread.style.display = "none"; threadOn = false; } return; }
+    if (!threadOn) { thread.style.display = ""; threadOn = true; }
+    const t = performance.now() / 1000, hx = H.x, hy = H.y - 20, sx = m.x, sy = m.y - m.size * 0.8;
+    const lift = Math.min(90, 30 + Math.hypot(sx - hx, sy - hy) * 0.25);
+    const c1x = hx + 14 * Math.sin(t * 1.3), c1y = Math.min(hy, sy) - lift + 8 * Math.sin(t * 0.9);
+    const c2x = sx + 16 * Math.sin(t * 1.1 + 1), c2y = sy - lift * 0.8 + 8 * Math.cos(t * 1.2);
+    const d = `M${hx.toFixed(1)} ${hy.toFixed(1)}C${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${sx.toFixed(1)} ${sy.toFixed(1)}`;
+    threadPaths.forEach((p) => p.setAttribute("d", d));
+  };
   const hideAll = (m, h) => { m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = h; if (m.bubble) m.bubble.el.hidden = h; };
   // Il plonge dans la marmite (fin de potIn) : caché, sa tête ressort de la marmite (onHome → l'app)
   eng.enterPot = (m) => {
@@ -2023,6 +2049,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     } else eng.v = view();
     sceneTick();
     list.forEach((m) => { homeTick(m, dt); if (m.away || m.inPot) return; follow(m); m.update(dt); m.render(); });
+    drawThread();
     raf = requestAnimationFrame(frame);
   }
 
@@ -2085,14 +2112,14 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       m.placed = false; // (au prochain mesurage : la case d'aujourd'hui si elle est à l'écran, sinon il tombe du haut)
       refresh(); run();
     },
-    // PeoPeo n'a pas l'app ouverte (on) / est là : en rêve — il fait tout pareil (sorties, Tino…), seul son aspect change
-    // (pâle et transparent, yeux fermés, « z » ; toucher → « isn't here right now »)
+    // PeoPeo n'a pas l'app ouverte (on) / est là : en rêve — il dort dans la marmite et c'est son âme qui sort (pâle et
+    // transparente, yeux fermés, « z », reliée par le fil) ; elle fait tout pareil (sorties, Tino…) ; toucher → « isn't here »
     setDream(kind, on) {
       const m = list.find((x) => x.def.key === kind);
       if (!m || m.dream === !!on) return;
       m.dream = !!on; m.away = false;
       onHome(kind, m.inPot);
-      refresh(); run();
+      refresh(); run(); drawThread();
     },
     hush() { tino?.hush(true); },
     inPot(kind) { return !!list.find((x) => x.def.key === kind)?.inPot; },
@@ -2100,7 +2127,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
     // On l'a nourri (ici ou chez l'autre) : il mange son poisson (pas s'il dort, ni sans animations)
     eat(fish, opt = {}) { if (tino && !reduce.matches && !eng.night() && !tino.el.hidden) tino.now([{ type: "eat", fish, ...opt }]); },
-    destroy() { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); m.propEl.remove(); m.bannerEl.remove(); }); },
+    destroy() { thread.remove(); cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); m.propEl.remove(); m.bannerEl.remove(); }); },
   };
 }
 

@@ -275,15 +275,20 @@ export function createBackend() {
 
     // Garde-robe du petit Tino (supabase/12_tino_outfits.sql) : tenues dessinées + ce qu'il porte (réglage commun)
     async listOutfits() {
-      const [rows, worn] = (await Promise.all([
+      const [r1, r2, r3] = await Promise.all([
         sb.from("tino_outfits").select("*").order("created_at"), // (« * » : marche avant et après 17, qui ajoute anim)
         sb.from("shared_settings").select("value").eq("key", "tino_outfit").maybeSingle(),
-      ])).map(must);
+        sb.rpc("outfit_hours"), // (26 : durée des tenues pêchées, en heures ; sans 26 : erreur → null = 7 jours)
+      ]);
+      const rows = must(r1), worn = must(r2);
       return {
+        hours: r3.error ? null : r3.data,
         outfits: rows.map((r) => ({ id: r.id, by: r.author, name: r.name, layer: r.layer, path: r.path, hideFlower: r.hide_flower, anim: r.anim ?? null, at: r.created_at, caughtAt: r.caught_at ?? null, caughtBy: r.caught_by ?? null })),
         worn: { head: worn?.value?.head ?? null, body: worn?.value?.body ?? null },
       };
     },
+    // Durée des tenues pêchées, commune aux deux (26_outfit_hours.sql) : 1 à 168 heures
+    async setOutfitHours(hours) { must(await sb.from("shared_settings").upsert({ key: "outfit_hours", value: { hours } })); },
     // Nouveau dessin (PNG transparent déjà réduit sur l'appareil, ou planche d'une tenue animée + anim, voir
     // 17_outfit_anim.sql) : fichier, puis la tenue (sinon le fichier est retiré) ; renvoie son id (avec la pêche, 20, elle
     // part dans la réserve : c'est l'app qui décide de la faire porter ou non)

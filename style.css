@@ -533,7 +533,7 @@ a { color: var(--text-accent); }
 .mp-nav button { min-width: 0; }
 /* Onglet Tino : Tino en grand, avec ses habits, posé sur une petite ombre */
 .mp-showcase { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.mp-show-stage { display: flex; justify-content: center; width: 100%; padding: 26px 0 4px;
+.mp-show-stage { display: flex; justify-content: center; width: 100%; padding: 40px 0 4px; /* (de la place au-dessus : chapeaux et ailes hauts) */
   background: radial-gradient(ellipse 30% 9px at 50% calc(100% - 6px), rgba(0, 0, 20, 0.28), transparent 75%); }
 .mp-show-cap { text-align: center; margin-top: 2px; }
 
@@ -614,6 +614,6 @@ a { color: var(--text-accent); }
 .mp-pot-art { width: 52px; height: 49px; overflow: visible; }
 .mp-pot-peo { transform-box: view-box; transform-origin: 32px 30px; transform: translateY(40px); transition: transform 0.6s cubic-bezier(.3, 1.5, .5, 1); }
 .mp-pot-peo.mp-up { transform: translateY(0); animation: mp-lurk 4.5s ease-in-out 0.6s infinite; }
-.mp-pot-peo.mp-dream { opacity: 0.5; filter: url(#mp-pot-dream); } .mp-pot-peo.mp-dream.mp-up { animation-duration: 9s; } /* PeoPeo pas là : en rêve */
+.mp-pot-peo.mp-dream.mp-up { animation-duration: 9s; } /* PeoPeo pas là : il dort dans la marmite (son âme se promène) */
 @keyframes mp-lurk { 0%, 100% { transform: translate(0, 2px); } 20% { transform: translate(-3px, 0) rotate(-6deg); } 45% { transform: translate(0, 4px); } 65% { transform: translate(3px, 0) rotate(6deg); } 85% { transform: translate(0, 1px); } }
 @media (prefers-reduced-motion: reduce) { .mp-pot-peo.mp-up { animation: none; } }

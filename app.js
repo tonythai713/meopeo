@@ -875,10 +875,10 @@ let unsubOutfits = null;
 const outfitUrls = new Map(); // fichier → adresse locale de l'image (gardée tant que la tenue existe)
 async function loadOutfits() {
   if (!S.user) return;
-  try { const r = await db.listOutfits(); S.outfits = r.outfits; S.worn = r.worn; S.outfitsOk = true; store.set("outfits." + S.user.id, r); }
+  try { const r = await db.listOutfits(); S.outfits = r.outfits; S.worn = r.worn; S.outfitHours = r.hours ?? null; S.outfitsOk = true; store.set("outfits." + S.user.id, r); }
   catch (err) {
     if (/does not exist|schema cache|tino_outfits/i.test(err.message)) { S.outfitsOk = false; S.outfits = []; S.worn = { head: null, body: null }; }
-    else { const r = store.get("outfits." + S.user.id, null); if (r) { S.outfits = r.outfits; S.worn = r.worn; } } // hors ligne
+    else { const r = store.get("outfits." + S.user.id, null); if (r) { S.outfits = r.outfits; S.worn = r.worn; S.outfitHours = r.hours ?? null; } } // hors ligne
   }
   await applyOutfit();
   const box = document.querySelector(".mp-wardrobe");
@@ -887,6 +887,8 @@ async function loadOutfits() {
   refreshFishing();
   scheduleFishTimer();
   syncWidgetScenes();
+  const fset = document.querySelector(".mp-fishset"); // (l'autre a changé la durée : ⚙ → 🎣 Fishing suit, sauf si on y touche)
+  if (fset && !fset.contains(document.activeElement)) fillFishSet(fset);
 }
 
 // ---------- Images du widget « Tino » avec la tenue portée (supabase/18_widget_scenes.sql) ----------
@@ -947,9 +949,13 @@ async function outfitUrl(o) {
 }
 // Pêche (20_fishing.sql) : une tenue se porte seulement si elle a été pêchée il y a moins de 7 jours (sinon : la réserve).
 // Sans 20 : toutes se portent, comme avant.
-const WEEK = 7 * 86400e3;
-const unlocked = (o) => S.fishingOk !== true || (!!o?.caughtAt && Date.parse(o.caughtAt) > Date.now() - WEEK);
-const caughtUntil = (o) => new Date(Date.parse(o.caughtAt) + WEEK);
+// Durée d'une tenue pêchée : réglage commun (26_outfit_hours.sql, 24 h par défaut) ; sans 26 : 7 jours
+const outfitMs = () => (S.outfitHours ?? 168) * 3600e3;
+const unlocked = (o) => S.fishingOk !== true || (!!o?.caughtAt && Date.parse(o.caughtAt) > Date.now() - outfitMs());
+const caughtUntil = (o) => new Date(Date.parse(o.caughtAt) + outfitMs());
+const durText = (h) => (h >= 48 && h % 24 === 0 ? `${h / 24} days` : h === 1 ? "1 hour" : `${h} hours`);
+const untilText = (d) => (+d - Date.now() < 2 * 86400e3 ? hourOf(d) : dayShort(d)); // (bientôt : l'heure ; plus loin : le jour)
+const showPool = () => store.get("showPool", false) === true; // (⚙ Settings → 🎣 Fishing, cet appareil : la réserve est une surprise)
 const dayShort = (d) => `${DAYS[dow(d) - 1].slice(0, 3)} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}`;
 // Ce que Tino porte : { head, body } (les tenues) et { head, body, hideFlower } prêt pour wear() de mascot.js
 const wornOutfit = (layer) => S.outfits.find((o) => o.id === S.worn[layer] && o.layer === layer && unlocked(o));
@@ -1066,19 +1072,21 @@ function fillWardrobe(box) {
   const who = (o) => (o.by === S.user.id ? S.me : S.partner), fishing = S.fishingOk === true;
   const row = (o, inPool = false) => {
     const on = !inPool && wornOutfit(o.layer)?.id === o.id;
-    const when = inPool ? " · in the pool" : fishing ? ` · until ${dayShort(caughtUntil(o))}` : "";
+    const when = inPool ? " · in the pool" : fishing ? ` · until ${untilText(caughtUntil(o))}` : "";
     const thumb = o.anim ? `<span class="mp-othumb" title="Animated"><i data-athumb="${o.id}"></i></span>` : `<img alt="" data-thumb="${o.id}">`;
     return `<div class="mp-outfit${on ? " on" : ""}${inPool ? " mp-pooled" : ""}" data-orow="${o.id}">${thumb}<span class="mp-outfit-name"><span class="mp-oname">${esc(o.name)}</span> <span class="pl-legend">${o.layer === "head" ? "head" : "body"}${o.anim ? " · animated" : ""} · ${esc(who(o)?.mark ?? "")}${when}</span></span>
       ${inPool ? "" : `<button type="button" data-wear="${o.id}">${on ? "Take off" : "Wear"}</button>`}<button type="button" data-rename="${o.id}" title="Rename">✏️</button><button type="button" data-drop="${o.id}" title="Remove from the wardrobe">✕</button></div>`;
   };
   const wearable = S.outfits.filter(unlocked), pool = fishing ? S.outfits.filter((o) => !unlocked(o)) : [];
-  box.innerHTML = (fishing ? `<div class="pl-legend">🎣 Outfits come from <b>fishing</b>: a new drawing goes into the <b>pool</b>; catch it in the <b>🎣 Fishing</b> tab and you can both dress Tino with it for <b>7 days</b> — then it goes back into the pool.</div>` : "")
+  box.innerHTML = (fishing ? `<div class="pl-legend">🎣 Outfits come from <b>fishing</b>: a new drawing goes into the <b>pool</b>; catch it in the <b>🎣 Fishing</b> tab and you can both dress Tino with it for <b>${durText(S.outfitHours ?? 168)}</b> — then it goes back into the pool.</div>` : "")
     + `<div class="pl-legend">Draw outfits for Tino on a tablet: download the template, draw on a <b>new layer</b> on top of it, then export <b>only your layer</b> as a PNG with a transparent background. Shared: ${esc(S.partner?.label ?? "the other")} sees what Tino wears.</div>
     <div class="pl-legend">✨ It can also <b>move</b>: export your animation as an <b>animated PNG</b> or a <b>GIF</b> with a transparent background, or as a <b>video</b> on a plain background color you don't use in the drawing (it's removed). Square like the template, 10 s max (the rest is cut), plays in a loop.</div>
     <span class="mp-row"><button type="button" data-act="template">⬇ Template</button></span>
     ${fishing ? `<div class="pl-sub">👒 Caught — wear them</div>` : ""}
     <div class="mp-outfits">${wearable.length ? wearable.map((o) => row(o)).join("") : `<div class="pl-empty">${fishing ? "Nothing caught right now — go fishing 🎣" : "No outfits yet."}</div>`}</div>
-    ${fishing ? `<div class="pl-sub">🎣 In the pool (${pool.length})</div>
+    ${fishing && !showPool() ? `<div class="pl-sub">🎣 In the pool (${pool.length})</div>
+      <div class="pl-legend">Hidden — it's a surprise. To see, rename or remove them: ⚙ Settings → 🎣 Fishing → “Show the outfit pool”.</div>` : ""}
+    ${fishing && showPool() ? `<div class="pl-sub">🎣 In the pool (${pool.length})</div>
       <div class="mp-outfits">${pool.map((o) => row(o, true)).join("")}${pool.length ? "" : `<div class="pl-empty">Empty — draw a new outfit!</div>`}</div>
       ${pool.length ? `<div class="pl-legend">One of these comes up when you catch an outfit — ✏️ to rename, ✕ to take it out of the pool.</div>` : ""}` : ""}
     <div class="mp-outfit-add">
@@ -2007,7 +2015,7 @@ async function dressShowcase(look) {
   if (!sc?.card.isConnected) return;
   sc.m.wear(look ?? await wornLook());
   const items = ["head", "body"].map(wornOutfit).filter(Boolean), c = colorNow();
-  sc.card.querySelector(".mp-show-cap").textContent = (items.length ? `Wearing: ${items.map((o) => o.name + (S.fishingOk === true ? ` (until ${dayShort(caughtUntil(o))})` : "")).join(" · ")}` : "No outfit right now")
+  sc.card.querySelector(".mp-show-cap").textContent = (items.length ? `Wearing: ${items.map((o) => o.name + (S.fishingOk === true ? ` (until ${untilText(caughtUntil(o))})` : "")).join(" · ")}` : "No outfit right now")
     + (c ? ` · 🎨 colour for ${timeLeft(c.until)}` : "");
 }
 
@@ -2096,7 +2104,8 @@ const catchRow = (c) => {
   if (c.kind === "junk") { const [e, n] = JUNK[c.junk] ?? ["🫧", c.junk]; return `<div class="mp-catch">${e} ${whoMark(c.by)} ${n}${FISH[c.junk] && S.feedingOk === true ? ` <span class="pl-legend">${c.eatenAt ? "· eaten 😋" : "· in the bucket"}</span>` : ""} ${when}</div>`; }
   const live = Date.parse(c.until) > Date.now();
   if (c.kind === "color") return `<div class="mp-catch"><span class="mp-swatch" style="background:${furOf(c.color).fill}"></span> ${whoMark(c.by)} a colour <span class="pl-legend">${live ? `· until ${hourOf(new Date(c.until))}` : "· faded"}</span> ${when}</div>`;
-  return `<div class="mp-catch">👒 ${whoMark(c.by)} “${esc(catchName(c))}” <span class="pl-legend">${live ? `· until ${dayShort(new Date(c.until))}` : "· back in the pool"}</span> ${when}</div>`;
+  const end = new Date(Date.parse(c.at) + outfitMs()), on = +end > Date.now(); // (la durée réglée maintenant, pas celle du moment de la prise)
+  return `<div class="mp-catch">👒 ${whoMark(c.by)} “${esc(catchName(c))}” <span class="pl-legend">${on ? `· until ${untilText(end)}` : "· back in the pool"}</span> ${when}</div>`;
 };
 function fillFishInfo(pane) {
   const info = pane.querySelector(".mp-fish-info"), list = pane.querySelector(".mp-catches");
@@ -2246,7 +2255,7 @@ function fishScene(pane) {
     prize.setAttribute("opacity", "1");
     const until = c.until ? new Date(c.until) : null;
     out.innerHTML = c.kind === "outfit"
-      ? `<div class="mp-fish-got">${o ? `<img alt="" class="mp-fish-img">` : "👒"}<span>You caught <b>“${esc(catchName(c))}”</b>! You can both dress Tino with it until <b>${dayShort(until)}</b>.</span></div>
+      ? `<div class="mp-fish-got">${o ? `<img alt="" class="mp-fish-img">` : "👒"}<span>You caught <b>“${esc(catchName(c))}”</b>! You can both dress Tino with it until <b>${untilText(until)}</b>.</span></div>
          ${o ? `<button type="button" class="mp-cta" data-puton>👒 Put it on Tino</button>` : ""}`
       : c.kind === "color"
         ? `<div class="mp-fish-got"><span class="mp-swatch mp-swatch-big" style="background:${furOf(c.color).fill}"></span><span>A new colour! Tino wears it for <b>30 minutes</b> (until ${hourOf(until)}) — for both of you.</span></div>`
@@ -2520,15 +2529,16 @@ function startBath(box) {
 // À côté du mois, à la place de la case « MeoMeo » : une marmite dorée (casserole coréenne à ramyeon / tteokbokki) où PeoPeo
 // (et MeoMeo, plus tard) vit. Celui qui a MeoPeo ouvert à l'écran en ce moment y est : sa tête sort et guette (endormie la
 // nuit) ; de temps en temps il saute dehors, se promène sur le calendrier, poursuit Tino… puis y retourne (mascot.js, « peo »,
-// homeTick). Absent : il est « en rêve » — pâle et transparent, les yeux fermés, dans la marmite aussi ; il en sort rarement,
-// en somnambule (setDream). Toucher la marmite = afficher / cacher les tâches de l'autre (comme la case d'avant).
+// homeTick). Absent : il dort dans la marmite (tête endormie) et c'est son âme qui sort — pâle et transparente, reliée à
+// lui par un fil spectral — et fait tout comme lui (setDream). Toucher la marmite = afficher / cacher les tâches de l'autre (comme la case d'avant).
 let presenceCh = null;
 const personId = (label) => [S.me, S.partner].find((p) => p?.label === label)?.id ?? null;
 const isHere = (id) => !!id && (id === S.user?.id ? !document.hidden : S.online.has(id));
 // MeoMeo et PeoPeo ont l'app ouverte en même temps : les deux téléphones montrent les mêmes actions au même moment (mascot.js,
 // « ensemble ») et Tino reste éveillé, même la nuit
 const bothHere = () => isHere(personId("PeoPeo")) && isHere(personId("MeoMeo"));
-const peoUp = () => (mascots ? mascots.inPot("peo") : true); // (sa tête sort de la marmite — pâle, en rêve, s'il n'est pas là)
+// (sa tête sort de la marmite ; pas là : il y dort toujours, même quand son âme se promène)
+const peoUp = () => (mascots ? peoDream() || mascots.inPot("peo") : true);
 const peoDream = () => !isHere(personId("PeoPeo"));
 function potButton() {
   const P = S.partner;
@@ -2595,6 +2605,7 @@ function renderSettings(pane) {
       <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button></div>`)
     + fold("notif", "🔔 Notifications", `<div class="mp-notif">Checking…</div>
       ${P ? `<label class="mp-check"><input type="checkbox" name="notify" ${S.me.notify_partner !== false ? "checked" : ""}> Tell me when ${esc(P.mark)} ${esc(P.label)} adds a task</label>` : ""}`)
+    + fold("fishing", "🎣 Fishing", `<div class="mp-fishset"></div>`)
     + fold("widget", "📱 Home-screen widget", `<div class="mp-widgets">Checking…</div><div class="mp-tinowidget"></div><div class="mp-doodlewidget"></div><div class="mp-allwidget"></div>`)
     + fold("password", "🔑 Password", `<label>New password<input type="password" name="pw" autocomplete="new-password" minlength="6"></label>
       <label>Repeat it<input type="password" name="pw2" autocomplete="new-password" minlength="6"></label>
@@ -2609,6 +2620,7 @@ function renderSettings(pane) {
   });
   pane.querySelector("[data-act=logout]").addEventListener("click", async () => { location.hash = ""; await logout(); });
   fillLook(pane.querySelector(".mp-look"));
+  fillFishSet(pane.querySelector(".mp-fishset"));
   appVersion().then((v) => { pane.querySelector(".mp-version").textContent = `MeoPeo version ${v}`; });
   fillNotif(pane.querySelector(".mp-notif"));
   fillWidgets(pane.querySelector(".mp-widgets"));
@@ -2620,6 +2632,31 @@ function renderSettings(pane) {
     const on = ev.target.checked;
     if (await guard(() => db.updateMyProfile({ notify_partner: on }))) { S.me.notify_partner = on; toast(on ? `You'll be told when ${P.label} adds a task` : `No more notifications for ${P.label}'s new tasks`); }
     else ev.target.checked = !on;
+  });
+}
+
+// ⚙ → 🎣 Fishing : combien de temps on garde une tenue pêchée (commun aux deux, 26) et voir la réserve (cet appareil)
+const OUTFIT_HOURS = [1, 3, 6, 12, 24, 48, 72, 168];
+function fillFishSet(box) {
+  if (!box) return;
+  if (S.fishingOk !== true) { box.innerHTML = `<div class="pl-legend">Fishing isn't set up yet.</div>`; return; }
+  const h = S.outfitHours, opts = OUTFIT_HOURS.includes(h) || h == null ? OUTFIT_HOURS : [...OUTFIT_HOURS, h].sort((a, b) => a - b);
+  box.innerHTML = (h == null
+    ? `<div class="pl-legend">👒 Caught outfits last 7 days. To choose how long, Tony needs to run <code>supabase/26_outfit_hours.sql</code>.</div>`
+    : `<label>👒 Caught outfits last <select name="ohours">${opts.map((x) => `<option value="${x}"${x === h ? " selected" : ""}>${durText(x)}</option>`).join("")}</select></label>
+      <div class="pl-legend">For both of you — then they go back into the pool. It also counts for outfits already caught.</div>`)
+    + `<label class="mp-check"><input type="checkbox" name="showpool"${showPool() ? " checked" : ""}> Show the outfit pool (🦭 Tino → 👒 Tino's wardrobe) — to see, rename or remove the outfits you can catch</label>
+    <div class="pl-legend">This device only. Off: what's in the pool stays a surprise.</div>`;
+  box.querySelector("[name=ohours]")?.addEventListener("change", async (ev) => {
+    const v = +ev.target.value;
+    if (await guard(() => db.setOutfitHours(v), "Couldn't change it")) { S.outfitHours = v; toast(`👒 Caught outfits now last ${durText(v)}`); await loadOutfits(); fishingChanged?.(true); }
+    else ev.target.value = String(S.outfitHours);
+  });
+  box.querySelector("[name=showpool]").addEventListener("change", (ev) => {
+    store.set("showPool", ev.target.checked);
+    const w = document.querySelector(".mp-wardrobe");
+    if (w) fillWardrobe(w);
+    toast(ev.target.checked ? "🎣 The pool is shown in Tino's wardrobe" : "🎣 The pool is hidden again");
   });
 }
 
