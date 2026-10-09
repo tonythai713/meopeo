@@ -1,6 +1,6 @@
 // MeoPeo — l'interface (même mise en page que les planners Obsidian MeoMeo / PeoPeo).
 // Ne parle jamais directement à Supabase : tout passe par `db` (data.js ; data-mock.js dans test.html).
-import { mountMascots, outfitTemplate, scenePng, WIDGET_SCENES, SCENES_V, tinoHeadSvg, demoPose } from "./mascot.js";
+import { mountMascots, outfitTemplate, scenePng, WIDGET_SCENES, SCENES_V, tinoHeadSvg, peoHeadSvg, demoPose } from "./mascot.js";
 import { createBigTino, DEFAULT_ANIM, videoToSprite, videoFrames, gifFrames, apngFrames, keyBackground, outfitSheet, shrinkFrames, isAnimatedImage, releaseCanvas } from "./bigtino.js";
 
 // ---------- Dates ----------
@@ -77,7 +77,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, online: new Set() };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -105,6 +105,7 @@ export async function start(backend) {
   if (u && u.id !== S.user?.id) await boot(u); // (le signal de connexion a pu arriver avant)
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
+  document.addEventListener("visibilitychange", () => { if (document.hidden) presenceCh?.set(false); presenceChanged(); }); // (en arrière-plan : il n'est plus « là »)
   const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyTheme(); runClocks(); } }); // (minuteries endormies en arrière-plan)
@@ -170,6 +171,7 @@ async function boot(user) {
   ensurePush();
 }
 function resubscribe() {
+  presenceCh?.stop(); presenceCh = S.user ? db.presence(S.user.id, (set) => { S.online = set; presenceChanged(); }) : null; // (marmite, PeoPeo)
   unsubscribe?.(); unsubscribe = S.user ? db.subscribe(() => reload()) : null;
   unsubTino?.(); unsubTino = S.user ? db.subscribeTino(() => loadTino()) : null;
   unsubExtras?.(); unsubExtras = S.user ? db.subscribeTinoExtras(() => loadExtras()) : null;
@@ -254,6 +256,7 @@ function showLogin() {
   unsubCatches?.(); unsubCatches = null; S.catches = []; S.color = null; S.fishingOk = null; lastCatch = null; applyColor(); clearTimeout(fishTimer);
   unsubFeeding?.(); unsubFeeding = null; S.feeding = null; S.hungerLines = []; S.feedingOk = null; feedSeen = null; clearTimeout(tummyTimer);
   unsubBath?.(); unsubBath = null; S.bath = null; S.bathOk = null; bathSeen = null; applyDirt();
+  presenceCh?.stop(); presenceCh = null; S.online = new Set();
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
   unsubNotes?.(); unsubNotes = null; S.notes = []; S.notesOk = null;
   unsubDoodles?.(); unsubDoodles = null; S.doodles = []; S.doodlesOk = null; doodleUi?.el.remove(); doodleUi = null; doodlePng.clear(); doodleSeen = null;
@@ -452,7 +455,7 @@ function renderCalendar(el) {
   const chipTitle = (e) => `${e.who === "partner" ? esc(S.partner?.label) + " — " : ""}${e.course ? esc(e.course) + " — " : ""}${esc(e.label)}`;
   let html = `<div class="pl-nav"><button data-m="-1" aria-label="Previous month">‹</button><button data-m="0">Today</button><button data-m="1" aria-label="Next month">›</button>
       <span class="pl-month">${MONTHS[first.getMonth()]} ${first.getFullYear()}</span>
-      ${S.partner ? `<label class="pl-toggle"><input type="checkbox" ${UI.showPartner ? "checked" : ""}> ${esc(S.partner.mark)} ${esc(S.partner.label)}</label>` : ""}</div>
+      ${S.partner ? potButton() : ""}</div>
     <div class="pl-cal">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, c) => `<div class="pl-dow" style="grid-row:1;grid-column:${c + 1}">${d}</div>`).join("")}`;
   let lanes = { segs: [], n: 0 };
   for (let i = 0; i < weeks * 7; i++) {
@@ -483,7 +486,7 @@ function renderCalendar(el) {
   };
   showDay(UI.day);
   el.querySelectorAll("[data-m]").forEach((b) => b.addEventListener("click", () => { UI.offset = +b.dataset.m === 0 ? 0 : UI.offset + +b.dataset.m; renderCalendar(el); align(); }));
-  el.querySelector(".pl-toggle input")?.addEventListener("change", (ev) => { UI.showPartner = ev.target.checked; store.set("showPartner", UI.showPartner); renderCalendar(el); align(); });
+  el.querySelector(".mp-pot")?.addEventListener("click", () => { UI.showPartner = !UI.showPartner; store.set("showPartner", UI.showPartner); renderCalendar(el); align(); });
   el.querySelectorAll("[data-day]").forEach((c) => c.addEventListener("click", () => {
     UI.day = c.dataset.day;
     el.querySelectorAll(".pl-day.sel").forEach((x) => x.classList.remove("sel"));
@@ -609,10 +612,10 @@ const hmOf = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
 const mealText = () => { const n = minutesOf(tinoSleep().napFrom);
   return `He cooks or has a barbecue 🍳 mostly from ${hmOf((n + 1380) % 1440)} to ${hmOf(n)} and from ${hmOf(DINNER[0])} to ${hmOf(DINNER[1])} (now and then otherwise), and plays video games 🎮 more the rest of the day.`; };
 function refreshMascots() {
-  if (mascots) return mascots.refresh();
+  if (mascots) { presenceChanged(); return mascots.refresh(); }
   const layer = document.createElement("div");
   document.body.append(layer);
-  mascots = mountMascots({ layer, kinds: ["tino"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo });
+  mascots = mountMascots({ layer, kinds: ["tino", "peo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo });
   syncTinoBubble();
   applyOutfit();
 }
@@ -2510,6 +2513,34 @@ function startBath(box) {
   }
   stage.addEventListener("click", scrub, true);
   bathing = { end };
+}
+
+// ---------- La marmite et PeoPeo (présence en direct, sans SQL) ----------
+// À côté du mois, à la place de la case « MeoMeo » : une marmite où PeoPeo (et MeoMeo, plus tard) se cachent. Celui qui a
+// MeoPeo ouvert à l'écran en ce moment sort la tête et guette ; sinon il reste au fond. Toucher la marmite = afficher / cacher
+// les tâches de l'autre (comme la case d'avant). Quand PeoPeo est là, un deuxième PeoPeo se promène aussi sur le calendrier
+// (mascot.js, « peo »), pendant que celui de la marmite garde la tête sortie. Chacun voit les deux.
+let presenceCh = null;
+const personId = (label) => [S.me, S.partner].find((p) => p?.label === label)?.id ?? null;
+const isHere = (id) => !!id && (id === S.user?.id ? !document.hidden : S.online.has(id));
+function potButton() {
+  const P = S.partner, peoUp = isHere(personId("PeoPeo"));
+  return `<button type="button" class="pl-toggle mp-pot" aria-pressed="${UI.showPartner}" title="${UI.showPartner ? "Hide" : "Show"} ${esc(P.label)}'s tasks on the calendar">
+    <svg class="mp-pot-art" viewBox="0 -8 64 60" aria-hidden="true">
+      <ellipse cx="32" cy="27" rx="24" ry="5" fill="#2a2d36"/>
+      <clipPath id="mp-pot-clip"><path d="M-20 -30H84V28H56Q56 48 32 49Q8 48 8 28H-20Z"/></clipPath>
+      <g clip-path="url(#mp-pot-clip)"><g class="mp-pot-peo${peoUp ? " mp-up" : ""}"><svg x="13" y="-12" width="38" height="38">${peoHeadSvg("ms-flush-peo-pot")}</svg></g></g>
+      <path d="M8 28Q8 48 32 49Q56 48 56 28Z" fill="#4a4f5c" stroke="#2a2d36" stroke-width="1.5"/>
+      <path d="M13 34Q32 39 51 34" fill="none" stroke="#6b7180" stroke-width="1.5"/>
+      <ellipse cx="32" cy="28" rx="25" ry="5.5" fill="none" stroke="#6b7180" stroke-width="2.5"/>
+      <path d="M6 30Q1 30 2 35Q3 38 8 37M58 30Q63 30 62 35Q61 38 56 37" fill="none" stroke="#2a2d36" stroke-width="2.5" stroke-linecap="round"/>
+    </svg><span class="mp-pot-label">${esc(P.mark)} ${esc(P.label)}</span></button>`;
+}
+// Quelqu'un arrive ou s'en va : la tête dans la marmite et le PeoPeo du calendrier suivent (sans redessiner le calendrier)
+function presenceChanged() {
+  const peoUp = isHere(personId("PeoPeo"));
+  document.querySelectorAll(".mp-pot-peo").forEach((g) => g.classList.toggle("mp-up", peoUp));
+  mascots?.setAway("peo", !peoUp);
 }
 
 // Version qui tourne sur cet appareil = celle du cache du service worker (« meopeo-2026-10-07.8 », voir sw.js) : pour savoir

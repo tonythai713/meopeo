@@ -25,6 +25,8 @@
 //   listFeeding() → { belly: { fill, at, by, fish, burnt } | null, fish: { fish, big_fish, golden_fish } (pas encore mangés) },
 //   feedTino(kind) → le ventre après le repas, listHungerLines(), addHungerLine(level, body), deleteHungerLine(id),
 //   subscribeFeeding(onChange) → nourrir Tino (21_feeding.sql) ; une phrase de faim : { id, by, level, body }
+//   presence(myId, onChange) → { set(here), stop() } : qui a MeoPeo ouvert à l'écran en ce moment (temps réel, sans table) ;
+//     onChange(Set des id présents) — PeoPeo / MeoMeo dans la marmite
 //   getBath() → { at, by } (dernier bain), washTino() → { at, by, washedColour }, subscribeBath(onChange) → laver Tino (23_bath.sql)
 //   listDecor(), setDecor(blob, { season, layout, light }), deleteDecor({ season, layout, light }),
 //   subscribeDecor(onChange) → décor dessiné, fond d'écran par saison / jour-nuit / format (supabase/16_decor.sql)
@@ -320,6 +322,18 @@ export function createBackend() {
     },
     async addHungerLine(level, body) { must(await sb.from("tino_hunger_lines").insert({ level, body })); },
     async deleteHungerLine(id) { must(await sb.from("tino_hunger_lines").delete().eq("id", id)); },
+    // Présence (Realtime Presence, pas de table) : chacun « s'annonce » tant que l'app est à l'écran ; set(false) quand elle
+    // passe en arrière-plan, set(true) au retour ; le téléphone coupe aussi la connexion en arrière-plan (l'app refait tout au retour)
+    presence(myId, onChange) {
+      let here = true;
+      const ch = sb.channel("meopeo-presence", { config: { presence: { key: myId } } });
+      ch.on("presence", { event: "sync" }, () => onChange(new Set(Object.keys(ch.presenceState()))));
+      ch.subscribe((status) => { if (status === "SUBSCRIBED" && here) ch.track({ at: Date.now() }).catch(() => {}); });
+      return {
+        set(v) { here = v; (v ? ch.track({ at: Date.now() }) : ch.untrack()).catch(() => {}); },
+        stop() { sb.removeChannel(ch); },
+      };
+    },
     // Laver Tino (supabase/23_bath.sql) : le dernier bain (la saleté se calcule avec le temps) ; le bain enlève la couleur
     async getBath() { const r = must(await sb.from("tino_bath").select("at, washed_by").maybeSingle()); return r ? { at: r.at, by: r.washed_by } : null; },
     async washTino() { const r = must(await sb.rpc("wash_tino")); return { at: r.at, by: r.by, washedColour: !!r.washed_colour }; },

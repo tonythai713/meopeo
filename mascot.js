@@ -8,7 +8,8 @@
 
 const STYLE = `
 .ms-fur { fill: var(--ms-fur, #ffffff); stroke: var(--ms-fur-line, #c9d0e2); }
-.ms-dirt { opacity: var(--ms-dirt, 0); } /* saleté (laver Tino) : variable posée par l'app, 0 = propre */ /* couleur pêchée : variables posées par l'app sur la racine (html) ; jamais de chevrons ici : ce style va aussi dans les images SVG du widget */
+.ms-dirt { opacity: var(--ms-dirt, 0); }
+.ms-peo-shut { display: none; } .ms-sleep .ms-peo-shut { display: inline; } .ms-sleep .ms-peo-eyes { display: none; } /* PeoPeo dort les yeux fermés */ /* saleté (laver Tino) : variable posée par l'app, 0 = propre */ /* couleur pêchée : variables posées par l'app sur la racine (html) ; jamais de chevrons ici : ce style va aussi dans les images SVG du widget */
 .ms-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .ms { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; will-change: transform;
   -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; }
@@ -24,6 +25,7 @@ const STYLE = `
 .ms-arm-r { transform-origin: 75px 59px; }
 .ms-foot-l { transform-origin: 38px 90px; }
 .ms-foot-r { transform-origin: 62px 90px; }
+.ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
 .ms-zzz, .ms-heart, .ms-anger, .ms-brows { opacity: 0; }
 .ms-mad .ms-brows { opacity: 1; }
 .ms-mad .ms-anger { animation: ms-anger 0.45s ease-in-out infinite alternate; }
@@ -215,6 +217,43 @@ export function tinoHeadSvg() {
   return `<svg viewBox="15 4 70 63" aria-hidden="true">${head}</svg>`;
 }
 
+// PeoPeo : les morceaux d'une planche dessinée (entier, tête, tête endormie, corps, bras, chaussures), fond
+// enlevé, mis à l'échelle et replacés sur la figure entière de la planche (art/peo/*.webp, 6 px par unité). Même repère que
+// Tino (100 × 100, pieds sur y = 98) et mêmes classes (ms-head, ms-face, ms-flush, ms-arm-*, ms-foot-*…) ; ses pivots à lui
+// (cou, épaules) sont dans STYLE sous .ms-peo. Le corps n'a plus de manches : ce sont les bras (sinon un bras levé
+// laisserait une manche vide). Tête ouverte / endormie : .ms-peo-eyes / .ms-peo-shut. gid : identifiant unique du dégradé.
+const PEO_ART = new URL("art/peo/", import.meta.url).href; // (à côté de mascot.js, quelle que soit la page)
+const peoImg = (f, x, y, w, h) => `<image href="${PEO_ART}${f}.webp" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+function peoHead(gid) {
+  return `<g class="ms-head">
+    <g class="ms-peo-eyes">${peoImg("head", 26.07, 5.9, 46, 49.5)}</g>
+    <g class="ms-peo-shut">${peoImg("head-sleep", 25.76, 5.91, 46, 49.33)}</g>
+    <g class="ms-face">
+      <radialGradient id="${gid}"><stop offset="0" stop-color="#ff5468" stop-opacity="0.9"/><stop offset="1" stop-color="#ff5468" stop-opacity="0"/></radialGradient>
+      <ellipse class="ms-flush" cx="49" cy="44" rx="15" ry="7" fill="url(#${gid})" opacity="0"/>
+      <g class="ms-cheeks"></g>
+    </g>
+    <g class="ms-flower"></g>
+    <g class="ms-wear-head"></g>
+  </g>`;
+}
+function peoSvg(gid = "ms-flush-peo") {
+  return `<svg class="ms-peo" viewBox="0 0 100 100" aria-hidden="true">
+  <g class="ms-foot-l">${peoImg("shoe-l", 36.6, 90.98, 10.83, 8)}</g>
+  <g class="ms-foot-r">${peoImg("shoe-r", 52.82, 91.07, 10.33, 7.67)}</g>
+  ${peoImg("body", 37.3, 49.04, 30.83, 43.83)}
+  <g class="ms-wear-body"></g>
+  <g class="ms-hold" display="none"></g>
+  <g class="ms-arm-l">${peoImg("arm-l", 34.63, 57.99, 7.33, 16.17)}</g>
+  <g class="ms-arm-r">${peoImg("arm-r", 56.33, 58.14, 7.33, 16.17)}</g>
+  ${peoHead(gid)}
+</svg>`;
+}
+// La tête de PeoPeo seule (dans la marmite), cadrée sur la tête ; gid unique par copie
+export function peoHeadSvg(gid = "ms-flush-peo-head") {
+  return `<svg class="ms-peo" viewBox="24 5.5 50 50" aria-hidden="true">${peoHead(gid)}</svg>`;
+}
+
 // ---------- Tenues dessinées (garde-robe) ----------
 // Un dessin = une image carrée posée dans le repère du MODÈLE : Tino au centre, 25 unités de marge tout autour
 // (repère -25…125, soit 150 × 150 ; le modèle fait 1500 × 1500 px = 10 px par unité). Calque « head » : suit la tête
@@ -361,7 +400,15 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 // body.cy : centre du corps (pivot des roulades) ; body.support : distance du centre au point le plus bas quand il
 // est tourné de 0°, 15°, 30°… (mesurée sur le dessin) — pour qu'il reste posé sur la ligne en roulant ou couché ;
 // head : centre de la tête (pour placer les « z », le cœur et la bulle)
+// only : les seules actions qu'il peut faire (les autres — objets, lit, nage, roulade, nourriture… — sont dessinées pour
+// Tino) ; calm : un appui le fait seulement sauter (les phrases râleuses sont celles de Tino)
+const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly"];
 export const KINDS = {
+  peo: {
+    name: "PeoPeo", svg: () => peoSvg(), size: 50, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
+    only: PEO_ACTIONS, calm: true,
+    body: { cy: 56, support: Array(24).fill(42) },
+  },
   tino: {
     name: "Tino", svg: sealSvg, size: 40, head: [50, 36],
     body: { cy: 52.75, support: [47.3, 49.5, 49, 46, 43.3, 43.8, 42, 38, 40.3, 43, 45.8, 45.8, 47, 49, 52, 52.5, 50.5, 45.3, 42, 43.8, 43.3, 46, 49, 49.5] },
@@ -1109,7 +1156,7 @@ class Mascot {
   busy() { const b = ACTIONS[this.act?.type]?.busy; return typeof b === "function" ? !!b(this, this.act) : !!b; } // (scooter : seulement pendant l'accident)
   // Ce qu'il fait quand on lui a demandé de rester (appui long) : assis le jour ; la nuit (et la sieste), couché dans son
   // lit — jamais assis à côté du lit (« il dort debout malgré le lit » : sans doute un appui long en zoomant)
-  stayStep() { return this.eng.night() && !this.bubble ? { type: "nap", dur: Infinity, bed: true, stay: true } : { type: "sit", dur: Infinity, stay: true }; }
+  stayStep() { return this.eng.night() && !this.bubble ? (this.def.only ? { type: "sleep", dur: Infinity, stay: true } : { type: "nap", dur: Infinity, bed: true, stay: true }) : { type: "sit", dur: Infinity, stay: true }; }
   // Fait faire une action tout de suite (ou juste après celle en cours si elle ne s'interrompt pas ; s'il nage, il sort de l'eau)
   now(steps) {
     if (!this.busy()) { this.plan = steps.slice(1); this.act = steps[0]; return; }
@@ -1125,7 +1172,7 @@ class Mascot {
     if (this.bubble?.sticky) this.hush();
     const t = performance.now();
     this.taps = [...this.taps.filter((x) => t - x < TEASE_MS), t];
-    if (this.taps.length >= TEASE_TAPS) { this.taps = []; this.grumble(); } // trop c'est trop
+    if (this.taps.length >= TEASE_TAPS && !this.def.calm) { this.taps = []; this.grumble(); } // trop c'est trop
     else { if (this.act?.type !== "swim") this.now([{ type: "react" }]); this.love(); } // dans l'eau : juste un cœur, il continue
     this.el.style.pointerEvents = "none";
     const under = document.elementFromPoint(ev.clientX, ev.clientY);
@@ -1255,11 +1302,12 @@ class Mascot {
     if (this.stay) return this.stayStep();
     let name;
     if (this.bubble?.sticky) name = pick(CALM);
+    else if (this.eng.night() && this.def.only) return { type: "sleep", dur: Infinity }; // (PeoPeo : il dort assis, là où il est)
     else if (this.eng.night()) { // la nuit : dans la case d'aujourd'hui si elle est à l'écran, sinon là où il est ; couché, dans son lit
       const t = ctx.today, T = t && this.plat(t.k);
       if (T && this.eng.visible(T) && (t.k !== this.k || Math.abs(t.x - this.x) > 4)) { this.plan = this.pathTo(t); return this.plan.shift(); }
       return { type: "nap", dur: Infinity, bed: true };
-    } else name = weighted(Object.keys(ACTIONS).map((n) => [ACTIONS[n].weight?.(this, ctx) ?? 0, n]));
+    } else name = weighted(Object.keys(ACTIONS).filter((n) => !this.def.only || this.def.only.includes(n)).map((n) => [ACTIONS[n].weight?.(this, ctx) ?? 0, n]));
     const steps = (ACTIONS[name].make ?? (() => [{ type: name }]))(this, me, ctx);
     this.plan = [...steps.slice(1), { type: "idle", dur: rand(0.6, 2.4) }];
     return steps[0];
@@ -1362,8 +1410,8 @@ class Mascot {
     // En tournant (roulade, couché) le corps pivote autour de son centre et reste posé sur la ligne
     const th = p.spin * Math.PI / 180, sup = B.support, k = (((p.spin % 360) + 360) % 360) / 15, i = Math.floor(k);
     const bw = this.bedK > 0.001 ? this.bedWidth() : 0, onMattress = this.bedK * bw * (BED_H - MATTRESS) / BED_W; // dans son lit : posé sur le matelas
-    const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * SINK * u + lift - onMattress;
-    const look = this.look;
+    const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * (this.def.sink ?? SINK) * u + lift - onMattress;
+    const mir = this.def.facesLeft && this.dir > 0 ? -1 : 1, look = this.look * mir; // (PeoPeo regarde vers la gauche : retourné en entier quand il va à droite)
     this.el.classList.toggle("ms-sleep", !!A.zzz);
     this.el.classList.toggle("ms-mad", a.type === "angry" || (a.t !== undefined && gameMad(a)));
     this.el.classList.toggle("ms-swim", a.type === "swim" && !!a.wet);
@@ -1383,7 +1431,7 @@ class Mascot {
     }
     this.el.style.transform = `translate3d(${(this.x - W / 2).toFixed(1)}px, ${(this.y - W * 0.98).toFixed(1)}px, 0)`;
     this.inner.style.transform = `translateY(${down.toFixed(2)}px)` + (p.spin ? ` translateY(${pivot.toFixed(2)}px) rotate(${p.spin.toFixed(1)}deg) translateY(${(-pivot).toFixed(2)}px)` : "")
-      + ` rotate(${p.rot.toFixed(2)}deg) scale(${p.sx.toFixed(3)}, ${p.sy.toFixed(3)})`;
+      + ` rotate(${p.rot.toFixed(2)}deg) scale(${(p.sx * mir).toFixed(3)}, ${p.sy.toFixed(3)})`;
     this.head.style.transform = `rotate(${(p.head + look * 0.4).toFixed(2)}deg)` + (f ? ` scale(${(1 + 0.24 * f).toFixed(3)}, ${(1 - 0.42 * f).toFixed(3)})` : "");
     // Rouge : quand il boit une bière, et encore 2 min après (s'efface dans les 20 dernières secondes) ; joues aussi quand on le frotte
     const red = Math.max(p.blush, this.redUntil ? this.redMax * clamp((this.redUntil - Date.now()) / 20000, 0, 1) : 0);
@@ -1532,7 +1580,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   layer.classList.add("ms-layer");
   const asleep = () => night() || siesta(); // (la sieste fait tout comme la nuit : case d'aujourd'hui, lit, pas de nage…)
   const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night: asleep, meal: () => meal() && !asleep(), tapThrough, layer, tapping: null, lines, grumbles, belly };
-  const list = kinds.map((k) => new Mascot(eng, KINDS[k] ?? KINDS.tino));
+  const list = kinds.map((k) => new Mascot(eng, { ...(KINDS[k] ?? KINDS.tino), key: KINDS[k] ? k : "tino" }));
   const room = Math.max(...list.map((m) => m.size)) * 1.05; // place au-dessus d'une plateforme pour qu'il y tienne
   eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
   list.forEach((m) => layer.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl));
@@ -1551,9 +1599,10 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     const t = today();
     eng.today = t && eng.byKey.has(t.key) ? { k: t.key, x: t.x } : null;
     list.forEach((m, i) => {
-      m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = !eng.plats.length;
-      if (m.bubble) m.bubble.el.hidden = !eng.plats.length;
-      if (!eng.plats.length) return;
+      const off = !eng.plats.length || m.away;
+      m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = off;
+      if (m.bubble) m.bubble.el.hidden = off;
+      if (off) return;
       if (!m.placed || moved) { m.place(i); return; }
       if (!eng.byKey.has(m.k)) m.k = nearestPlat(eng.plats, prev.get(m.k)?.y ?? m.y, m.x).key;
       const P = m.plat();
@@ -1565,7 +1614,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   function refresh() {
     measure();
     list.forEach((m) => {
-      if (!eng.plats.length) return;
+      if (!eng.plats.length || m.away) return;
       if (reduce.matches) still(m);
       m.render();
     });
@@ -1578,7 +1627,8 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     m.dropProp(); // (pas d'écran ni de barbecue dans une pose fixe)
     const P = m.plat();
     if (P) m.y = P.y;
-    if (eng.night() && !m.bubble?.sticky) {
+    if (eng.night() && !m.bubble?.sticky && m.def.only) { m.act = { type: "sleep", t: 0, dur: Infinity }; m.sink = 1; m.lie = 0; m.bedAt = null; m.bedK = 0; } // (PeoPeo : assis, endormi)
+    else if (eng.night() && !m.bubble?.sticky) {
       const t = eng.today, T = t && m.plat(t.k);
       if (T && eng.visible(T)) { m.k = t.k; m.x = clamp(t.x, T.x0, T.x1); m.y = T.y; }
       m.act = { type: "nap", t: 0, dur: Infinity, bed: true }; m.lie = 1; m.sink = 0; m.bedAt = { k: m.k, x: m.x }; m.bedK = 1;
@@ -1600,7 +1650,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       measure();
       if (!eng.plats.length) { raf = 0; return; }
     } else eng.v = view();
-    list.forEach((m) => { follow(m); m.update(dt); m.render(); });
+    list.forEach((m) => { if (m.away) return; follow(m); m.update(dt); m.render(); });
     raf = requestAnimationFrame(frame);
   }
 
@@ -1652,7 +1702,16 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       });
     },
     say(text, opts) { tino?.say(text, opts); },
-    wear(o) { eng.outfit = o; list.forEach((m) => m.wear(o)); },
+    wear(o) { eng.outfit = o; tino?.wear(o); }, // (les habits de Tino : seulement Tino pour l'instant)
+    // Un personnage arrive ou s'en va (PeoPeo : l'app ouverte chez lui ou non) : il tombe du haut de l'écran en arrivant
+    setAway(kind, away) {
+      const m = list.find((x) => x.def.key === kind);
+      if (!m || m.away === !!away) return;
+      m.away = !!away;
+      if (m.away) { m.hush(true); m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = true; return; }
+      m.placed = false; // (au prochain mesurage : la case d'aujourd'hui si elle est à l'écran, sinon il tombe du haut)
+      refresh(); run();
+    },
     hush() { tino?.hush(true); },
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
     // On l'a nourri (ici ou chez l'autre) : il mange son poisson (pas s'il dort, ni sans animations)
