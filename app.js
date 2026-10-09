@@ -2445,7 +2445,7 @@ function fillBath(box) {
     <div class="pl-legend">He gets dirtier through the day. A bath also washes off his colour${colorNow() ? " (the one he has now!)" : ""}.</div>`;
   box.querySelector("[data-bath]").addEventListener("click", () => startBath(box));
 }
-// Le bain : une baignoire sous le grand Tino ; chaque toucher sur la scène le frotte (mousse, il fait « boing »), ses taches
+// Le bain (sans baignoire : demande de Tony) : chaque toucher sur le grand Tino le frotte au savon (mousse, il fait « boing »), ses taches
 // pâlissent ; au bout de SCRUBS, il est lavé pour de vrai (wash_tino)
 function startBath(box) {
   const sc = showcase;
@@ -2453,17 +2453,11 @@ function startBath(box) {
   if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
   const stage = sc.card.querySelector(".mp-show-stage"), dirt0 = dirtOpacity(dirtNow());
   let n = 0, done = false;
-  const tub = document.createElement("div");
-  tub.className = "mp-tub";
-  tub.innerHTML = `<svg viewBox="0 0 200 70" aria-hidden="true"><ellipse cx="100" cy="14" rx="96" ry="12" fill="#e9f6ff"/><path d="M6 14H194L182 56Q178 64 168 64H32Q22 64 18 56Z" fill="#ffffff" stroke="#b9cfe6" stroke-width="2"/>
-    <g fill="#ffffff" stroke="#d6e6f5" stroke-width="1.5">${[[30, 10, 10], [52, 6, 12], [76, 9, 9], [124, 8, 11], [150, 5, 10], [172, 10, 9]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join("")}</g>
-    <rect x="34" y="62" width="10" height="7" rx="3" fill="#b9cfe6"/><rect x="156" y="62" width="10" height="7" rx="3" fill="#b9cfe6"/></svg>`;
-  stage.append(tub);
   sc.card.classList.add("mp-bathing");
   const say = (t) => { const b = box.querySelector(".mp-bath-msg") ?? box.appendChild(Object.assign(document.createElement("div"), { className: "pl-legend mp-bath-msg" })); b.textContent = t; };
   box.querySelector("[data-bath]").disabled = true;
   say(`🧼 Tap Tino to rub the soap on him! (0/${SCRUBS})`);
-  const end = () => { stage.removeEventListener("click", scrub, true); tub.remove(); stage.querySelectorAll(".mp-foam-stick, .mp-soap").forEach((f) => f.remove()); sc.card.classList.remove("mp-bathing"); sc.card.style.removeProperty("--ms-dirt"); bathing = null; };
+  const end = () => { stage.removeEventListener("click", scrub, true); stage.querySelectorAll(".mp-foam-stick, .mp-soap").forEach((f) => f.remove()); sc.card.classList.remove("mp-bathing"); sc.card.style.removeProperty("--ms-dirt"); bathing = null; };
   async function scrub(ev) {
     ev.stopPropagation(); ev.preventDefault(); // (pas le saut / la colère du toucher habituel)
     if (done) return;
