@@ -622,11 +622,14 @@ a { color: var(--text-accent); }
 .mp-pot[aria-pressed="false"] .mp-pot-art, .mp-pot[aria-pressed="false"] .mp-pot-label { opacity: 0.45; }
 .mp-pot[aria-pressed="false"] .mp-pot-label { text-decoration: line-through; }
 .mp-pot-art { width: 52px; height: 49px; overflow: visible; }
-.mp-pot-peo { transform-box: view-box; transform-origin: 32px 30px; transform: translateY(40px); transition: transform 0.6s cubic-bezier(.3, 1.5, .5, 1); }
-.mp-pot-peo.mp-up { transform: translateY(0); animation: mp-lurk 4.5s ease-in-out 0.6s infinite; }
-.mp-pot-peo.mp-dream.mp-up { animation-duration: 9s; } /* PeoPeo pas là : il dort dans la marmite */
+/* Les deux têtes dans la marmite (PeoPeo à gauche, MeoMeo à droite) : cachées sous le bord, elles sortent quand la personne est là (ou dort dedans) */
+.mp-pot-head { transform-box: view-box; transform-origin: 18px 28px; transform: translateY(40px); transition: transform 0.6s cubic-bezier(.3, 1.5, .5, 1); }
+.mp-pot-meo { transform-origin: 46px 28px; } .mp-pot-tino { transform-origin: 32px 28px; } /* (Tino : quand PeoPeo et MeoMeo l'y ont jeté) */
+.mp-pot-head.mp-up { transform: translateY(0); animation: mp-lurk 4.5s ease-in-out 0.6s infinite; }
+.mp-pot-meo.mp-up { animation-delay: 2.1s; }
+.mp-pot-head.mp-dream.mp-up { animation-duration: 9s; } /* pas là : il / elle dort dans la marmite */
 @keyframes mp-lurk { 0%, 100% { transform: translate(0, 2px); } 20% { transform: translate(-3px, 0) rotate(-6deg); } 45% { transform: translate(0, 4px); } 65% { transform: translate(3px, 0) rotate(6deg); } 85% { transform: translate(0, 1px); } }
-@media (prefers-reduced-motion: reduce) { .mp-pot-peo.mp-up { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .mp-pot-head.mp-up { animation: none; } }
 /* Tino fait mijoter PeoPeo (mascot.js, « stir ») : feu sous la marmite, bouillon qui frémit, vapeur, bûches ; plus grand quand il
    attise le feu à l'éventail (mp-pot-fan) */
 .mp-pot-fire, .mp-pot-logs, .mp-pot-steam, .mp-pot-broth, .mp-pot-bubbles { opacity: 0; transition: opacity 0.6s; }

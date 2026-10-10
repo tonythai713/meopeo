@@ -1,12 +1,13 @@
 // Service worker de MeoPeo : l'app s'ouvre même sans réseau (ses fichiers sont gardés sur le téléphone).
 // ⚠️ À CHAQUE publication d'une nouvelle version : changer VERSION, sinon les téléphones gardent l'ancienne.
 // Les données (Supabase : tâches, connexion, temps réel) ne passent JAMAIS par ce cache.
-const VERSION = "2026-10-10.4";
+const VERSION = "2026-10-10.5";
 const CACHE = "meopeo-" + VERSION;
 const SHELL = [
   "./", "index.html", "app.js", "mascot.js", "bigtino.js", "data.js", "config.js", "style.css", "manifest.webmanifest",
   "background.jpg", "art/big-tino.jpg",
-  "art/peo/head.webp", "art/peo/head-sleep.webp", "art/peo/body.webp", "art/peo/arm-l.webp", "art/peo/arm-r.webp", "art/peo/shoe-l.webp", "art/peo/shoe-r.webp", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png",
+  "art/peo/head.webp", "art/peo/head-sleep.webp", "art/peo/body.webp", "art/peo/arm-l.webp", "art/peo/arm-r.webp", "art/peo/shoe-l.webp", "art/peo/shoe-r.webp",
+  "art/meo/head.webp", "art/meo/head-sleep.webp", "art/meo/body.webp", "art/meo/arm-l.webp", "art/meo/arm-r.webp", "art/meo/shoe-l.webp", "art/meo/shoe-r.webp", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png",
 ];
 
 // Bibliothèque Supabase 2.117.2 et ses modules (versions figées : à mettre à jour si data.js change de version)

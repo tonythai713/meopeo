@@ -25,7 +25,7 @@ const STYLE = `
 .ms-arm-r { transform-origin: 75px 59px; }
 .ms-foot-l { transform-origin: 38px 90px; }
 .ms-foot-r { transform-origin: 62px 90px; }
-.ms-peo .ms-hold { transform-origin: 49px 71px; }
+.ms-peo .ms-hold { transform-origin: 49px 71px; } .ms-meo .ms-hold { transform-origin: 50px 70px; } .ms-meo .ms-head { transform-origin: 50.4px 50.7px; } .ms-meo .ms-face { transform-origin: 50px 40px; } .ms-meo .ms-arm-l { transform-origin: 42.25px 58.8px; } .ms-meo .ms-arm-r { transform-origin: 55.35px 58.2px; }
 .ms-tool-ladle .ms-ladle { display: inline; } .ms-dust circle { opacity: 0; transform-box: fill-box; transform-origin: center; } .ms-run .ms-dust circle { animation: ms-dust 0.5s ease-out infinite; } .ms-run .ms-dust circle:nth-child(2) { animation-delay: 0.17s; } .ms-run .ms-dust circle:nth-child(3) { animation-delay: 0.34s; } .ms-skid .ms-dust circle { animation-duration: 0.3s; }
 @keyframes ms-dust { 0% { opacity: 0.8; transform: translate(0, 0) scale(0.5); } 100% { opacity: 0; transform: translate(7px, -5px) scale(1.5); } }
  .ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
@@ -250,7 +250,7 @@ function peoSvg(gid = "ms-flush-peo") {
   ${peoImg("body", 37.3, 49.04, 30.83, 43.83)}
   <g class="ms-wear-body"></g>
   <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(49 71) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(49 70) scale(0.55) translate(-51 -76)">${BEER}</g></g>
-  <g class="ms-arm-l"><g class="ms-ladle" display="none"><path d="M37.5 71L36 95" stroke="#8d96a8" stroke-width="2.2" stroke-linecap="round"/><path d="M36 95Q37.5 98 40 96.5" fill="none" stroke="#8d96a8" stroke-width="1.6"/><path d="M37 95.5Q37 100.5 41.5 100.5Q46 100.5 46 95.5Z" fill="#d3d9e4" stroke="#7d8597" stroke-width="1"/></g>${peoImg("arm-l", 34.63, 57.99, 7.33, 16.17)}</g>
+  <g class="ms-arm-l"><g class="ms-ladle" display="none"><path d="M37.5 71L35.0 97" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M39.1 71.2L37.7 97" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M38 73L35 80" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="32" cy="85.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M32 85.5L27 82M32 85.5L29 91M32 85.5L36 80M32 85.5L38 88" stroke="#e0956a" stroke-width="0.6"/><circle cx="32" cy="85.5" r="2.2" fill="#e8604c"/></g>${peoImg("arm-l", 34.63, 57.99, 7.33, 16.17)}<circle class="ms-hand" cx="38" cy="73.5" r="0.6" fill="none"/></g>
   <g class="ms-arm-r">${peoImg("arm-r", 56.33, 58.14, 7.33, 16.17)}</g>
   ${peoHead(gid)}
 </svg>`;
@@ -258,6 +258,41 @@ function peoSvg(gid = "ms-flush-peo") {
 // La tête de PeoPeo seule (dans la marmite), cadrée sur la tête ; gid unique par copie
 export function peoHeadSvg(gid = "ms-flush-peo-head") {
   return `<svg class="ms-peo" viewBox="24 5.5 50 50" aria-hidden="true">${peoHead(gid)}</svg>`;
+}
+// MeoMeo : comme PeoPeo, les morceaux d'une planche dessinée (découpée par un outil à part, pas publié) :
+// art/meo/*.webp, même repère (pieds sur y = 98, 92 unités de haut). Ailes de fée et rubans
+// dans la tête (ils bougent avec elle) ; bras DERRIÈRE le corps (le haut du bras est sous la manche) ; mêmes classes et
+// mêmes yeux ouverts / fermés que PeoPeo (.ms-peo-eyes / .ms-peo-shut) ; ses pivots à elle sous .ms-meo (STYLE).
+const MEO_ART = new URL("art/meo/", import.meta.url).href;
+const meoImg = (f, x, y, w, h) => `<image href="${MEO_ART}${f}.webp" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+function meoHead(gid) {
+  return `<g class="ms-head">
+    <g class="ms-peo-eyes">${meoImg("head", 19.18, 6.18, 62.69, 61.95)}</g>
+    <g class="ms-peo-shut">${meoImg("head-sleep", 19.18, 6, 63.38, 62.18)}</g>
+    <g class="ms-face">
+      <radialGradient id="${gid}"><stop offset="0" stop-color="#ff5468" stop-opacity="0.9"/><stop offset="1" stop-color="#ff5468" stop-opacity="0"/></radialGradient>
+      <ellipse class="ms-flush" cx="50" cy="44" rx="15" ry="5.5" fill="url(#${gid})" opacity="0"/>
+      <g class="ms-cheeks"></g>
+    </g>
+    <g class="ms-flower"></g>
+    <g class="ms-wear-head"></g>
+  </g>`;
+}
+function meoSvg(gid = "ms-flush-meo") {
+  return `<svg class="ms-meo" viewBox="0 0 100 100" aria-hidden="true">
+  <g class="ms-arm-l"><g class="ms-ladle" display="none"><path d="M39.5 73.5L37.0 99.5" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M41.1 73.7L39.7 99.5" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M40 74L37 81" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="34" cy="86.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M34 86.5L29 83M34 86.5L31 92M34 86.5L38 81M34 86.5L40 89" stroke="#e0956a" stroke-width="0.6"/><circle cx="34" cy="86.5" r="2.2" fill="#e8604c"/></g>${meoImg("arm-l", 37.91, 58.55, 5.89, 16.74)}<circle class="ms-hand" cx="40" cy="74.5" r="0.6" fill="none"/></g>
+  <g class="ms-arm-r">${meoImg("arm-r", 53.96, 58.07, 5.97, 16.59)}</g>
+  ${meoImg("body", 39.48, 53.61, 19.6, 39.42)}
+  <g class="ms-foot-l">${meoImg("shoe-l", 42.8, 90.34, 7.45, 7.39)}</g>
+  <g class="ms-foot-r">${meoImg("shoe-r", 49.08, 90.34, 7.66, 7.66)}</g>
+  <g class="ms-wear-body"></g>
+  <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(50 70) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(50 69) scale(0.55) translate(-51 -76)">${BEER}</g></g>
+  ${meoHead(gid)}
+</svg>`;
+}
+// La tête de MeoMeo seule (dans la marmite), cadrée sur le visage et les cheveux (ailes et bouts des rubans coupés)
+export function meoHeadSvg(gid = "ms-flush-meo-head") {
+  return `<svg class="ms-meo" viewBox="25 4 50 50" aria-hidden="true">${meoHead(gid)}</svg>`;
 }
 
 // ---------- Tenues dessinées (garde-robe) ----------
@@ -417,9 +452,16 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo"];
 export const KINDS = {
   peo: {
-    name: "PeoPeo", svg: () => peoSvg(), size: 60, wide: 1.12, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
+    name: "PeoPeo", svg: () => peoSvg(), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
     // size 60 : 1,5 fois la hauteur de Tino (mesurée sur les pixels : 92,8 unités de haut, Tino 92 → 55,7 px contre 36,8) ; wide : un peu élargi
     only: PEO_ACTIONS, calm: true, home: true, // home : il vit dans la marmite (voir mountMascots, homeTick)
+    body: { cy: 56, support: Array(24).fill(42) },
+  },
+  // MeoMeo : les mêmes actions que PeoPeo ; size 56 : 1,4 × la hauteur de Tino (92 unités de haut, comme PeoPeo — réglable) ;
+  // snatch : quand Tino boit une bière, elle la lui prend, s'énerve et la boit (duo « beer »)
+  meo: {
+    name: "MeoMeo", svg: () => meoSvg(), size: 56, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
+    only: PEO_ACTIONS, calm: true, home: true,
     body: { cy: 56, support: Array(24).fill(42) },
   },
   tino: {
@@ -450,9 +492,10 @@ const TAKEOFF = 0.2;                                 // envol : il prend son él
 // La marmite (PeoPeo) : temps passé dedans avant de sortir (la 1re fois, puis les suivantes) et dehors avant d'y retourner (s) ;
 // DIVE : il plonge dedans (s)
 // Ensemble (MeoMeo et PeoPeo là en même temps) : une scène toutes les SCENE_S secondes, la même sur les deux téléphones
-// (tirée de son numéro = l'heure commune) ; PeoPeo dans la marmite pendant les POT_SLOTS premières scènes de chaque cycle
-// de SCENE_CYCLE, dehors ensuite
-const SCENE_S = 24, SCENE_CYCLE = 6, POT_SLOTS = 2;
+// (tirée de son numéro = l'heure commune). Depuis la 2026-10-10.5 : PeoPeo et MeoMeo restent dehors ; la marmite est pour
+// Tino : ils l'y jettent et le font mijoter (scène 0 du cycle), et il y va aussi tout seul (scènes SOAK : il saute dedans,
+// y reste, ressort au début de la scène suivante — comme PeoPeo quand il est seul)
+const SCENE_S = 24, SCENE_CYCLE = 6, SOAK = [2, 3];
 // Tirage au sort reproductible (mulberry32) : même numéro → mêmes nombres sur les deux téléphones
 function seeded(n) {
   let a = (Math.imul(n, 2654435761) ^ 0x9e3779b9) >>> 0;
@@ -460,15 +503,22 @@ function seeded(n) {
 }
 const pickSeeded = (rnd, list) => { let r = rnd() * list.reduce((x, [w]) => x + w, 0); return list.find(([w]) => (r -= w) < 0)?.[1] ?? list[0][1]; };
 const SOLO = [[3, "game"], [2, "cook"], [2, "bbq"], [2, "rice"], [2, "pho"], [2, "matcha"], [1.5, "beer"], [3, "scooter"], [2, "shop"], [2, "roll"], [1, "swim"], [1, "wave"]];
-const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [2, "chase"], [2, "solo"]];
+const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [2, "chase"], [2, "kiss"], [2, "solo"]];
+const SOAK_DUOS = [[1, "kiss"], [4, "solo"]]; // (Tino est dans la marmite : PeoPeo et MeoMeo font leur vie, ou un bisou)
 // La scène n° k : { k, peoOut, duo (ce que PeoPeo fait avec Tino, ou null), tino (ce que fait Tino), dur, win, crash, bounce }
+// cookTino : PeoPeo et MeoMeo jettent Tino dans la marmite ; stirBy touille (du côté side), l'autre attise le feu ; tino « soak » :
+// il va dans la marmite tout seul et y reste ;
+// kiss : kissBy embrasse l'autre ; snatch : MeoMeo prend la bière de Tino (sinon « chin chin ») — tout tiré du même numéro
 function sceneOf(k) {
-  const rnd = seeded(k), peoOut = ((k % SCENE_CYCLE) + SCENE_CYCLE) % SCENE_CYCLE >= POT_SLOTS;
-  let duo = peoOut ? pickSeeded(rnd, DUOS) : "solo", tino;
-  if (duo === "solo") { duo = null; tino = pickSeeded(rnd, peoOut ? SOLO : [...SOLO, [8, "stir"]]); } // (PeoPeo dans la marmite : Tino le fait souvent mijoter)
+  const rnd = seeded(k), slot = ((k % SCENE_CYCLE) + SCENE_CYCLE) % SCENE_CYCLE, cookTino = slot === 0, soak = SOAK.includes(slot);
+  let duo = cookTino ? "cookTino" : pickSeeded(rnd, soak ? SOAK_DUOS : DUOS), tino;
+  if (soak) tino = "soak";
+  else if (duo === "solo" || duo === "kiss") tino = pickSeeded(rnd, SOLO); // (pendant le bisou, Tino fait sa vie)
   else if (duo === "cook") tino = pickSeeded(rnd, [[1, "cook"], [1, "bbq"], [1, "rice"]]);
-  else tino = duo === "chase" ? "wait" : duo;
-  return { k, peoOut, duo, tino, dur: 11 + 5 * rnd(), win: rnd() < 0.6, crash: rnd() < 0.5, bounce: rnd() < 0.5 };
+  else tino = duo === "chase" || duo === "cookTino" ? "wait" : duo;
+  if (duo === "solo") duo = null;
+  return { k, peoOut: true, duo, tino, dur: 11 + 5 * rnd(), win: rnd() < 0.6, crash: rnd() < 0.5, bounce: rnd() < 0.5,
+    snatch: rnd() < SNATCH_P, kissBy: rnd() < 0.5 ? "peo" : "meo", stirBy: rnd() < 0.5 ? "peo" : "meo", side: rnd() < 0.5 ? 1 : -1 };
 }
 // Ce que Tino fait pour la scène (là où il est, sur son écran) ; si ce n'est pas possible ici (pas la place…), il se promène
 function tinoScene(m, sc) {
@@ -476,8 +526,12 @@ function tinoScene(m, sc) {
   if (!me) return [];
   const kind = sc.tino, ctx = { plats: m.eng.plats, today: m.eng.today, lines: m.eng.lines() };
   if (kind === "wait") return [{ type: "idle", dur: 5 }];
+  if (kind === "soak") { // (la marmite pas à l'écran, ou un message à lire : il se promène)
+    const H = m.eng.home?.("tino");
+    return H && H.y >= m.eng.v.top && H.y <= m.eng.v.bottom && !m.bubble?.sticky ? [{ type: "potIn", soak: true }] : ACTIONS.walk.make(m, me, ctx);
+  }
   if (kind === "beer") return [{ type: "beer", dur: sc.dur, duo: !!sc.duo }];
-  const ok = ["game", "cook", "bbq", "rice"].includes(kind) ? !!m.propSpot(kind) : ["shop", "scooter"].includes(kind) ? !!m.trip(kind) : kind === "swim" ? !!m.swimRow() : kind === "stir" ? !!(m.eng.peoSimmer?.() && m.stirSpot()) : true;
+  const ok = ["game", "cook", "bbq", "rice"].includes(kind) ? !!m.propSpot(kind) : ["shop", "scooter"].includes(kind) ? !!m.trip(kind) : kind === "swim" ? !!m.swimRow() : true;
   if (!ok) return ACTIONS.walk.make(m, me, ctx);
   const st = (ACTIONS[kind].make ?? (() => [{ type: kind }]))(m, me, ctx), last = st[st.length - 1];
   if (last.type === kind) {
@@ -487,15 +541,25 @@ function tinoScene(m, sc) {
   }
   return sc.duo === "scooter" ? [{ type: "idle", dur: 2.5 }, ...st] : st; // (scooter : il attend que PeoPeo arrive)
 }
-// Ce que PeoPeo fait pour la scène : il va vers Tino puis le rejoint (duo) ou le poursuit ; rien de spécial sinon
+// Ce que PeoPeo / MeoMeo fait pour la scène : il / elle va vers Tino puis le rejoint (duo) ou le poursuit, le jette dans la
+// marmite et le fait mijoter, ou fait un bisou à l'autre ; rien de spécial sinon
 function buddyScene(m, sc) {
   const t = m.eng.buddy?.(m, "tino");
+  if (sc.duo === "kiss") {
+    const o = (m.eng.peers?.(m) ?? [])[0];
+    return o ? [{ type: "kiss", lead: m.def.key === sc.kissBy, with: o }, { type: "wave", dur: 1.4 }] : [];
+  }
   if (!sc.duo || !t) return [];
   const P = t.plat(), side = t.x >= m.x ? 1 : -1;
   const way = !P || t.k === m.k ? [] : m.pathTo({ k: t.k, x: clamp(t.x - side * m.size, P.x0, P.x1) });
-  return [...way, sc.duo === "chase" ? { type: "chase" } : { type: "duo", kind: sc.duo === "game" || sc.duo === "beer" || sc.duo === "scooter" ? sc.duo : "cook" }, { type: "wave", dur: 1.6 }];
+  if (sc.duo === "cookTino") { // celui qui touille jette Tino dans la marmite, puis monte sur le tabouret ; l'autre va attiser le feu
+    if (m.def.key === sc.stirBy) return [...way, { type: "toss" }, { type: "goto", prefer: sc.side, next: { type: "stir", prefer: sc.side, only: true, stirDur: 13 } }, { type: "wave", dur: 1.6 }];
+    return [{ type: "goto", prefer: -sc.side, next: { type: "fanpot", prefer: -sc.side, dur: 14 } }, { type: "wave", dur: 1.6 }];
+  }
+  return [...way, sc.duo === "chase" ? { type: "chase" } : { type: "duo", kind: sc.duo === "game" || sc.duo === "beer" || sc.duo === "scooter" ? sc.duo : "cook", snatchRoll: sc.snatch ? 0 : 1 }, { type: "wave", dur: 1.6 }];
 }
 const CHEERS = 1.5; // bière avec PeoPeo : « chin chin » (s)
+const SNATCH_GRAB = 0.5, SNATCH_MAD = 2.4, SNATCH_P = 0.35; // MeoMeo prend la bière de Tino (s), puis elle est fâchée (s) avant de la boire ; pas toujours : 35 % des fois (sinon « chin chin »)
 const POT_FIRST = [15, 40], POT_IN = [60, 180], POT_OUT = [60, 150], DIVE = 0.3;
 const LOOK = 8;   // décalage du visage quand il regarde de côté (repère 100)
 const SINK = 12;  // assis : il descend sur la ligne, les pieds pendent en dessous (repère 100)
@@ -881,12 +945,18 @@ const ACTIONS = {
       p.sip = 1 - 0.85 * clamp(a.t / a.dur, 0, 1);
     },
   },
+  // a.snatched : le moment où MeoMeo lui a pris sa chope (il n'a plus rien en main, il boude un peu, puis passe à autre chose)
   beer: {
     weight: (m) => (!m.eng.meal() && minutesNow() >= 18 * 60 ? 5 : 0),
     make: () => [{ type: "beer", dur: rand(9, 13) }],
     sit: true,
-    look: (m, a) => (a.with ? a.with * LOOK * 0.7 : 0), // (avec PeoPeo : il le regarde)
+    hold: (m, a) => (a.snatched != null ? null : "beer"),
+    look: (m, a) => (a.with ? a.with * LOOK * 0.7 : 0), // (avec PeoPeo / MeoMeo : il le regarde)
     step(m, a) {
+      if (a.snatched != null) {
+        if (!a.sulk && a.t - a.snatched > 0.8) { a.sulk = true; if (!m.bubble) m.say("Hey!! My beer… 😢", { ms: 2200 }); }
+        return a.t >= a.dur || a.t - a.snatched > 4;
+      }
       if (a.t > 1.5) { // il a bu : rouge pendant 2 min (même s'il fait autre chose ensuite), d'autant plus qu'il a bu
         if (Date.now() > m.redUntil) m.redMax = 0;
         m.redUntil = Date.now() + RED_MS; m.redMax = Math.max(m.redMax, clamp(a.t / a.dur, 0, 1));
@@ -895,6 +965,12 @@ const ACTIONS = {
       return a.t >= a.dur;
     },
     pose(m, a, p) {
+      if (a.snatched != null) { // on lui a pris sa bière : surpris (les nageoires en l'air), puis tout triste
+        const v = a.t - a.snatched;
+        if (v < 0.7) { p.armL = 110; p.armR = -110; p.sy = 1.04; p.bob = -Math.sin(Math.PI * clamp(v / 0.7, 0, 1)) * m.size * 0.12; }
+        else { p.armL = -8; p.armR = 8; p.head = 10; p.sy = 0.94; p.sx = 1.04; p.rot = 2 * Math.sin(m.clock * 1.2); }
+        return;
+      }
       const u = a.cheers != null ? a.t - a.cheers : -1;
       if (u >= 0 && u < CHEERS) { // « chin chin » avec PeoPeo : la chope levée vers lui
         const k = smooth(clamp(Math.min(u, CHEERS - u) / 0.35, 0, 1));
@@ -1092,7 +1168,7 @@ const ACTIONS = {
 // dessine la louche, le feu, le bouillon et la vapeur. a.mode : walk (il y va), up / down (il monte / descend du tabouret),
 // stir, fan ; a.side : de quel côté de la marmite il est (+1 = à droite). Souvent (poids 24 quand PeoPeo est là — seulement pendant ses passages dans la marmite —, 16 quand il est
 // absent — toujours dans la marmite —, + 8 aux repas) ; il attise le feu
-// au moins deux fois. Ensemble : une des scènes quand PeoPeo est dans la marmite.
+// au moins deux fois. Ensemble : jamais (PeoPeo et MeoMeo restent dehors ; ce sont eux qui font mijoter Tino).
 const STOOL_HOP = 0.35, STIR_W = 7; // (s) ; vitesse de la louche (rad/s) : la même pour sa nageoire et la louche de l'app
 ACTIONS.stir = {
   weight: (m) => { const p = m.eng.peoSimmer?.(); return p && m.stirSpot() ? (p.dream ? 16 : 24) + (m.eng.meal() ? 8 : 0) : 0; }, // (absent, il est toujours dans la marmite : un peu moins souvent)
@@ -1101,21 +1177,21 @@ ACTIONS.stir = {
     return [...(s.k === m.k ? [] : m.pathTo({ k: s.k, x: s.x })), { type: "stir" }];
   },
   start(m, a) {
-    const s = m.stirSpot();
+    const s = m.stirSpot(a.prefer);
     if (!s || s.k !== m.k) { a.cancel = true; return; }
-    Object.assign(a, { side: s.side, x: s.x, lift: s.lift, mode: "walk", mt: 0, seq: ["stir", "fan", "stir", "fan", "stir", ...(Math.random() < 0.4 ? ["fan", "stir"] : [])] });
+    Object.assign(a, { side: s.side, x: s.x, lift: s.lift, mode: "walk", mt: 0, seq: a.only ? ["stir"] : ["stir", "fan", "stir", "fan", "stir", ...(Math.random() < 0.4 ? ["fan", "stir"] : [])] }); // (only : il touille seulement, l'autre attise le feu)
     a.fanX = a.x - a.side * m.size * 0.14; // (pour attiser le feu, il descend du tabouret, un petit pas vers la marmite)
   },
   step(m, a, dt) {
     if (a.cancel) return true;
-    const u = a.t - a.mt, set = (mode) => { a.mode = mode; a.mt = a.t; a.dur = mode === "stir" ? rand(3, 4.5) : mode === "fan" ? rand(2.5, 3.5) : STOOL_HOP; };
+    const u = a.t - a.mt, set = (mode) => { a.mode = mode; a.mt = a.t; a.dur = mode === "stir" ? a.stirDur ?? rand(3, 4.5) : mode === "fan" ? rand(2.5, 3.5) : STOOL_HOP; };
     const gone = !m.eng.peoSimmer?.(); // (PeoPeo est sorti de la marmite, ou elle n'est plus à l'écran : il arrête)
     if (gone) a.seq = [];
     if (a.mode === "walk") {
-      if (gone) return true;
       const d = a.x - m.x, sp = 30 * (m.size / 40) * dt;
       if (Math.abs(d) > sp) { m.dir = Math.sign(d); m.x += Math.sign(d) * sp; return false; }
       m.x = a.x; m.dir = -a.side;
+      if (gone) return a.t > 4; // (personne dans la marmite : il attend un peu — Tino est peut-être encore en l'air)
       if (a.lift) m.prop = { kind: "stool", k: m.k, x: a.x, side: 1, act: a, h: a.lift };
       set("up"); a.seq.shift();
       return false;
@@ -1139,7 +1215,7 @@ ACTIONS.stir = {
     if (a.cancel) return;
     if (a.mode === "walk") { if (Math.abs(a.x - m.x) > 0.5) ACTIONS.walk.pose(m, a, p); return; }
     const c = m.clock, u = a.t - a.mt, s = a.side, W = m.size, L = a.lift ?? 0, k = clamp(u / STOOL_HOP, 0, 1);
-    const pot = s > 0 ? "armL" : "armR", other = s > 0 ? "armR" : "armL"; // (nageoire du côté de la marmite ; levée : + à gauche, − à droite)
+    const front = !!m.def.facesLeft, pot = front || s > 0 ? "armL" : "armR", other = pot === "armL" ? "armR" : "armL", sg = front ? 1 : s; // (nageoire du côté de la marmite ; levée : + à gauche, − à droite ; PeoPeo / MeoMeo : le bras de devant, le dessin est retourné)
     if (a.mode === "up" || a.mode === "down") { // il saute sur le tabouret / en descend
       const h = a.mode === "up" ? k : 1 - k;
       p.bob = -(L * h + Math.sin(Math.PI * k) * W * 0.16); p.armL = 50; p.armR = -50; p.sy = 1.04; p.sx = 0.97;
@@ -1147,13 +1223,125 @@ ACTIONS.stir = {
     }
     if (a.mode === "stir") { // debout sur le tabouret, il touille (la louche suit sa nageoire)
       const ph = c * STIR_W;
-      p.bob = -L; p[pot] = s * (52 + 13 * Math.sin(ph)); p[other] = -s * 18; p.rot = -s * (4 + 2.5 * Math.sin(ph)); p.head = -s * (3 + 2 * Math.sin(ph)); p.sx = 1 + 0.02 * Math.cos(ph);
+      p.bob = -L; p[pot] = sg * (52 + 13 * Math.sin(ph)); p[other] = -sg * 18; p.rot = -s * (4 + 2.5 * Math.sin(ph)); p.head = -sg * (3 + 2 * Math.sin(ph)); p.sx = 1 + 0.02 * Math.cos(ph);
       return;
     }
     if (a.mode === "fan") { // accroupi près du feu, il agite l'éventail
       const f = Math.max(0, Math.sin(c * 15));
-      p.sy = 0.9; p.sx = 1.06; p[pot] = s * (10 + 38 * f); p[other] = -s * 12; p.rot = -s * 7; p.head = -s * 5;
+      p.sy = 0.9; p.sx = 1.06; p[pot] = sg * (10 + 38 * f); p[other] = -sg * 12; p.rot = -s * 7; p.head = -sg * 5;
     }
+  },
+};
+// Ensemble, Tino dans la marmite : l'autre cuisinier (PeoPeo / MeoMeo) s'accroupit de l'autre côté et attise le feu à
+// l'éventail (2,6 s, puis 1 s de pause, et ainsi de suite) ; il attend si Tino n'est pas encore tombé dedans
+ACTIONS.fanpot = {
+  start(m, a) {
+    const s = m.stirSpot(a.prefer);
+    if (!s || s.k !== m.k) { a.cancel = true; return; }
+    Object.assign(a, { side: s.side, x: s.x - s.side * m.size * 0.06, mode: "walk", mt: 0 });
+  },
+  step(m, a, dt) {
+    if (a.cancel) return true;
+    const gone = !m.eng.peoSimmer?.();
+    if (a.mode === "walk") {
+      const d = a.x - m.x, sp = 34 * (m.size / 40) * dt;
+      if (Math.abs(d) > sp) { m.dir = Math.sign(d); m.x += Math.sign(d) * sp; return false; }
+      m.x = a.x; m.dir = -a.side;
+      if (gone) return a.t > 5;
+      a.mode = "fan"; a.mt = a.t;
+      return false;
+    }
+    if (gone) return true;
+    a.fanning = (a.t - a.mt) % 3.6 < 2.6;
+    return a.t - a.mt > (a.dur ?? 15);
+  },
+  look: (m, a) => (a.mode === "walk" ? facing(m) : -a.side * LOOK),
+  pose(m, a, p) {
+    if (a.cancel) return;
+    if (a.mode === "walk") { if (Math.abs(a.x - m.x) > 0.5) ACTIONS.walk.pose(m, a, p); return; }
+    const c = m.clock, f = a.fanning ? Math.max(0, Math.sin(c * 15)) : 0;
+    p.sy = 0.9; p.sx = 1.05; p.rot = -a.side * 6; p.armL = a.fanning ? 10 + 40 * f : 22; p.armR = -10; p.head = a.fanning ? 4 : 4 * Math.sin(c * 2);
+  },
+};
+// Ensemble : PeoPeo / MeoMeo attrape Tino et le jette dans la marmite (Tino : potIn avec toss) — il faut que Tino soit libre
+ACTIONS.toss = {
+  start(m, a) {
+    const t = m.eng.buddy?.(m, "tino");
+    if (!t || t.k !== m.k || !m.eng.home?.("tino")) { a.skip = true; return; }
+    a.tino = t;
+  },
+  step(m, a, dt, me) {
+    if (a.skip) return true;
+    const t = a.tino;
+    if (t.inPot) return true;
+    if (!a.here) {
+      const x = t.x - (Math.sign(t.x - m.x) || 1) * (t.size * 0.38 + m.size * 0.2);
+      if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; m.dir = Math.sign(t.x - m.x) || 1; }
+      return a.t > 7;
+    }
+    const u = a.t - a.hereT;
+    if (!a.thrown && u > 0.5) {
+      if (canFlee(t)) { a.thrown = true; t.now([{ type: "potIn", toss: true }]); }
+      else if (u > 3) return true; // (Tino n'est pas libre : tant pis)
+    }
+    return a.thrown && u > 1.2;
+  },
+  look: facing,
+  pose(m, a, p) {
+    p.behind = true;
+    if (a.skip) return;
+    if (!a.here) { if (a.moving) ACTIONS.walk.pose(m, a, p); return; }
+    const u = a.t - a.hereT;
+    if (!a.thrown) { const k = clamp(u / 0.5, 0, 1); p.armL = p.armR = 85 * k; p.sy = 1 - 0.05 * k; p.rot = m.dir * 6 * k; } // il le prend…
+    else { const k = clamp((u - 0.5) / 0.3, 0, 1); p.armL = p.armR = 85 + 70 * k; p.sy = 1.04; p.rot = -m.dir * 6; p.bob = -Math.sin(Math.PI * k) * m.size * 0.05; } // … et hop !
+  },
+};
+// Aller à côté de la marmite (de quel côté : prefer), puis faire next (stir ou fanpot) : le trajet est calculé au moment
+// d'y aller (après avoir jeté Tino, on n'est plus au même endroit)
+ACTIONS.goto = {
+  start(m, a) {
+    const s = m.stirSpot(a.prefer);
+    if (s) m.plan = [...(s.k === m.k ? [] : m.pathTo({ k: s.k, x: s.x })), a.next, ...m.plan];
+  },
+  step: () => true,
+};
+// Ensemble : MeoMeo et PeoPeo se font un bisou (lead : celui / celle qui embrasse). Le meneur va sur la ligne de l'autre, se
+// met face à lui / elle, se penche et l'embrasse (« 💋 », cœurs, joues rouges) ; puis ils sont tout contents
+ACTIONS.kiss = {
+  start(m, a) {
+    const o = a.with;
+    if (!o || o.inPot || o.away || o.el.hidden) { a.skip = true; return; }
+    if (a.lead && o.k !== m.k) {
+      const P = o.plat();
+      if (P) { const again = { type: "kiss", lead: true, with: o }; m.plan = [...m.pathTo({ k: o.k, x: clamp(o.x + (m.x < o.x ? -1 : 1) * 40, P.x0, P.x1) }), again, ...m.plan]; }
+      a.skip = true;
+    }
+  },
+  step(m, a, dt, me) {
+    if (a.skip) return true;
+    const o = a.with, oa = o.act;
+    if (o.inPot || o.away || o.el.hidden || a.t > 12) return true;
+    if (o.k !== m.k) return a.t > 8; // (il / elle attend que l'autre arrive sur sa ligne)
+    if (!a.here) {
+      if (!a.lead) { m.dir = Math.sign(o.x - m.x) || m.dir; if (oa?.type === "kiss" && oa.here) { a.here = true; a.hereT = a.t; } return false; }
+      const side = Math.sign(m.x - o.x) || 1;
+      if (duoWalk(m, a, o.x + side * (m.size + o.size) * 0.2, dt, me)) { a.here = true; a.hereT = a.t; }
+      return false;
+    }
+    m.dir = Math.sign(o.x - m.x) || m.dir;
+    const u = a.t - a.hereT;
+    if (u > 0.55 && !a.kissed) { a.kissed = true; m.love(); if (a.lead && !m.bubble) m.say("💋", { ms: 1500 }); }
+    return u > 3.3;
+  },
+  look: facing,
+  pose(m, a, p) {
+    if (a.skip) return;
+    if (!a.here) { if (a.moving) ACTIONS.walk.pose(m, a, p); return; }
+    const u = a.t - a.hereT, k = smooth(clamp(Math.min(u, 2.6 - u) / 0.4, 0, 1));
+    if (a.lead) { p.rot = m.dir * 13 * k; p.bob = -m.size * 0.04 * k; p.armL = 60 * k; p.armR = 35 * k; } // il / elle se penche, sur la pointe des pieds
+    else { p.rot = m.dir * 4 * k; p.armL = 25 * k; p.armR = 15 * k; p.head = -4 * k; }
+    p.blush = u < 3.3 ? clamp(u / 0.7, 0, 1) : 0;
+    if (u > 2.6) p.bob = -Math.abs(Math.sin(m.clock * 8)) * m.size * 0.04; // tout contents
   },
 };
 // Les actions « free » quittent les plateformes (la marmite est à côté du mois) : leur x n'est pas ramené sur la plateforme.
@@ -1187,6 +1375,8 @@ ACTIONS.potIn = {
     a.x0 = m.x; a.y0 = m.y; a.hx = H.x; a.hy = H.y;
     a.T = 0.5 + Math.hypot(H.x - m.x, H.y - m.y) / 900; a.h = 40 + Math.max(0, m.y - H.y) * 0.15;
     if (H.x !== m.x) m.dir = H.x < m.x ? -1 : 1;
+    if (a.toss && !m.bubble) m.say("Waaah! 😱", { ms: 1300 }); // (Tino jeté dans la marmite)
+    else if (a.soak && !m.bubble) m.say(pick(["Bath time! ♨️", "Into the pot! 🛁"]), { ms: 1200 }); // (il y va tout seul)
   },
   step(m, a) {
     if (a.cancel) return true;
@@ -1203,6 +1393,7 @@ ACTIONS.potIn = {
   look: facing,
   pose(m, a, p) {
     if (a.cancel) return;
+    if (a.toss && a.t < CROUCH + a.T) { const s = clamp((a.t - CROUCH) / a.T, 0, 1); p.spin = m.dir * 360 * s; p.armL = 90 + 30 * Math.sin(m.clock * 28); p.armR = -(90 + 30 * Math.sin(m.clock * 28 + 1)); p.footL = p.footR = 2; return; }
     if (a.t < CROUCH + a.T) { jumpPose(p, a.t, CROUCH, a.T); return; }
     const k = clamp((a.t - CROUCH - a.T) / DIVE, 0, 1);
     p.sy = 1 - 0.6 * k; p.sx = 1 - 0.35 * k; p.armL = 70; p.armR = -70; p.footL = p.footR = 2;
@@ -1243,6 +1434,7 @@ ACTIONS.chase = {
   },
   start(m, a) {
     const t = m.eng.buddy?.(m, "tino"), P = m.plat();
+    if (t && P && t.k === m.k && t.act?.type === "flee") { a.tino = t; a.mode = "run"; a.mt = 0; a.v = 0; a.ph = 0; a.catch = false; a.joined = true; return; } // (l'autre l'a déjà fait fuir : il court aussi)
     if (!canFlee(t) || t.k !== m.k || !P) { a.skip = true; return; }
     a.tino = t; a.mode = "sneak"; a.v = 0; a.ph = 0; a.catch = Math.random() < 0.5;
   },
@@ -1255,6 +1447,7 @@ ACTIONS.chase = {
     const go = (v) => { const dx = m.dir * v * dt, x = clamp(m.x + dx, lo, hi); stride(m, a, x - m.x); m.x = x; };
     const mode = (x) => { a.mode = x; a.mt = a.t; };
     if (a.mode === "sneak") { // à pas de loup, penché, les mains en avant
+      if (ta?.type === "flee") { mode("run"); a.catch = false; a.joined = true; return false; } // (l'autre a bondi le premier : il court aussi)
       if (!canFlee(t)) return true;
       m.dir = to;
       if (Math.abs(d) > gap * 1.9 && a.t < 2.2) { go(18 * (m.size / 40)); return false; }
@@ -1277,7 +1470,7 @@ ACTIONS.chase = {
     // il court : Tino repassé derrière lui → emporté, il dérape ; sinon il le rattrape (ou pas : une fois sur deux)
     if (to !== m.dir && a.v > vt * 0.3) { mode("skid"); return false; }
     m.dir = to;
-    const vmax = fleeing ? vt * (ta.turns ? (a.catch ? 1.3 : 0.8) : 0.9) : vt * (a.catch ? 1.1 : 0.55);
+    const vmax = (fleeing ? vt * (ta.turns ? (a.catch ? 1.3 : 0.8) : 0.9) : vt * (a.catch ? 1.1 : 0.55)) * (a.joined ? 0.86 : 1); // (le 2e poursuivant un peu derrière le 1er)
     const stop = !fleeing && !a.catch ? Math.max(0, Math.abs(d) - gap * 1.8) : Infinity; // (il a perdu : il s'arrête avant lui)
     a.v = Math.min(vmax, a.v + RUN.acc * 0.85 * dt, Math.sqrt(2 * RUN.brake * stop));
     const headOn = fleeing && t.dir !== m.dir; // (Tino a fait demi-tour et revient vers lui : il ne freine pas, il le croise)
@@ -1337,7 +1530,7 @@ function duoInvite(m, t) { // ce que PeoPeo propose à Tino (libre) : null s'il 
   const opts = [], meal = m.eng.meal(), now = minutesNow();
   if (!meal && t.propSpot("game")) opts.push([3, "game"]);
   for (const k of ["cook", "bbq", "rice"]) if (t.propSpot(k)) opts.push([meal ? 4 : 0.6, k]);
-  if (!meal && now >= 17 * 60) opts.push([5, "beer"]);
+  if (!meal && now >= 17 * 60 && !m.def.snatch) opts.push([5, "beer"]); // (MeoMeo ne l'invite pas à boire : elle lui prendrait sa bière)
   if (t.trip("scooter")) opts.push([meal ? 0.5 : 3, "scooter"]);
   return opts.length ? weighted(opts) : null;
 }
@@ -1381,27 +1574,46 @@ ACTIONS.duo = {
       else { duoWalk(m, a, t.x - Math.sign(t.x - m.x || 1) * m.size * 0.7, dt, me); return false; } // il le suit en attendant
     }
     const r = a.ref;
+    if (a.got) { // MeoMeo a pris la bière de Tino : elle reste là, s'énerve, puis la boit (même si Tino est parti bouder)
+      m.x = clamp(a.fx, me.x0, me.x1); m.dir = -a.bs;
+      const u = a.t - a.hereT;
+      if (!a.said && u > 0.5) { a.said = true; if (!m.bubble) m.say(pick(["No beer for you! 😤", "Mine now! 😤", "That's enough beer, Tino! 😠"]), { ms: 2000 }); }
+      if (u > SNATCH_MAD) { if (Date.now() > m.redUntil) m.redMax = 0; m.redUntil = Date.now() + RED_MS; m.redMax = Math.max(m.redMax, clamp((u - SNATCH_MAD) / 6, 0, 1)); }
+      return u > SNATCH_MAD + 6.5;
+    }
     if (t.act !== r) return true; // Tino a fini (ou on l'a interrompu)
+    // L'autre compagnon (PeoPeo / MeoMeo) est peut-être déjà avec Tino pour la même chose : a.slot 1 = on se met ailleurs
+    if (a.slot == null) a.slot = (m.eng.peers?.(m) ?? []).filter((x) => x.act?.type === "duo" && x.act.ref === r && x.act.slot != null).length;
     let x;
-    if (a.kind === "game") { a.dir = r.side; x = t.x - r.side * (t.size * 0.45 + m.size * 0.3); }
+    if (a.kind === "game") { a.dir = r.side; x = t.x - r.side * (t.size * 0.45 + m.size * 0.3 + a.slot * m.size * 0.6); } // (le 2e un peu plus loin)
+    else if (a.kind === "cook" && a.slot) { a.dir = r.side; x = t.x - r.side * (t.size * 0.45 + m.size * 0.3); } // (le 2e : de l'autre côté de Tino)
     else if (a.kind === "cook") { const D = PROPS[r.type]; a.dir = -r.side; x = t.x + r.side * ((D.gap + D.w / 2) * t.size + 22); }
     else if (a.kind === "scooter") {
       if (r.crashT != null) { // il vole aussi, un peu plus loin que Tino (pas sur lui)
         a.side = r.side; a.bounce = Math.random() < 0.5; a.riding = false; startCrash(m, a, me);
-        a.land = clamp(a.land + a.side * 24, me.x0, me.x1); a.land2 = clamp(a.land2 + a.side * 24, me.x0, me.x1);
+        a.land = clamp(a.land + a.side * 24 * (1 + a.slot), me.x0, me.x1); a.land2 = clamp(a.land2 + a.side * 24 * (1 + a.slot), me.x0, me.x1);
         return false;
       }
-      a.dir = r.side; x = t.x - r.side * 8;
+      a.dir = r.side; x = t.x - r.side * (8 + a.slot * m.size * 0.45); // (le 2e passager derrière le 1er)
       if (r.t >= 0.5 || a.riding) { a.riding = !r.ended; a.here = true; m.x = lerp(m.x, clamp(x, me.x0, me.x1), Math.min(1, dt * 12)); m.dir = a.dir; return false; }
     } else { // bière, sieste : à côté de lui, du côté où il est (ou de l'autre s'il n'y a pas la place)
       const gap = (a.kind === "beer" ? 0.42 : 0.38) * t.size + 0.25 * m.size; // (bière : les chopes se touchent ; sieste : sa main sur la tête de Tino)
-      if (!a.bs) { a.bs = Math.sign(m.x - t.x) || 1; if (t.x + a.bs * gap < me.x0 || t.x + a.bs * gap > me.x1) a.bs = -a.bs; }
-      a.dir = -a.bs; x = t.x + a.bs * gap;
-      if (a.kind === "beer") r.with = a.bs;
+      if (!a.bs) {
+        const first = (m.eng.peers?.(m) ?? []).find((q) => q.act?.type === "duo" && q.act.ref === r && q.act.bs);
+        const out = (bs) => t.x + bs * gap < me.x0 || t.x + bs * gap > me.x1;
+        a.bs = first ? -first.act.bs : Math.sign(m.x - t.x) || 1; a.far = 0; // (le 2e de l'autre côté de Tino…)
+        if (out(a.bs)) { if (first) { a.bs = first.act.bs; a.far = 1; } else a.bs = -a.bs; } // (… ou, sans la place, à côté du 1er)
+      }
+      a.dir = -a.bs; x = t.x + a.bs * (gap + a.far * m.size * 0.6);
+      if (a.kind === "beer" && !a.snatch) r.with = a.bs;
     }
-    if (!a.here) { if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; if (a.kind === "beer") r.cheers = r.t; } return false; }
+    if (!a.here) { if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; a.snatch = a.kind === "beer" && !!m.def.snatch && r.snatched == null && (a.snatchRoll ?? Math.random()) < SNATCH_P; if (a.kind === "beer" && !a.snatch) r.cheers = r.t; } return false; }
     m.x = clamp(x, me.x0, me.x1); m.dir = a.dir;
     const u = a.t - a.hereT;
+    if (a.snatch) { // MeoMeo tend les mains… et lui prend sa chope
+      if (u > SNATCH_GRAB) { a.got = true; a.fx = m.x; a.hereT = a.t; r.snatched = r.t; r.with = a.bs; r.cheers = null; m.love(); }
+      return false;
+    }
     if (a.kind === "beer") {
       if (u > 0.7 && !a.clink) { a.clink = true; if (!m.bubble) m.say("Chin chin! 🍻", { ms: 1800 }); m.love(); t.love(); }
       if (u > CHEERS + 1) { if (Date.now() > m.redUntil) m.redMax = 0; m.redUntil = Date.now() + RED_MS; m.redMax = Math.max(m.redMax, clamp(u / 10, 0, 1)); }
@@ -1414,8 +1626,9 @@ ACTIONS.duo = {
     return false;
   },
   busy: (m, a) => a.crashT != null || !!a.riding,
-  sit: (m, a) => (a.here && (a.kind === "game" || a.kind === "beer")) || !!a.riding,
-  hold: (m, a) => (a.here && a.crashT == null ? { game: "controller", beer: "beer" }[a.kind] : null),
+  sit: (m, a) => (a.here && (a.kind === "game" || (a.kind === "beer" && (!a.snatch || a.t - a.hereT > SNATCH_MAD)))) || !!a.riding, // (MeoMeo s'assoit pour boire la bière volée)
+  hold: (m, a) => (a.here && a.crashT == null && !(a.snatch && !a.got) ? { game: "controller", beer: "beer" }[a.kind] : null),
+  mad: (m, a) => !!a.got && a.t - a.hereT < SNATCH_MAD, // (« 💢 » : elle est fâchée)
   ladle: (m, a) => a.here && a.kind === "cook",
   look: facing,
   pose(m, a, p) {
@@ -1430,6 +1643,12 @@ ACTIONS.duo = {
     } else if (a.kind === "cook") { // il touille avec la grande louche
       p.armL = 80 + 10 * Math.sin(c * 5); p.armR = 12; p.head = 5 + 2 * Math.sin(c * 5); p.rot = -2;
       if (t?.act === r && r.ended) { p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.06; p.armR = -40; } // c'est prêt !
+    } else if (a.kind === "beer" && a.snatch) {
+      const u = a.t - a.hereT, d = -a.bs; // (Tino est du côté d)
+      if (!a.got) { p.armL = p.armR = 75 + 15 * clamp(u / SNATCH_GRAB, 0, 1); p.rot = d * 12; p.sy = 1.02; } // elle tend les mains vers sa chope
+      else if (u < SNATCH_MAD) { // fâchée : elle trépigne, la chope levée hors de sa portée
+        p.holdY = -12; p.holdRot = -d * 18; p.armL = -30; p.armR = 60; p.rot = 4 * Math.sin(c * 22); p.bob = -Math.abs(Math.sin(c * 14)) * m.size * 0.03; p.head = 6 * Math.sin(c * 12);
+      } else { const v = u - SNATCH_MAD, gulp = Math.max(0, Math.sin(c * 1.5 + 1)) ** 4; p.holdY = -6 * gulp; p.holdRot = -12 * gulp; p.head = -5 * gulp; p.armL = -40; p.armR = 40; p.sy = 0.97; p.blush = clamp(v / 6, 0, 1); } // puis elle la boit
     } else if (a.kind === "beer") {
       const u = a.t - a.hereT;
       if (u < CHEERS) { const k = smooth(clamp(Math.min(u, CHEERS - u) / 0.35, 0, 1)); p.holdY = -9 * k; p.holdRot = -18 * k; p.armL = -40 + 30 * k; p.armR = 40 + 10 * k; p.sy = 0.97; }
@@ -1616,19 +1835,19 @@ class Mascot {
     if (this.dropIn("top")) this.x = this.act.x1;
   }
   rollDist() { return Math.PI * 0.72 * this.size; } // distance d'un tour complet (il roule sans glisser)
-  // Faire mijoter PeoPeo : où se mettre à côté de la marmite (eng.home("peo") : { x, y = bord, bottom = fond, half = demi-largeur }),
+  // Faire mijoter PeoPeo / MeoMeo : où se mettre à côté de la marmite (eng.home("pot") : { x = centre, y = bord, bottom = fond, half = demi-largeur }),
   // sur la plateforme à l'écran juste sous la marmite (au plus 40 px plus bas), du côté où il y a la place (de préférence le
   // sien) ; lift = hauteur du tabouret pour que sa nageoire levée arrive juste au-dessus du bord ; null s'il n'y a pas moyen
-  stirSpot() {
-    const H = this.eng.home?.("peo"), v = this.eng.v;
+  stirSpot(prefer) {
+    const H = this.eng.home?.("pot"), v = this.eng.v;
     if (!H?.bottom || H.y - 20 < v.top || H.bottom > v.bottom) return null;
     const P = this.eng.plats.filter((q) => this.eng.visible(q) && q.y >= H.bottom - 2 && q.y - H.bottom <= 40 && H.x >= q.x0 - 60 && H.x <= q.x1 + 60).sort((a, b) => a.y - b.y)[0];
     if (!P) return null;
-    const W = this.size, lift = Math.max(0, P.y - (H.y - 4) - 0.48 * W); // (nageoire levée : 48 % de sa taille au-dessus de ses pieds)
+    const W = this.size, lift = Math.max(0, P.y - (H.y - 4) - (this.def.reach ?? 0.48) * W); // (main levée : Tino 48 % de sa taille au-dessus de ses pieds, PeoPeo / MeoMeo 32 %)
     if (lift > 0.9 * W) return null;
-    const first = Math.sign(this.x - H.x) || 1;
+    const first = prefer ?? (Math.sign(this.x - H.x) || 1);
     for (const side of [first, -first]) {
-      const x = H.x + side * (H.half + W * 0.36);
+      const x = H.x + side * (H.half + W * (this.def.stand ?? 0.36));
       if (x - W * 0.4 >= Math.max(P.x0 - 10, v.left) && x + W * 0.4 <= Math.min(P.x1 + 10, v.right)) return { k: P.key, x, side, lift: lift < 4 ? 0 : lift };
     }
     return null;
@@ -1885,6 +2104,7 @@ class Mascot {
       this.flat = Math.max(-0.5, this.flat + this.flatV * dt);
       if (Math.abs(this.flat) < 0.002 && Math.abs(this.flatV) < 0.02) this.flat = this.flatV = 0;
     }
+    if (!Number.isFinite(this.flat + this.flatV)) this.flat = this.flatV = this.press = 0; // (garde-fou : une valeur invalide figerait tout le dessin, vu une fois sur la page des poses)
     // Le lit reste tant qu'il est dessus la nuit (un petit saut quand on le touche ne le fait pas disparaître)
     const moving = a && ["walk", "hop", "fly", "roll", "swim", "drop"].includes(a.type);
     const inBed = !a || a.type === "nap" || ["react", "pet", "angry"].includes(a.type); // (réveillé — assis, debout — : pas de lit)
@@ -1933,10 +2153,10 @@ class Mascot {
     const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * (this.def.sink ?? SINK) * u + lift - onMattress;
     const mir = this.def.facesLeft && this.dir > 0 ? -1 : 1, look = this.look * mir; // (PeoPeo regarde vers la gauche : retourné en entier quand il va à droite)
     this.el.classList.toggle("ms-sleep", !!A.zzz);
-    this.el.classList.toggle("ms-mad", a.type === "angry" || (a.t !== undefined && gameMad(a)));
+    this.el.classList.toggle("ms-mad", a.type === "angry" || (a.t !== undefined && (gameMad(a) || !!A.mad?.(this, a))));
     this.el.classList.toggle("ms-swim", a.type === "swim" && !!a.wet);
     const busyHands = a.t !== undefined && ["cook", "bbq", "rice"].includes(a.type); // spatule dans la nageoire du côté de l'objet
-    const fanning = a.type === "stir" && a.mode === "fan"; // (éventail dans la nageoire du côté de la marmite : à gauche s'il est à droite de la marmite)
+    const fanning = (a.type === "stir" && a.mode === "fan") || (a.type === "fanpot" && a.mode === "fan"); // (éventail dans la nageoire du côté de la marmite : à gauche s'il est à droite de la marmite ; PeoPeo / MeoMeo : dans la main de devant)
     this.el.classList.toggle("ms-tool-on-r", (busyHands && a.side > 0) || (fanning && a.side < 0));
     this.el.classList.toggle("ms-tool-on-l", (busyHands && a.side < 0) || (fanning && a.side > 0));
     this.el.classList.toggle("ms-tool-fan", fanning);
@@ -2116,17 +2336,26 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   // L'autre personnage (key), s'il est à l'écran (pas parti, pas dans la marmite)
   eng.buddy = (m, key) => list.find((x) => x !== m && x.def.key === key && !x.away && !x.inPot && !x.el.hidden) ?? null;
   // PeoPeo est dans sa marmite (absent et endormi, ou là) : Tino peut le faire mijoter (action « stir »)
-  eng.peoSimmer = () => { const p = list.find((x) => x.def.home); return p && p.inPot && !p.away ? p : null; };
-  const stirring = () => list.some((x) => x.act?.type === "stir" && !x.act.cancel); // (PeoPeo ne saute pas dehors pendant ce temps)
+  // (PeoPeo et / ou MeoMeo ; dream = tous ceux qui sont dans la marmite sont absents)
+  eng.peoSimmer = () => { const ps = list.filter((x) => x.inPot && !x.away); return ps.length ? { dream: ps.every((p) => p.dream) } : null; }; // (Tino aussi, quand on l'y a jeté)
+  // Les autres personnages de la marmite qui sont dehors (pour se placer à deux autour de Tino)
+  eng.peers = (m) => list.filter((x) => x !== m && x.def.home && !x.away && !x.inPot && !x.el.hidden);
+  const stirring = () => list.some((x) => ["stir", "fanpot"].includes(x.act?.type) && !x.act.cancel); // (PeoPeo ne saute pas dehors pendant ce temps)
   // La marmite pendant que Tino fait mijoter PeoPeo : l'app (potFx) dessine la louche jusqu'à sa nageoire, le feu, la vapeur
   // — à chaque image ; null quand c'est fini, interrompu, ou que l'animation s'arrête (autre onglet, plus d'animations…)
+  // (cuisiniers : Tino — PeoPeo / MeoMeo dans la marmite —, ou PeoPeo / MeoMeo — Tino dedans, ensemble — : celui qui touille
+  // tient les baguettes, le feu grandit dès que quelqu'un l'attise)
   let potOn = false;
+  const handOf = (x) => x.el.querySelector(".ms-hand") ?? x.el.querySelector(x.act.side > 0 ? ".ms-arm-l > ellipse" : ".ms-arm-r > ellipse");
   const potLink = (off = false) => {
-    const t = list.find((x) => x.def.key === "tino"), a = t?.act;
-    const on = !off && !!a && a.type === "stir" && a.t !== undefined && !a.cancel && !t.el.hidden && !t.away && !reduce.matches;
+    const cooks = off || reduce.matches ? [] : list.filter((x) => !x.el.hidden && !x.away && x.act?.t !== undefined && !x.act.cancel && ["stir", "fanpot"].includes(x.act.type) && x.act.mode !== "walk");
+    const on = cooks.length > 0;
     if (!on && !potOn) return;
     potOn = on;
-    potFx(on ? { mode: a.mode, side: a.side, phase: t.clock * STIR_W, paw: t.el.querySelector(a.side > 0 ? ".ms-arm-l > ellipse" : ".ms-arm-r > ellipse") } : null);
+    if (!on) { potFx(null); return; }
+    const stirrer = cooks.find((x) => x.act.type === "stir" && x.act.mode === "stir"), fan = cooks.some((x) => x.act.mode === "fan" && (x.act.type === "stir" || x.act.fanning));
+    const s = stirrer ?? cooks[0];
+    potFx({ mode: stirrer ? "stir" : fan ? "fan" : s.act.mode, fan, side: s.act.side, phase: s.clock * STIR_W, paw: stirrer ? handOf(stirrer) : null });
   };
   const hideAll = (m, h) => { m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = h; if (m.bubble) m.bubble.el.hidden = h; };
   // Il plonge dans la marmite (fin de potIn) : caché, sa tête ressort de la marmite (onHome → l'app)
@@ -2162,8 +2391,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     }
     if (together()) {
       const sc = scene(slotNow());
-      if (m.inPot) { if (sc.peoOut && seen && !reduce.matches && leavePot(m, H)) m.plan = buddyScene(m, sc); }
-      else if (!sc.peoOut && seen && !m.busy() && m.act?.type !== "potIn") m.now([{ type: "potIn" }]);
+      if (m.inPot && seen && !reduce.matches && leavePot(m, H)) m.plan = buddyScene(m, sc); // (ensemble : ils restent dehors — la marmite est pour Tino)
       return;
     }
     if (m.inPot) {
@@ -2175,6 +2403,39 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     if ((m.outT -= dt) > 0 && !eng.night()) return;
     if (seen) m.now([{ type: "potIn" }]);
   };
+  // Tino dans la marmite (ensemble : PeoPeo et MeoMeo l'y ont jeté, ou il y est allé tout seul — scènes « soak ») : il en
+  // ressort quand plus personne ne le cuisine et que ce n'est plus une scène « soak » (1,2 s — en comptant ceux qui y vont),
+  // au bout de 40 s de cuisine au plus, si la marmite n'est plus à l'écran, si ce n'est plus « ensemble », ou si un message
+  // arrive ; cuit (on l'a touillé / le feu était allumé) : tout rouge pendant 1 min ; puis il fait sa part de la scène en cours.
+  // force : sans animation, directement sur une plateforme
+  const soaking = () => together() && scene(slotNow()).tino === "soak";
+  const tinoOut = (t, force = false) => {
+    const H = home("tino"), cooked = t.cooked;
+    t.potTime = t.potIdle = 0; t.cooked = false;
+    if (!force && H && leavePot(t, H)) {
+      if (cooked) {
+        t.redUntil = Date.now() + 60000; t.redMax = 0.9;
+        if (!t.bubble) t.say(pick(["Hot hot hot! 🥵", "So hot!! ♨️", "I'm cooked… 🥵"]), { ms: 2200 });
+      } else if (!t.bubble && Math.random() < 0.5) t.say(pick(["Ahh… so relaxing ♨️", "What a nice bath! 🛁"]), { ms: 2000 });
+      if (together() && !reduce.matches) t.plan = tinoScene(t, scene(slotNow()));
+      return;
+    }
+    t.inPot = false; t.placed = false; t.act = null; t.plan = []; hideAll(t, false); onHome(t.def.key, false);
+  };
+  const cookingTino = () => list.some((x) => [x.act, ...x.plan].some((s) => s && ["stir", "fanpot", "toss", "goto"].includes(s.type) && !s.cancel && !s.skip));
+  const tinoPotTick = (dt) => {
+    const t = list.find((x) => x.def.key === "tino");
+    if (!t) return;
+    const H = home("tino"), seen = !!H && H.y >= eng.v.top && H.y <= eng.v.bottom, soak = soaking();
+    if (!t.inPot) { // scène « soak » : sorti en cours de route (marmite pas à l'écran, message lu…) → il y retourne
+      if (soak && seen && eng.plats.length && !reduce.matches && !t.away && !t.el.hidden && !t.stay && !t.busy() && !t.bubble?.sticky && ![t.act, ...t.plan].some((s) => s?.type === "potIn")) t.now([{ type: "potIn", soak: true }]);
+      return;
+    }
+    const cook = cookingTino();
+    if (potOn) t.cooked = true;
+    t.potIdle = cook || soak ? 0 : (t.potIdle ?? 0) + dt; t.potTime = soak ? 0 : (t.potTime ?? 0) + dt;
+    if (t.potIdle > 1.2 || t.potTime > 40 || !seen || !together() || t.bubble?.sticky) tinoOut(t, !seen);
+  };
   // Ensemble : à chaque nouvelle scène (toutes les SCENE_S s, à la même seconde sur les deux téléphones), Tino commence la
   // sienne et PeoPeo (s'il est dehors) la sienne — juste après l'action en cours si elle ne s'interrompt pas
   const sceneTick = () => {
@@ -2182,7 +2443,8 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     const k = slotNow();
     if (k === eng.sceneK) return;
     eng.sceneK = k;
-    const sc = scene(k);
+    const sc = scene(k), tp = list.find((x) => x.def.key === "tino" && x.inPot);
+    if (tp && sc.tino !== "soak" && !cookingTino()) { const H = home("tino"); tinoOut(tp, !H || H.y < eng.v.top || H.y > eng.v.bottom); } // (fin du bain : il sort tout de suite, pour que PeoPeo et MeoMeo le trouvent)
     list.forEach((m) => {
       if (m.away || m.inPot || m.el.hidden || reduce.matches) return;
       const st = m.def.home ? buddyScene(m, sc) : tinoScene(m, sc);
@@ -2219,6 +2481,8 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   }
 
   function refresh() {
+    const tp = list.find((x) => x.def.key === "tino" && x.inPot);
+    if (tp && (reduce.matches || document.hidden)) tinoOut(tp, true); // (sans animation : Tino ne reste pas caché dans la marmite)
     measure();
     list.forEach((m) => {
       if (!eng.plats.length || m.away || m.inPot) return;
@@ -2251,7 +2515,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
 
   let since = 0;
   function frame(t) {
-    const dt = Math.min(0.05, (t - last) / 1000);
+    const dt = clamp((t - last) / 1000, 0, 0.05); // (jamais en arrière : une action ne doit pas remonter le temps)
     last = t;
     if ((since += dt) > 0.5) {
       since = 0;
@@ -2260,6 +2524,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     } else eng.v = view();
     sceneTick();
     list.forEach((m) => { homeTick(m, dt); if (m.away || m.inPot) return; follow(m); m.update(dt); m.render(); });
+    tinoPotTick(dt);
     potLink();
     raf = requestAnimationFrame(frame);
   }

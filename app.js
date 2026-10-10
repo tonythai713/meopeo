@@ -1,6 +1,6 @@
 // MeoPeo — l'interface (même mise en page que les planners Obsidian MeoMeo / PeoPeo).
 // Ne parle jamais directement à Supabase : tout passe par `db` (data.js ; data-mock.js dans test.html).
-import { mountMascots, outfitTemplate, scenePng, WIDGET_SCENES, SCENES_V, tinoHeadSvg, peoHeadSvg, demoPose } from "./mascot.js";
+import { mountMascots, outfitTemplate, scenePng, WIDGET_SCENES, SCENES_V, tinoHeadSvg, peoHeadSvg, meoHeadSvg, demoPose } from "./mascot.js";
 import { createBigTino, DEFAULT_ANIM, videoToSprite, videoFrames, gifFrames, apngFrames, keyBackground, outfitSheet, shrinkFrames, isAnimatedImage, releaseCanvas } from "./bigtino.js";
 
 // ---------- Dates ----------
@@ -615,8 +615,8 @@ function refreshMascots() {
   if (mascots) { presenceChanged(); return mascots.refresh(); }
   const layer = document.createElement("div");
   document.body.append(layer);
-  mascots = mountMascots({ layer, kinds: ["tino", "peo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo,
-    home: (kind) => (kind === "peo" ? potSpot() : null), onHome: () => presenceChanged(), together: bothHere, potFx });
+  mascots = mountMascots({ layer, kinds: ["tino", "peo", "meo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo,
+    home: (kind) => potSpot(kind), onHome: () => presenceChanged(), together: bothHere, potFx });
   syncTinoBubble();
   applyOutfit();
 }
@@ -2563,7 +2563,7 @@ function startBath(box) {
 
 // ---------- La marmite et PeoPeo (présence en direct, sans SQL) ----------
 // À côté du mois, à la place de la case « MeoMeo » : une marmite dorée (casserole coréenne à ramyeon / tteokbokki) où PeoPeo
-// (et MeoMeo, plus tard) vit. Celui qui a MeoPeo ouvert à l'écran en ce moment y est : sa tête sort et guette (endormie la
+// et MeoMeo vivent. Celui qui a MeoPeo ouvert à l'écran en ce moment y est : sa tête sort et guette (endormie la
 // nuit) ; de temps en temps il saute dehors, se promène sur le calendrier, poursuit Tino… puis y retourne (mascot.js, « peo »,
 // homeTick). Absent : il reste dans la marmite, endormi (setDream). Quand il est dans la marmite (là ou pas), Tino le fait
 // souvent mijoter : il touille
@@ -2575,14 +2575,21 @@ const isHere = (id) => !!id && (id === S.user?.id ? !document.hidden : S.online.
 // MeoMeo et PeoPeo ont l'app ouverte en même temps : les deux téléphones montrent les mêmes actions au même moment (mascot.js,
 // « ensemble ») et Tino reste éveillé, même la nuit
 const bothHere = () => isHere(personId("PeoPeo")) && isHere(personId("MeoMeo"));
-// (sa tête sort de la marmite ; pas là : il y dort toujours)
-const peoUp = () => (mascots ? peoDream() || mascots.inPot("peo") : true);
-const peoDream = () => !isHere(personId("PeoPeo"));
+// Les deux têtes dans la marmite (PeoPeo à gauche, MeoMeo à droite) : x = centre de la tête dans le repère de la marmite
+const POT_HEADS = { peo: { label: "PeoPeo", x: 18, box: 'x="2" y="-6" width="32" height="32"', svg: () => peoHeadSvg("ms-flush-peo-pot") },
+  meo: { label: "MeoMeo", x: 46, box: 'x="30" y="-8" width="32" height="32"', svg: () => meoHeadSvg("ms-flush-meo-pot") },
+  // Tino, au milieu, quand PeoPeo et MeoMeo l'ont jeté dans la marmite (ensemble) : pas de présence à lui
+  tino: { label: null, x: 32, box: 'x="14" y="-6" width="36" height="32.4"', svg: () => tinoHeadSvg() } };
+// Absent (pas l'app ouverte) : il / elle reste dans la marmite, endormi(e) ; là : sa tête sort quand il / elle est dans la marmite
+const potAway = (kind) => !!POT_HEADS[kind].label && !isHere(personId(POT_HEADS[kind].label));
+const potUp = (kind) => (kind === "tino" ? !!mascots?.inPot("tino") : mascots ? potAway(kind) || mascots.inPot(kind) : true);
+const potAsleep = (kind) => kind !== "tino" && (potAway(kind) || (!bothHere() && (tinoNight() || tinoNap())));
+const potHead = (kind) => `<g class="mp-pot-head mp-pot-${kind}${potUp(kind) ? " mp-up" : ""}${potAway(kind) ? " mp-dream" : ""}${potAsleep(kind) ? " ms-sleep" : ""}" data-kind="${kind}"><g class="mp-pot-bob"><svg ${POT_HEADS[kind].box}>${POT_HEADS[kind].svg()}</svg></g></g>`;
 function potButton() {
   const P = S.partner;
   // repère 64 × 60 (y de −8 à 52) ; bord de la marmite : ellipse de centre (32, 24), 26 × 5 ; l'arrière du bord est dessiné
   // derrière la tête, l'avant devant ; la tête est coupée sous le bord avant (clipPath) : elle est DANS la marmite
-  return `<button type="button" class="pl-toggle mp-pot${potState ? " mp-pot-hot" : ""}${potState === "fan" ? " mp-pot-fan" : ""}" aria-pressed="${UI.showPartner}" title="${UI.showPartner ? "Hide" : "Show"} ${esc(P.label)}'s tasks on the calendar">
+  return `<button type="button" class="pl-toggle mp-pot${potState ? " mp-pot-hot" : ""}${potFanned ? " mp-pot-fan" : ""}" aria-pressed="${UI.showPartner}" title="${UI.showPartner ? "Hide" : "Show"} ${esc(P.label)}'s tasks on the calendar">
     <svg class="mp-pot-art" viewBox="0 -8 64 60" aria-hidden="true">
       <defs>
         <linearGradient id="mp-pot-gold" x1="0" x2="1"><stop offset="0" stop-color="#b9821c"/><stop offset="0.3" stop-color="#f7d675"/><stop offset="0.55" stop-color="#e5ae3e"/><stop offset="1" stop-color="#a86f14"/></linearGradient>
@@ -2593,8 +2600,8 @@ function potButton() {
       <ellipse cx="32" cy="24" rx="26" ry="5" fill="#6e4a10"/>
       <ellipse class="mp-pot-broth" cx="32" cy="24.6" rx="24.5" ry="4.2" fill="#d4502a"/>
       <path d="M6 24Q32 14 58 24" fill="none" stroke="#c99230" stroke-width="2.4"/>
-      <g clip-path="url(#mp-pot-clip)"><g class="mp-pot-peo${peoUp() ? " mp-up" : ""}${peoDream() ? " mp-dream" : ""}${peoDream() || (!bothHere() && (tinoNight() || tinoNap())) ? " ms-sleep" : ""}"><g class="mp-pot-bob"><svg x="13" y="-7" width="38" height="38">${peoHeadSvg("ms-flush-peo-pot")}</svg></g></g>
-        <g class="mp-pot-spoon" style="display: none"><path class="mp-spoon-stick" d="" fill="none" stroke="#9a6a3c" stroke-width="2.4" stroke-linecap="round"/><path class="mp-spoon-shine" d="" fill="none" stroke="#d9a874" stroke-width="0.8" stroke-linecap="round"/></g></g>
+      <g clip-path="url(#mp-pot-clip)">${potHead("peo")}${potHead("meo")}${potHead("tino")}
+        <g class="mp-pot-spoon" style="display: none"><path class="mp-chop" d="" fill="none" stroke="#b9894a" stroke-width="1.5" stroke-linecap="round"/><path class="mp-chop" d="" fill="none" stroke="#d4a463" stroke-width="1.5" stroke-linecap="round"/></g></g>
       <g class="mp-pot-bubbles" fill="#ff8a5c"><circle cx="14" cy="24" r="1.3"/><circle cx="48" cy="23.5" r="1.1"/><circle cx="22" cy="26" r="0.9"/></g>
       <path d="M2 25.5H7.5V29.5H2Q0 29.5 0 27.5Q0 25.5 2 25.5ZM62 25.5H56.5V29.5H62Q64 29.5 64 27.5Q64 25.5 62 25.5Z" fill="#c48a24" stroke="#8a5a10" stroke-width="1"/>
       <path d="M6 24L7.6 43Q8 47 12.5 47H51.5Q56 47 56.4 43L58 24Q32 34 6 24Z" fill="url(#mp-pot-gold)" stroke="#8a5a10" stroke-width="1.2" stroke-linejoin="round"/>
@@ -2606,38 +2613,43 @@ function potButton() {
       <g class="mp-pot-steam" fill="none" stroke="#f3f5ff" stroke-width="1.5" stroke-linecap="round"><path d="M18 18Q15 13 18 9Q21 5 18 1"/><path d="M45 17Q48 12 45 8Q42 4 45 0"/></g>
     </svg><span class="mp-pot-label">${esc(P.mark)} ${esc(P.label)}</span></button>`;
 }
-// Le bord de la marmite (coordonnées de la page) : là où PeoPeo saute dehors et revient ; null si elle n'est pas affichée
-function potSpot() {
+// Le bord de la marmite (coordonnées de la page) : là où PeoPeo / MeoMeo (kind) saute dehors et revient — au-dessus de sa
+// tête —, ou son centre (kind « pot » : Tino s'y met à côté pour la faire mijoter) ; null si elle n'est pas affichée
+function potSpot(kind = "pot") {
   if (currentTab() !== "calendar") return null;
   const art = root?.querySelector(".mp-pot .mp-pot-art"), r = art?.getBoundingClientRect();
   if (!r?.width) return null;
   const M = art.getScreenCTM(); // (repère de la marmite → écran : fond y = 47, flancs x = 6 et 58)
-  return { x: r.left + scrollX + r.width / 2, y: r.top + scrollY + r.height * (32 / 60), bottom: (M ? M.d * 47 + M.f : r.bottom) + scrollY, half: M ? Math.abs(M.a) * 26 : r.width * 0.4 };
+  const hx = POT_HEADS[kind]?.x ?? 32;
+  return { x: (M ? M.a * hx + M.e : r.left + r.width * hx / 64) + scrollX, y: r.top + scrollY + r.height * (32 / 60), bottom: (M ? M.d * 47 + M.f : r.bottom) + scrollY, half: M ? Math.abs(M.a) * 26 : r.width * 0.4 };
 }
 // Tino fait mijoter PeoPeo (mascot.js, action « stir » ; PeoPeo dans la marmite) : feu sous la marmite (plus
 // grand quand il l'attise à l'éventail), bouillon qui frémit, vapeur ; la louche part du bouillon et finit dans sa nageoire
 // (mesurée à chaque image, comme la canne à pêche) ; la tête de PeoPeo est un peu remuée. potState = ce que dessine
 // potButton() quand le calendrier est refait. Sans nouvelles pendant 0,5 s (animation arrêtée) : tout s'éteint.
-let potState = null, potOff = 0;
+let potState = null, potFanned = false, potOff = 0;
 function potFx(st) {
   clearTimeout(potOff);
-  const mode = st && st.mode !== "walk" ? st.mode : null; // (en chemin : pas encore de feu)
-  if (mode !== potState) {
-    potState = mode;
-    document.querySelectorAll(".mp-pot").forEach((b) => { b.classList.toggle("mp-pot-hot", !!mode); b.classList.toggle("mp-pot-fan", mode === "fan"); });
+  const mode = st && st.mode !== "walk" ? (st.fan && st.mode !== "stir" ? "fan" : st.mode) : null, fanned = mode === "fan" || !!st?.fan; // (en chemin : pas encore de feu ; l'autre cuisinier peut attiser le feu pendant qu'on touille)
+  if (mode !== potState || fanned !== potFanned) {
+    potState = mode; potFanned = fanned;
+    document.querySelectorAll(".mp-pot").forEach((b) => { b.classList.toggle("mp-pot-hot", !!mode); b.classList.toggle("mp-pot-fan", fanned); });
   }
-  const art = root?.querySelector(".mp-pot .mp-pot-art"), spoon = art?.querySelector(".mp-pot-spoon"), bob = art?.querySelector(".mp-pot-bob");
+  const art = root?.querySelector(".mp-pot .mp-pot-art"), spoon = art?.querySelector(".mp-pot-spoon");
   const stir = mode === "stir" && st.paw ? st : null;
-  if (bob) bob.setAttribute("transform", stir ? `rotate(${(4 * Math.sin(stir.phase)).toFixed(2)} 32 30) translate(${(1.2 * Math.cos(stir.phase)).toFixed(2)} 0)` : "");
+  art?.querySelectorAll(".mp-pot-head").forEach((h, i) => { // (les deux têtes remuent, un peu décalées)
+    const ph = (stir?.phase ?? 0) + i * 1.3, cx = POT_HEADS[h.dataset.kind]?.x ?? 32;
+    h.querySelector(".mp-pot-bob")?.setAttribute("transform", stir ? `rotate(${(4 * Math.sin(ph)).toFixed(2)} ${cx} 28) translate(${(1.2 * Math.cos(ph)).toFixed(2)} 0)` : "");
+  });
   let drawn = false;
   if (stir && spoon) {
     const r = stir.paw.getBoundingClientRect(), M = art.getScreenCTM()?.inverse();
     if (M && r.width) {
       const P = new DOMPoint(r.left + r.width / 2, r.top + r.height / 2).matrixTransform(M);
       const sx = 32 + stir.side * (8 + 4 * Math.cos(stir.phase)), sy = 31 + 1.5 * Math.sin(stir.phase); // (le bout dans le bouillon, caché par le bord avant)
-      const d = `M${sx.toFixed(1)} ${sy.toFixed(1)}L${P.x.toFixed(1)} ${P.y.toFixed(1)}`;
-      spoon.querySelector(".mp-spoon-stick").setAttribute("d", d);
-      spoon.querySelector(".mp-spoon-shine").setAttribute("d", d);
+      // deux baguettes : écartées dans le bouillon, presque jointes dans la main
+      const dx = P.x - sx, dy = P.y - sy, n = Math.hypot(dx, dy) || 1, ox = -dy / n, oy = dx / n;
+      spoon.querySelectorAll(".mp-chop").forEach((c, i) => { const e = i ? 1 : -1; c.setAttribute("d", `M${(sx + e * 1.4 * ox).toFixed(1)} ${(sy + e * 1.4 * oy).toFixed(1)}L${(P.x + e * 0.45 * ox).toFixed(1)} ${(P.y + e * 0.45 * oy).toFixed(1)}`); });
       drawn = true;
     }
   }
@@ -2647,9 +2659,8 @@ function potFx(st) {
 // Quelqu'un arrive ou s'en va, PeoPeo sort de la marmite ou y retourne, la nuit tombe : la tête dans la marmite suit (sans
 // redessiner le calendrier)
 function presenceChanged() {
-  mascots?.setDream("peo", peoDream()); // (pas là : il reste dans la marmite, endormi)
-  const up = peoUp(), dream = peoDream(), asleep = dream || (!bothHere() && (tinoNight() || tinoNap()));
-  document.querySelectorAll(".mp-pot-peo").forEach((g) => { g.classList.toggle("mp-up", up); g.classList.toggle("mp-dream", dream); g.classList.toggle("ms-sleep", asleep); });
+  for (const kind of Object.keys(POT_HEADS)) if (POT_HEADS[kind].label) mascots?.setDream(kind, potAway(kind)); // (pas là : il / elle reste dans la marmite, endormi(e))
+  document.querySelectorAll(".mp-pot-head").forEach((g) => { const k = g.dataset.kind; g.classList.toggle("mp-up", potUp(k)); g.classList.toggle("mp-dream", potAway(k)); g.classList.toggle("ms-sleep", potAsleep(k)); });
 }
 setInterval(() => { if (!document.hidden) presenceChanged(); }, 60000); // (la nuit tombe : il s'endort dans la marmite)
 
