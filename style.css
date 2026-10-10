@@ -373,7 +373,12 @@ textarea { font: inherit; font-size: 16px; color: var(--text-normal); background
 .mp-tummy-bar.mp-hungry i { background: #ff7b8a; }
 .mp-tummy-fish { margin-top: 0; }
 .mp-light .mp-tummy-bar { background: rgba(40, 50, 110, 0.12); }
-.mp-orename { display: inline-flex; gap: 4px; align-items: center; max-width: 100%; }
+.mp-orename { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 100%; }
+/* Rareté d'une tenue à pêcher (27) : « ✨ 1 in 10 » = édition limitée ; champ « 🎲 1 in [N] » */
+.mp-rare { color: #ffd76a; font-weight: 700; }
+.mp-light .mp-rare { color: #a86b00; }
+.mp-orare { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.mp-orename .mp-orare input, .mp-orarity input { width: 4.6em; font-size: 16px; padding: 3px 6px; }
 .mp-orename input { width: 11em; min-width: 0; font-size: 16px; padding: 3px 6px; }
 .mp-orename button { min-height: 32px; padding: 2px 8px; }
 

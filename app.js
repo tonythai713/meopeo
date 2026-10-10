@@ -882,8 +882,7 @@ async function loadOutfits() {
   }
   await applyOutfit();
   const box = document.querySelector(".mp-wardrobe");
-  // (pas pendant un renommage, un envoi, ni avec un nom de tenue tapé : la mise à jour en direct l'effacerait)
-  if (box && !renaming && !box.querySelector(".mp-busy") && !box.querySelector("[name=oname]")?.value) fillWardrobe(box);
+  if (box && !wardrobeBusy(box)) fillWardrobe(box);
   refreshFishing();
   scheduleFishTimer();
   syncWidgetScenes();
@@ -1067,6 +1066,15 @@ async function shareFile(blob, name, title) {
 const outfitNameOf = (fileName) => String(fileName ?? "").replace(/\.[^.]+$/, "").replace(/\[[^\]]*\]|\([^)]*\)|\{[^}]*\}/g, " ").replace(/_/g, " ")
   .replace(/\s+/g, " ").replace(/^[\s\-–—:|·.,]+|[\s\-–—:|·.,]+$/g, "").trim().slice(0, 40).trim() || "Outfit";
 let renaming = null; // id de la tenue qu'on est en train de renommer (la garde-robe n'est pas refaite pendant ce temps)
+// Les mises à jour en direct ne refont pas la garde-robe pendant un renommage, un envoi, ni avec un nom ou une rareté
+// tapés pour une nouvelle tenue (elles les effaceraient)
+function wardrobeBusy(box) {
+  return !!renaming || !!box.querySelector(".mp-busy") || !!box.querySelector("[name=oname]")?.value || !["", "1"].includes(box.querySelector("[name=orarity]")?.value ?? "1");
+}
+// Rareté d'une tenue à pêcher, « 1 sur N » (27_outfit_rarity.sql) : 1 = normale, 10 = édition limitée (10 fois plus rare
+// qu'une tenue normale) ; de 1 à 1000
+const rarityOf = (v) => Math.min(1000, Math.max(1, Math.round(Number(v)) || 1));
+const rareBadge = (o) => ((o?.rarity ?? 1) > 1 ? `<b class="mp-rare">✨ 1 in ${o.rarity}</b>` : "");
 function fillWardrobe(box) {
   if (S.outfitsOk === false) { box.innerHTML = `<div class="pl-legend">Tino's wardrobe isn't available yet — Tony needs to run <code>supabase/12_tino_outfits.sql</code>.</div>`; return; }
   const who = (o) => (o.by === S.user.id ? S.me : S.partner), fishing = S.fishingOk === true;
@@ -1074,8 +1082,8 @@ function fillWardrobe(box) {
     const on = !inPool && wornOutfit(o.layer)?.id === o.id;
     const when = inPool ? " · in the pool" : fishing ? ` · until ${untilText(caughtUntil(o))}` : "";
     const thumb = o.anim ? `<span class="mp-othumb" title="Animated"><i data-athumb="${o.id}"></i></span>` : `<img alt="" data-thumb="${o.id}">`;
-    return `<div class="mp-outfit${on ? " on" : ""}${inPool ? " mp-pooled" : ""}" data-orow="${o.id}">${thumb}<span class="mp-outfit-name"><span class="mp-oname">${esc(o.name)}</span> <span class="pl-legend">${o.layer === "head" ? "head" : "body"}${o.anim ? " · animated" : ""} · ${esc(who(o)?.mark ?? "")}${when}</span></span>
-      ${inPool ? "" : `<button type="button" data-wear="${o.id}">${on ? "Take off" : "Wear"}</button>`}<button type="button" data-rename="${o.id}" title="Rename">✏️</button><button type="button" data-drop="${o.id}" title="Remove from the wardrobe">✕</button></div>`;
+    return `<div class="mp-outfit${on ? " on" : ""}${inPool ? " mp-pooled" : ""}" data-orow="${o.id}">${thumb}<span class="mp-outfit-name"><span class="mp-oname">${esc(o.name)}</span> <span class="pl-legend">${o.layer === "head" ? "head" : "body"}${o.anim ? " · animated" : ""} · ${esc(who(o)?.mark ?? "")}${when}${fishing && rareBadge(o) ? ` · ${rareBadge(o)}` : ""}</span></span>
+      ${inPool ? "" : `<button type="button" data-wear="${o.id}">${on ? "Take off" : "Wear"}</button>`}<button type="button" data-rename="${o.id}" title="${fishing ? "Rename / rarity" : "Rename"}">✏️</button><button type="button" data-drop="${o.id}" title="Remove from the wardrobe">✕</button></div>`;
   };
   const wearable = S.outfits.filter(unlocked), pool = fishing ? S.outfits.filter((o) => !unlocked(o)) : [];
   box.innerHTML = (fishing ? `<div class="pl-legend">🎣 Outfits come from <b>fishing</b>: a new drawing goes into the <b>pool</b>; catch it in the <b>🎣 Fishing</b> tab and you can both dress Tino with it for <b>${durText(S.outfitHours ?? 168)}</b> — then it goes back into the pool.</div>` : "")
@@ -1085,14 +1093,16 @@ function fillWardrobe(box) {
     ${fishing ? `<div class="pl-sub">👒 Caught — wear them</div>` : ""}
     <div class="mp-outfits">${wearable.length ? wearable.map((o) => row(o)).join("") : `<div class="pl-empty">${fishing ? "Nothing caught right now — go fishing 🎣" : "No outfits yet."}</div>`}</div>
     ${fishing && !showPool() ? `<div class="pl-sub">🎣 In the pool (${pool.length})</div>
-      <div class="pl-legend">Hidden — it's a surprise. To see, rename or remove them: ⚙ Settings → 🎣 Fishing → “Show the outfit pool”.</div>` : ""}
+      <div class="pl-legend">Hidden — it's a surprise. To see, rename, remove them or make them rarer: ⚙ Settings → 🎣 Fishing → “Show the outfit pool”.</div>` : ""}
     ${fishing && showPool() ? `<div class="pl-sub">🎣 In the pool (${pool.length})</div>
       <div class="mp-outfits">${pool.map((o) => row(o, true)).join("")}${pool.length ? "" : `<div class="pl-empty">Empty — draw a new outfit!</div>`}</div>
-      ${pool.length ? `<div class="pl-legend">One of these comes up when you catch an outfit — ✏️ to rename, ✕ to take it out of the pool.</div>` : ""}` : ""}
+      ${pool.length ? `<div class="pl-legend">One of these comes up when you catch an outfit — ✏️ to rename it or make it rarer (✨ limited edition), ✕ to take it out of the pool.</div>` : ""}` : ""}
     <div class="mp-outfit-add">
       <input type="text" name="oname" maxlength="40" placeholder="Name (e.g. Summer hat)">
       <span class="mp-row"><label class="mp-check"><input type="radio" name="olayer" value="head" checked> On his head</label><label class="mp-check"><input type="radio" name="olayer" value="body"> On his body</label></span>
       <label class="mp-check mp-oflower"><input type="checkbox" name="oflower"> Hide his flower</label>
+      ${fishing ? `<label class="mp-check mp-orarity">🎲 Rarity: 1 in <input type="number" name="orarity" min="1" max="1000" step="1" value="1" inputmode="numeric" aria-label="Rarity: 1 in"></label>
+      <div class="pl-legend">1 = normal · 10 = ✨ limited edition, 10× rarer than a normal outfit. To change it later: ✏️ (for outfits in the pool: ⚙ Settings → 🎣 Fishing → “Show the outfit pool”)</div>` : ""}
       <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/png,image/apng,.apng,image/webp,image/gif,video/*" hidden> ＋ Add a drawing (PNG, GIF or video)</label></span>
       <div class="pl-legend mp-ostatus"></div>
     </div>`;
@@ -1120,20 +1130,25 @@ function fillWardrobe(box) {
     if (!o || box.querySelector(".mp-orename")) return;
     renaming = o.id;
     const span = rowEl.querySelector(".mp-oname");
-    span.innerHTML = `<span class="mp-orename"><input type="text" maxlength="40" value="${esc(o.name)}" aria-label="New name" enterkeyhint="done"><button type="button" data-ok title="Save">✓</button><button type="button" data-no title="Cancel">✕</button></span>`;
-    const input = span.querySelector("input");
+    span.innerHTML = `<span class="mp-orename"><input type="text" maxlength="40" value="${esc(o.name)}" aria-label="New name" enterkeyhint="done">${fishing ? `<label class="mp-orare" title="1 = normal · 10 = limited edition (10× rarer)">🎲 1 in <input type="number" name="rerarity" min="1" max="1000" step="1" inputmode="numeric" enterkeyhint="done" value="${o.rarity ?? 1}" aria-label="Rarity: 1 in"></label>` : ""}<button type="button" data-ok title="Save">✓</button><button type="button" data-no title="Cancel">✕</button></span>`;
+    const input = span.querySelector("input"), rIn = span.querySelector("[name=rerarity]");
     input.focus(); input.select();
     const close = () => { renaming = null; fillWardrobe(box); };
     const save = async () => {
-      const name = input.value.trim();
-      if (!name || name === o.name) { close(); return; }
-      input.disabled = true;
-      if (await guard(() => db.renameOutfit(o.id, name), "Couldn't rename the outfit")) { o.name = name; toast(`✏️ Renamed: “${name}”`); outfitChangedHere = true; renaming = null; await loadOutfits(); fillWardrobe(box); }
-      else input.disabled = false;
+      const name = input.value.trim(), rarity = rIn ? rarityOf(rIn.value) : o.rarity ?? 1;
+      const newName = !!name && name !== o.name, newRarity = rarity !== (o.rarity ?? 1);
+      if (!newName && !newRarity) { close(); return; }
+      const lock = (on) => span.querySelectorAll("input, button").forEach((x) => { x.disabled = on; });
+      lock(true);
+      if (newName) { if (!(await guard(() => db.renameOutfit(o.id, name), "Couldn't rename the outfit"))) { lock(false); return; } o.name = name; outfitChangedHere = true; }
+      if (newRarity && !(await guard(() => db.setOutfitRarity(o.id, rarity), "Couldn't change the rarity"))) { lock(false); return; }
+      if (newRarity) o.rarity = rarity;
+      toast(newRarity ? (rarity > 1 ? `✨ “${o.name}” is now a limited edition: 1 in ${rarity}` : `🎲 “${o.name}” is a normal outfit again`) : `✏️ Renamed: “${name}”`);
+      renaming = null; await loadOutfits(); fillWardrobe(box);
     };
     span.querySelector("[data-ok]").addEventListener("click", save);
     span.querySelector("[data-no]").addEventListener("click", close);
-    input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); save(); } else if (ev.key === "Escape") close(); });
+    [input, rIn].forEach((el) => el?.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); save(); } else if (ev.key === "Escape") close(); }));
   }));
   const flower = box.querySelector(".mp-oflower");
   box.querySelectorAll("[name=olayer]").forEach((r) => r.addEventListener("change", () => { flower.hidden = box.querySelector("[name=olayer]:checked").value !== "head"; })); // (seulement pour la tête)
@@ -1144,7 +1159,7 @@ function fillWardrobe(box) {
     input.value = "";
     if (!file) return;
     const name = box.querySelector("[name=oname]").value.trim() || outfitNameOf(file.name);
-    const layer = box.querySelector("[name=olayer]:checked").value;
+    const layer = box.querySelector("[name=olayer]:checked").value, rarity = rarityOf(box.querySelector("[name=orarity]")?.value);
     if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
     box.querySelector(".mp-filebtn").classList.add("mp-busy");
     try {
@@ -1157,7 +1172,13 @@ function fillWardrobe(box) {
       const blob = moving?.blob ?? await prepareOutfit(file), anim = moving?.anim ?? null;
       status("Sending…");
       const id = await db.addOutfit(blob, { name, layer, hideFlower: layer === "head" && box.querySelector("[name=oflower]").checked, anim });
-      if (S.fishingOk === true) toast(`🎣 “${name}” is in the pool — catch it in Fishing!${anim ? " ✨" : ""}`);
+      // (rareté réglée après l'ajout : sans 27, la tenue est quand même ajoutée, en normale)
+      let rare = "";
+      if (S.fishingOk === true && rarity > 1) {
+        try { await db.setOutfitRarity(id, rarity); rare = ` ✨ Limited edition: 1 in ${rarity}.`; }
+        catch (err) { rare = ` ⚠️ Added as a normal outfit (${err.message}).`; }
+      }
+      if (S.fishingOk === true) toast(`🎣 “${name}” is in the pool — catch it in Fishing!${anim ? " ✨" : ""}${rare}`, { ms: rare ? 9000 : 6000 });
       else { await db.wearOutfit(layer, id); toast(`👒 Tino is wearing “${name}”!${anim ? " ✨" : ""}`); } // (sans 20 : il la porte tout de suite, comme avant)
       outfitChangedHere = true; // (images du widget refaites tout de suite)
       await loadOutfits();
@@ -2048,7 +2069,7 @@ async function loadCatches() {
   }
   const top = S.catches[0]; // une prise de l'autre arrive en direct : on le dit (pas pour un « rien »)
   if (lastCatch !== null && top && top.id !== lastCatch && top.by !== S.user.id && top.kind !== "junk" && S.partner)
-    toast(`🎣 ${S.partner.mark} ${S.partner.label} caught ${top.kind === "color" ? "a new colour for Tino 🎨" : `“${catchName(top)}” 👒`}`);
+    toast(`🎣 ${S.partner.mark} ${S.partner.label} caught ${top.kind === "color" ? "a new colour for Tino 🎨" : `“${catchName(top)}” 👒${(S.outfits.find((o) => o.id === top.outfit)?.rarity ?? 1) > 1 ? " — ✨ a limited edition!" : ""}`}`);
   lastCatch = top?.id ?? 0;
   fishingChanged(was !== S.fishingOk);
   loadFeeding(); // (un poisson pêché va dans le seau)
@@ -2060,7 +2081,7 @@ function fishingChanged(wardrobe = true) {
   applyColor();
   applyOutfit();
   const box = document.querySelector(".mp-wardrobe");
-  if (box && wardrobe && !box.querySelector(".mp-busy") && !box.querySelector("[name=oname]")?.value && !renaming) fillWardrobe(box);
+  if (box && wardrobe && !wardrobeBusy(box)) fillWardrobe(box);
   refreshFishing();
   scheduleFishTimer();
   syncWidgetScenes();
@@ -2105,19 +2126,20 @@ const catchRow = (c) => {
   const live = Date.parse(c.until) > Date.now();
   if (c.kind === "color") return `<div class="mp-catch"><span class="mp-swatch" style="background:${furOf(c.color).fill}"></span> ${whoMark(c.by)} a colour <span class="pl-legend">${live ? `· until ${hourOf(new Date(c.until))}` : "· faded"}</span> ${when}</div>`;
   const end = new Date(Date.parse(c.at) + outfitMs()), on = +end > Date.now(); // (la durée réglée maintenant, pas celle du moment de la prise)
-  return `<div class="mp-catch">👒 ${whoMark(c.by)} “${esc(catchName(c))}” <span class="pl-legend">${on ? `· until ${untilText(end)}` : "· back in the pool"}</span> ${when}</div>`;
+  return `<div class="mp-catch">👒 ${whoMark(c.by)} “${esc(catchName(c))}”${(S.outfits.find((o) => o.id === c.outfit)?.rarity ?? 1) > 1 ? " ✨" : ""} <span class="pl-legend">${on ? `· until ${untilText(end)}` : "· back in the pool"}</span> ${when}</div>`;
 };
 function fillFishInfo(pane) {
   const info = pane.querySelector(".mp-fish-info"), list = pane.querySelector(".mp-catches");
   if (!info || !list) return;
   const c = colorNow(), pool = S.outfits.filter((o) => !unlocked(o)).length, caught = S.outfits.filter((o) => o.caughtAt && unlocked(o)).length;
+  const limited = S.outfits.filter((o) => !unlocked(o) && (o.rarity ?? 1) > 1).length;
   info.innerHTML = `<h4>🎨 Tino's colour</h4>
     <div class="mp-fish-line">${c ? `<span class="mp-swatch" style="background:${furOf(c.color).fill}"></span> Caught by ${whoMark(c.by)} — ${timeLeft(c.until)} left (until ${hourOf(new Date(c.until))}). No other colour until then.` : "White, as usual — you might catch a colour! It lasts 30 minutes."}</div>
     <h4>👒 Outfits</h4>
     <div class="mp-fish-line">🎣 ${pool} in the pool · 👒 ${caught} caught — wear them in the Tino tab → Tino's wardrobe</div>
     <h4>🍽 Tino's tummy</h4><div class="mp-tummy"></div>
     <h4>🌊 In the water</h4>
-    <div class="mp-fish-line">${S.feedingOk === true ? "🐟 Fish about 1 cast in 2 (🐠 big ones, now and then ✨🐟 a golden one) — food for Tino" : "🐟 Now and then a fish"} · 👒 an outfit from the pool (${pool}) · 🎨 a colour for Tino · 🦀🥾 crabs, boots and other junk</div>`;
+    <div class="mp-fish-line">${S.feedingOk === true ? "🐟 Fish about 1 cast in 2 (🐠 big ones, now and then ✨🐟 a golden one) — food for Tino" : "🐟 Now and then a fish"} · 👒 an outfit from the pool (${pool}${limited ? ` — ✨ ${limited} limited edition${limited > 1 ? "s" : ""}` : ""}) · 🎨 a colour for Tino · 🦀🥾 crabs, boots and other junk</div>`;
   const tummy = info.querySelector(".mp-tummy");
   tummy._eater = () => fishGame?.m; // (le Tino de la scène mange)
   fillTummy(tummy);
@@ -2238,7 +2260,7 @@ function fishScene(pane) {
     if (c.kind === "color") outfitChangedHere = true; // (images du widget refaites tout de suite)
     fishingChanged(false);
     loadOutfits(); loadCatches();
-    const o = c.kind === "outfit" ? S.outfits.find((x) => x.id === c.outfit) : null;
+    const o = c.kind === "outfit" ? S.outfits.find((x) => x.id === c.outfit) : null, limited = (o?.rarity ?? 1) > 1 ? o.rarity : 0; // (27 : édition limitée)
     const NS = "http://www.w3.org/2000/svg";
     const picture = o && (o.anim ? outfitDataUrl(o) : outfitUrl(o)); // (tenue animée : sa première image, pas la planche)
     if (c.kind === "outfit" && o) {
@@ -2255,7 +2277,7 @@ function fishScene(pane) {
     prize.setAttribute("opacity", "1");
     const until = c.until ? new Date(c.until) : null;
     out.innerHTML = c.kind === "outfit"
-      ? `<div class="mp-fish-got">${o ? `<img alt="" class="mp-fish-img">` : "👒"}<span>You caught <b>“${esc(catchName(c))}”</b>! You can both dress Tino with it until <b>${untilText(until)}</b>.</span></div>
+      ? `<div class="mp-fish-got">${o ? `<img alt="" class="mp-fish-img">` : "👒"}<span>${limited ? `<b class="mp-rare">✨ LIMITED EDITION (1 in ${limited})!</b> ` : ""}You caught <b>“${esc(catchName(c))}”</b>! You can both dress Tino with it until <b>${untilText(until)}</b>.</span></div>
          ${o ? `<button type="button" class="mp-cta" data-puton>👒 Put it on Tino</button>` : ""}`
       : c.kind === "color"
         ? `<div class="mp-fish-got"><span class="mp-swatch mp-swatch-big" style="background:${furOf(c.color).fill}"></span><span>A new colour! Tino wears it for <b>30 minutes</b> (until ${hourOf(until)}) — for both of you.</span></div>`
@@ -2274,8 +2296,8 @@ function fishScene(pane) {
       out.querySelector("[data-feednow]")?.addEventListener("click", (ev) => { ev.target.disabled = true; feedTino(c.junk, out); });
     }
     if (c.kind === "junk" && !fish) m.say(c.junk === "boot" ? "A boot… again? 😑" : c.junk === "crab" ? "Ouch! 🦀" : "Hmm… 🤔", { ms: 2400 });
-    else { m.now([{ type: "react" }, { type: "sit", dur: Infinity }]); m.love(); if (fish) m.say(c.junk === "golden_fish" ? "A GOLDEN fish!! ✨" : "A fish! Yum 🐟", { ms: 2400 }); }
-    set("done", "🎣 Cast again", c.kind === "junk" && !fish ? "Not this time." : "Nice catch! 🎉");
+    else { m.now([{ type: "react" }, { type: "sit", dur: Infinity }]); m.love(); if (fish) m.say(c.junk === "golden_fish" ? "A GOLDEN fish!! ✨" : "A fish! Yum 🐟", { ms: 2400 }); else if (limited) m.say("A limited edition!! ✨", { ms: 2600 }); }
+    set("done", "🎣 Cast again", c.kind === "junk" && !fish ? "Not this time." : limited ? "WOW — a limited edition! 🎉✨" : "Nice catch! 🎉");
   }
   btn.addEventListener("click", () => {
     if (state === "idle" || state === "done") cast();
