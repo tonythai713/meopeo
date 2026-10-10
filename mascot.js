@@ -465,7 +465,7 @@ const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [2, "chase"
 function sceneOf(k) {
   const rnd = seeded(k), peoOut = ((k % SCENE_CYCLE) + SCENE_CYCLE) % SCENE_CYCLE >= POT_SLOTS;
   let duo = peoOut ? pickSeeded(rnd, DUOS) : "solo", tino;
-  if (duo === "solo") { duo = null; tino = pickSeeded(rnd, SOLO); }
+  if (duo === "solo") { duo = null; tino = pickSeeded(rnd, peoOut ? SOLO : [...SOLO, [8, "stir"]]); } // (PeoPeo dans la marmite : Tino le fait souvent mijoter)
   else if (duo === "cook") tino = pickSeeded(rnd, [[1, "cook"], [1, "bbq"], [1, "rice"]]);
   else tino = duo === "chase" ? "wait" : duo;
   return { k, peoOut, duo, tino, dur: 11 + 5 * rnd(), win: rnd() < 0.6, crash: rnd() < 0.5, bounce: rnd() < 0.5 };
@@ -477,7 +477,7 @@ function tinoScene(m, sc) {
   const kind = sc.tino, ctx = { plats: m.eng.plats, today: m.eng.today, lines: m.eng.lines() };
   if (kind === "wait") return [{ type: "idle", dur: 5 }];
   if (kind === "beer") return [{ type: "beer", dur: sc.dur, duo: !!sc.duo }];
-  const ok = ["game", "cook", "bbq", "rice"].includes(kind) ? !!m.propSpot(kind) : ["shop", "scooter"].includes(kind) ? !!m.trip(kind) : kind === "swim" ? !!m.swimRow() : true;
+  const ok = ["game", "cook", "bbq", "rice"].includes(kind) ? !!m.propSpot(kind) : ["shop", "scooter"].includes(kind) ? !!m.trip(kind) : kind === "swim" ? !!m.swimRow() : kind === "stir" ? !!(m.eng.peoSimmer?.() && m.stirSpot()) : true;
   if (!ok) return ACTIONS.walk.make(m, me, ctx);
   const st = (ACTIONS[kind].make ?? (() => [{ type: kind }]))(m, me, ctx), last = st[st.length - 1];
   if (last.type === kind) {
@@ -1085,14 +1085,17 @@ const ACTIONS = {
     busy: true,
   },
 };
-// Tino fait mijoter PeoPeo (absent : il dort dans la marmite) : il monte sur un tabouret à côté de la marmite et touille avec
+// Tino fait mijoter PeoPeo (dans la marmite : endormi s'il est absent, réveillé sinon — depuis la 2026-10-10.4, aussi
+// quand il est là, sinon on ne le voyait jamais sur son propre téléphone) : il monte sur un tabouret à côté de la marmite et touille avec
 // une grande louche (dessinée par l'app dans la marmite : sa nageoire en tient le bout), descend de temps en temps attiser le
 // feu sous la marmite avec un éventail (les flammes grandissent), remonte touiller… L'app (option potFx de mountMascots)
 // dessine la louche, le feu, le bouillon et la vapeur. a.mode : walk (il y va), up / down (il monte / descend du tabouret),
-// stir, fan ; a.side : de quel côté de la marmite il est (+1 = à droite). Plus souvent à l'heure des repas.
+// stir, fan ; a.side : de quel côté de la marmite il est (+1 = à droite). Souvent (poids 24 quand PeoPeo est là — seulement pendant ses passages dans la marmite —, 16 quand il est
+// absent — toujours dans la marmite —, + 8 aux repas) ; il attise le feu
+// au moins deux fois. Ensemble : une des scènes quand PeoPeo est dans la marmite.
 const STOOL_HOP = 0.35, STIR_W = 7; // (s) ; vitesse de la louche (rad/s) : la même pour sa nageoire et la louche de l'app
 ACTIONS.stir = {
-  weight: (m) => (m.eng.peoSimmer?.() && m.stirSpot() ? (m.eng.meal() ? 9 : 5) : 0),
+  weight: (m) => { const p = m.eng.peoSimmer?.(); return p && m.stirSpot() ? (p.dream ? 16 : 24) + (m.eng.meal() ? 8 : 0) : 0; }, // (absent, il est toujours dans la marmite : un peu moins souvent)
   make(m) {
     const s = m.stirSpot();
     return [...(s.k === m.k ? [] : m.pathTo({ k: s.k, x: s.x })), { type: "stir" }];
@@ -1100,13 +1103,13 @@ ACTIONS.stir = {
   start(m, a) {
     const s = m.stirSpot();
     if (!s || s.k !== m.k) { a.cancel = true; return; }
-    Object.assign(a, { side: s.side, x: s.x, lift: s.lift, mode: "walk", mt: 0, seq: ["stir", "fan", "stir", ...(Math.random() < 0.5 ? ["fan", "stir"] : [])] });
+    Object.assign(a, { side: s.side, x: s.x, lift: s.lift, mode: "walk", mt: 0, seq: ["stir", "fan", "stir", "fan", "stir", ...(Math.random() < 0.4 ? ["fan", "stir"] : [])] });
     a.fanX = a.x - a.side * m.size * 0.14; // (pour attiser le feu, il descend du tabouret, un petit pas vers la marmite)
   },
   step(m, a, dt) {
     if (a.cancel) return true;
-    const u = a.t - a.mt, set = (mode) => { a.mode = mode; a.mt = a.t; a.dur = mode === "stir" ? rand(3.5, 5) : mode === "fan" ? rand(2.2, 3) : STOOL_HOP; };
-    const gone = !m.eng.peoSimmer?.(); // (PeoPeo est revenu, ou la marmite n'est plus à l'écran : il arrête)
+    const u = a.t - a.mt, set = (mode) => { a.mode = mode; a.mt = a.t; a.dur = mode === "stir" ? rand(3, 4.5) : mode === "fan" ? rand(2.5, 3.5) : STOOL_HOP; };
+    const gone = !m.eng.peoSimmer?.(); // (PeoPeo est sorti de la marmite, ou elle n'est plus à l'écran : il arrête)
     if (gone) a.seq = [];
     if (a.mode === "walk") {
       if (gone) return true;
@@ -2112,8 +2115,9 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
   // L'autre personnage (key), s'il est à l'écran (pas parti, pas dans la marmite)
   eng.buddy = (m, key) => list.find((x) => x !== m && x.def.key === key && !x.away && !x.inPot && !x.el.hidden) ?? null;
-  // PeoPeo est absent et dort dans sa marmite : Tino peut le faire mijoter (action « stir »)
-  eng.peoSimmer = () => { const p = list.find((x) => x.def.home); return !!p && !!p.dream && p.inPot && !p.away && !together(); };
+  // PeoPeo est dans sa marmite (absent et endormi, ou là) : Tino peut le faire mijoter (action « stir »)
+  eng.peoSimmer = () => { const p = list.find((x) => x.def.home); return p && p.inPot && !p.away ? p : null; };
+  const stirring = () => list.some((x) => x.act?.type === "stir" && !x.act.cancel); // (PeoPeo ne saute pas dehors pendant ce temps)
   // La marmite pendant que Tino fait mijoter PeoPeo : l'app (potFx) dessine la louche jusqu'à sa nageoire, le feu, la vapeur
   // — à chaque image ; null quand c'est fini, interrompu, ou que l'animation s'arrête (autre onglet, plus d'animations…)
   let potOn = false;
@@ -2163,7 +2167,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       return;
     }
     if (m.inPot) {
-      if ((m.potT -= dt) > 0 || !seen || eng.night() || reduce.matches) return;
+      if ((m.potT -= dt) > 0 || !seen || eng.night() || reduce.matches || stirring()) return;
       leavePot(m, H);
       return;
     }

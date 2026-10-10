@@ -2565,7 +2565,8 @@ function startBath(box) {
 // À côté du mois, à la place de la case « MeoMeo » : une marmite dorée (casserole coréenne à ramyeon / tteokbokki) où PeoPeo
 // (et MeoMeo, plus tard) vit. Celui qui a MeoPeo ouvert à l'écran en ce moment y est : sa tête sort et guette (endormie la
 // nuit) ; de temps en temps il saute dehors, se promène sur le calendrier, poursuit Tino… puis y retourne (mascot.js, « peo »,
-// homeTick). Absent : il reste dans la marmite, endormi (setDream), et Tino le fait mijoter de temps en temps : il touille
+// homeTick). Absent : il reste dans la marmite, endormi (setDream). Quand il est dans la marmite (là ou pas), Tino le fait
+// souvent mijoter : il touille
 // avec une louche et attise le feu sous la marmite avec un éventail (mascot.js, « stir » ; dessin ici : potFx). Toucher la
 // marmite = afficher / cacher les tâches de l'autre (comme la case d'avant).
 let presenceCh = null;
@@ -2613,7 +2614,7 @@ function potSpot() {
   const M = art.getScreenCTM(); // (repère de la marmite → écran : fond y = 47, flancs x = 6 et 58)
   return { x: r.left + scrollX + r.width / 2, y: r.top + scrollY + r.height * (32 / 60), bottom: (M ? M.d * 47 + M.f : r.bottom) + scrollY, half: M ? Math.abs(M.a) * 26 : r.width * 0.4 };
 }
-// Tino fait mijoter PeoPeo (mascot.js, action « stir » ; PeoPeo absent, endormi dans la marmite) : feu sous la marmite (plus
+// Tino fait mijoter PeoPeo (mascot.js, action « stir » ; PeoPeo dans la marmite) : feu sous la marmite (plus
 // grand quand il l'attise à l'éventail), bouillon qui frémit, vapeur ; la louche part du bouillon et finit dans sa nageoire
 // (mesurée à chaque image, comme la canne à pêche) ; la tête de PeoPeo est un peu remuée. potState = ce que dessine
 // potButton() quand le calendrier est refait. Sans nouvelles pendant 0,5 s (animation arrêtée) : tout s'éteint.
