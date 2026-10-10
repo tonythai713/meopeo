@@ -948,10 +948,11 @@ async function outfitUrl(o) {
 }
 // Pêche (20_fishing.sql) : une tenue se porte seulement si elle a été pêchée il y a moins de 7 jours (sinon : la réserve).
 // Sans 20 : toutes se portent, comme avant.
-// Durée d'une tenue pêchée : réglage commun (26_outfit_hours.sql, 24 h par défaut) ; sans 26 : 7 jours
-const outfitMs = () => (S.outfitHours ?? 168) * 3600e3;
-const unlocked = (o) => S.fishingOk !== true || (!!o?.caughtAt && Date.parse(o.caughtAt) > Date.now() - outfitMs());
-const caughtUntil = (o) => new Date(Date.parse(o.caughtAt) + outfitMs());
+// Durée d'une tenue pêchée : la sienne (28_outfit_duration.sql), sinon le réglage commun (26_outfit_hours.sql, 24 h par
+// défaut) ; sans 26 : 7 jours
+const outfitMs = (o) => (o?.hours ?? S.outfitHours ?? 168) * 3600e3;
+const unlocked = (o) => S.fishingOk !== true || (!!o?.caughtAt && Date.parse(o.caughtAt) > Date.now() - outfitMs(o));
+const caughtUntil = (o) => new Date(Date.parse(o.caughtAt) + outfitMs(o));
 const durText = (h) => (h >= 48 && h % 24 === 0 ? `${h / 24} days` : h === 1 ? "1 hour" : `${h} hours`);
 const untilText = (d) => (+d - Date.now() < 2 * 86400e3 ? hourOf(d) : dayShort(d)); // (bientôt : l'heure ; plus loin : le jour)
 const showPool = () => store.get("showPool", false) === true; // (⚙ Settings → 🎣 Fishing, cet appareil : la réserve est une surprise)
@@ -1069,40 +1070,46 @@ let renaming = null; // id de la tenue qu'on est en train de renommer (la garde-
 // Les mises à jour en direct ne refont pas la garde-robe pendant un renommage, un envoi, ni avec un nom ou une rareté
 // tapés pour une nouvelle tenue (elles les effaceraient)
 function wardrobeBusy(box) {
-  return !!renaming || !!box.querySelector(".mp-busy") || !!box.querySelector("[name=oname]")?.value || !["", "1"].includes(box.querySelector("[name=orarity]")?.value ?? "1");
+  return !!renaming || !!box.querySelector(".mp-busy") || !!box.querySelector("[name=oname]")?.value || !!box.querySelector("[name=odur]")?.value || !["", "1"].includes(box.querySelector("[name=orarity]")?.value ?? "1");
 }
 // Rareté d'une tenue à pêcher, « 1 sur N » (27_outfit_rarity.sql) : 1 = normale, 10 = édition limitée (10 fois plus rare
 // qu'une tenue normale) ; de 1 à 1000
 const rarityOf = (v) => Math.min(1000, Math.max(1, Math.round(Number(v)) || 1));
 const rareBadge = (o) => ((o?.rarity ?? 1) > 1 ? `<b class="mp-rare">✨ 1 in ${o.rarity}</b>` : "");
+// Durée propre d'une tenue pêchée (28_outfit_duration.sql) : null = la durée commune ; mêmes choix que ⚙ Settings → 🎣 Fishing.
+// Seulement avec 26 (S.outfitHours connu), dont 28 a besoin.
+const hoursOf = (v) => (v === "" || v == null ? null : Math.min(168, Math.max(1, Math.round(Number(v)) || 24)));
+const hoursOptions = (h) => `<option value=""${h == null ? " selected" : ""}>default (${durText(S.outfitHours ?? 168)})</option>`
+  + (OUTFIT_HOURS.includes(h) || h == null ? OUTFIT_HOURS : [...OUTFIT_HOURS, h].sort((a, b) => a - b)).map((x) => `<option value="${x}"${x === h ? " selected" : ""}>${durText(x)}</option>`).join("");
 function fillWardrobe(box) {
   if (S.outfitsOk === false) { box.innerHTML = `<div class="pl-legend">Tino's wardrobe isn't available yet — Tony needs to run <code>supabase/12_tino_outfits.sql</code>.</div>`; return; }
-  const who = (o) => (o.by === S.user.id ? S.me : S.partner), fishing = S.fishingOk === true;
+  const who = (o) => (o.by === S.user.id ? S.me : S.partner), fishing = S.fishingOk === true, timed = fishing && S.outfitHours != null;
   const row = (o, inPool = false) => {
     const on = !inPool && wornOutfit(o.layer)?.id === o.id;
     const when = inPool ? " · in the pool" : fishing ? ` · until ${untilText(caughtUntil(o))}` : "";
     const thumb = o.anim ? `<span class="mp-othumb" title="Animated"><i data-athumb="${o.id}"></i></span>` : `<img alt="" data-thumb="${o.id}">`;
-    return `<div class="mp-outfit${on ? " on" : ""}${inPool ? " mp-pooled" : ""}" data-orow="${o.id}">${thumb}<span class="mp-outfit-name"><span class="mp-oname">${esc(o.name)}</span> <span class="pl-legend">${o.layer === "head" ? "head" : "body"}${o.anim ? " · animated" : ""} · ${esc(who(o)?.mark ?? "")}${when}${fishing && rareBadge(o) ? ` · ${rareBadge(o)}` : ""}</span></span>
-      ${inPool ? "" : `<button type="button" data-wear="${o.id}">${on ? "Take off" : "Wear"}</button>`}<button type="button" data-rename="${o.id}" title="${fishing ? "Rename / rarity" : "Rename"}">✏️</button><button type="button" data-drop="${o.id}" title="Remove from the wardrobe">✕</button></div>`;
+    return `<div class="mp-outfit${on ? " on" : ""}${inPool ? " mp-pooled" : ""}" data-orow="${o.id}">${thumb}<span class="mp-outfit-name"><span class="mp-oname">${esc(o.name)}</span> <span class="pl-legend">${o.layer === "head" ? "head" : "body"}${o.anim ? " · animated" : ""} · ${esc(who(o)?.mark ?? "")}${when}${fishing && rareBadge(o) ? ` · ${rareBadge(o)}` : ""}${timed && o.hours ? ` · ⏱ ${durText(o.hours)}` : ""}</span></span>
+      ${inPool ? "" : `<button type="button" data-wear="${o.id}">${on ? "Take off" : "Wear"}</button>`}<button type="button" data-rename="${o.id}" title="${timed ? "Rename / rarity / duration" : fishing ? "Rename / rarity" : "Rename"}">✏️</button><button type="button" data-drop="${o.id}" title="Remove from the wardrobe">✕</button></div>`;
   };
   const wearable = S.outfits.filter(unlocked), pool = fishing ? S.outfits.filter((o) => !unlocked(o)) : [];
-  box.innerHTML = (fishing ? `<div class="pl-legend">🎣 Outfits come from <b>fishing</b>: a new drawing goes into the <b>pool</b>; catch it in the <b>🎣 Fishing</b> tab and you can both dress Tino with it for <b>${durText(S.outfitHours ?? 168)}</b> — then it goes back into the pool.</div>` : "")
+  box.innerHTML = (fishing ? `<div class="pl-legend">🎣 Outfits come from <b>fishing</b>: a new drawing goes into the <b>pool</b>; catch it in the <b>🎣 Fishing</b> tab and you can both dress Tino with it for <b>${durText(S.outfitHours ?? 168)}</b>${timed ? " (or its own ⏱ duration)" : ""} — then it goes back into the pool.</div>` : "")
     + `<div class="pl-legend">Draw outfits for Tino on a tablet: download the template, draw on a <b>new layer</b> on top of it, then export <b>only your layer</b> as a PNG with a transparent background. Shared: ${esc(S.partner?.label ?? "the other")} sees what Tino wears.</div>
     <div class="pl-legend">✨ It can also <b>move</b>: export your animation as an <b>animated PNG</b> or a <b>GIF</b> with a transparent background, or as a <b>video</b> on a plain background color you don't use in the drawing (it's removed). Square like the template, 10 s max (the rest is cut), plays in a loop.</div>
     <span class="mp-row"><button type="button" data-act="template">⬇ Template</button></span>
     ${fishing ? `<div class="pl-sub">👒 Caught — wear them</div>` : ""}
     <div class="mp-outfits">${wearable.length ? wearable.map((o) => row(o)).join("") : `<div class="pl-empty">${fishing ? "Nothing caught right now — go fishing 🎣" : "No outfits yet."}</div>`}</div>
     ${fishing && !showPool() ? `<div class="pl-sub">🎣 In the pool (${pool.length})</div>
-      <div class="pl-legend">Hidden — it's a surprise. To see, rename, remove them or make them rarer: ⚙ Settings → 🎣 Fishing → “Show the outfit pool”.</div>` : ""}
+      <div class="pl-legend">Hidden — it's a surprise. To see, rename, remove them or change their rarity or duration: ⚙ Settings → 🎣 Fishing → “Show the outfit pool”.</div>` : ""}
     ${fishing && showPool() ? `<div class="pl-sub">🎣 In the pool (${pool.length})</div>
       <div class="mp-outfits">${pool.map((o) => row(o, true)).join("")}${pool.length ? "" : `<div class="pl-empty">Empty — draw a new outfit!</div>`}</div>
-      ${pool.length ? `<div class="pl-legend">One of these comes up when you catch an outfit — ✏️ to rename it or make it rarer (✨ limited edition), ✕ to take it out of the pool.</div>` : ""}` : ""}
+      ${pool.length ? `<div class="pl-legend">One of these comes up when you catch an outfit — ✏️ to rename it, make it rarer (✨ limited edition) or change how long it lasts once caught (⏱), ✕ to take it out of the pool.</div>` : ""}` : ""}
     <div class="mp-outfit-add">
       <input type="text" name="oname" maxlength="40" placeholder="Name (e.g. Summer hat)">
       <span class="mp-row"><label class="mp-check"><input type="radio" name="olayer" value="head" checked> On his head</label><label class="mp-check"><input type="radio" name="olayer" value="body"> On his body</label></span>
       <label class="mp-check mp-oflower"><input type="checkbox" name="oflower"> Hide his flower</label>
       ${fishing ? `<label class="mp-check mp-orarity">🎲 Rarity: 1 in <input type="number" name="orarity" min="1" max="1000" step="1" value="1" inputmode="numeric" aria-label="Rarity: 1 in"></label>
-      <div class="pl-legend">1 = normal · 10 = ✨ limited edition, 10× rarer than a normal outfit. To change it later: ✏️ (for outfits in the pool: ⚙ Settings → 🎣 Fishing → “Show the outfit pool”)</div>` : ""}
+      ${timed ? `<label class="mp-check mp-orarity">⏱ Lasts <select name="odur" aria-label="How long it lasts once caught">${hoursOptions(null)}</select> once caught</label>` : ""}
+      <div class="pl-legend">1 = normal · 10 = ✨ limited edition, 10× rarer than a normal outfit.${timed ? " ⏱ default = the duration for all outfits (⚙ Settings → 🎣 Fishing)." : ""} To change it later: ✏️ (for outfits in the pool: ⚙ Settings → 🎣 Fishing → “Show the outfit pool”)</div>` : ""}
       <span class="mp-row"><label class="mp-filebtn"><input type="file" accept="image/png,image/apng,.apng,image/webp,image/gif,video/*" hidden> ＋ Add a drawing (PNG, GIF or video)</label></span>
       <div class="pl-legend mp-ostatus"></div>
     </div>`;
@@ -1130,20 +1137,23 @@ function fillWardrobe(box) {
     if (!o || box.querySelector(".mp-orename")) return;
     renaming = o.id;
     const span = rowEl.querySelector(".mp-oname");
-    span.innerHTML = `<span class="mp-orename"><input type="text" maxlength="40" value="${esc(o.name)}" aria-label="New name" enterkeyhint="done">${fishing ? `<label class="mp-orare" title="1 = normal · 10 = limited edition (10× rarer)">🎲 1 in <input type="number" name="rerarity" min="1" max="1000" step="1" inputmode="numeric" enterkeyhint="done" value="${o.rarity ?? 1}" aria-label="Rarity: 1 in"></label>` : ""}<button type="button" data-ok title="Save">✓</button><button type="button" data-no title="Cancel">✕</button></span>`;
-    const input = span.querySelector("input"), rIn = span.querySelector("[name=rerarity]");
+    span.innerHTML = `<span class="mp-orename"><input type="text" maxlength="40" value="${esc(o.name)}" aria-label="New name" enterkeyhint="done">${fishing ? `<label class="mp-orare" title="1 = normal · 10 = limited edition (10× rarer)">🎲 1 in <input type="number" name="rerarity" min="1" max="1000" step="1" inputmode="numeric" enterkeyhint="done" value="${o.rarity ?? 1}" aria-label="Rarity: 1 in"></label>` : ""}${timed ? `<label class="mp-orare" title="How long it lasts once caught">⏱ <select name="redur" aria-label="How long it lasts once caught">${hoursOptions(o.hours ?? null)}</select></label>` : ""}<button type="button" data-ok title="Save">✓</button><button type="button" data-no title="Cancel">✕</button></span>`;
+    const input = span.querySelector("input"), rIn = span.querySelector("[name=rerarity]"), dIn = span.querySelector("[name=redur]");
     input.focus(); input.select();
     const close = () => { renaming = null; fillWardrobe(box); };
     const save = async () => {
-      const name = input.value.trim(), rarity = rIn ? rarityOf(rIn.value) : o.rarity ?? 1;
-      const newName = !!name && name !== o.name, newRarity = rarity !== (o.rarity ?? 1);
-      if (!newName && !newRarity) { close(); return; }
-      const lock = (on) => span.querySelectorAll("input, button").forEach((x) => { x.disabled = on; });
+      const name = input.value.trim(), rarity = rIn ? rarityOf(rIn.value) : o.rarity ?? 1, hours = dIn ? hoursOf(dIn.value) : o.hours ?? null;
+      const newName = !!name && name !== o.name, newRarity = rarity !== (o.rarity ?? 1), newHours = hours !== (o.hours ?? null);
+      if (!newName && !newRarity && !newHours) { close(); return; }
+      const lock = (on) => span.querySelectorAll("input, select, button").forEach((x) => { x.disabled = on; });
       lock(true);
+      // (chaque changement réussi est gardé tout de suite : si le suivant échoue, ✓ ne renvoie que ce qui reste)
       if (newName) { if (!(await guard(() => db.renameOutfit(o.id, name), "Couldn't rename the outfit"))) { lock(false); return; } o.name = name; outfitChangedHere = true; }
-      if (newRarity && !(await guard(() => db.setOutfitRarity(o.id, rarity), "Couldn't change the rarity"))) { lock(false); return; }
-      if (newRarity) o.rarity = rarity;
-      toast(newRarity ? (rarity > 1 ? `✨ “${o.name}” is now a limited edition: 1 in ${rarity}` : `🎲 “${o.name}” is a normal outfit again`) : `✏️ Renamed: “${name}”`);
+      if (newRarity) { if (!(await guard(() => db.setOutfitRarity(o.id, rarity), "Couldn't change the rarity"))) { lock(false); return; } o.rarity = rarity; }
+      if (newHours) { if (!(await guard(() => db.setOutfitDuration(o.id, hours), "Couldn't change how long it lasts"))) { lock(false); return; } o.hours = hours; }
+      const said = [newName && "✏️ renamed", newRarity && (rarity > 1 ? `✨ now a limited edition: 1 in ${rarity}` : "🎲 a normal outfit again"),
+        newHours && (hours ? `⏱ lasts ${durText(hours)} once caught` : `⏱ back to the default duration (${durText(S.outfitHours ?? 168)})`)].filter(Boolean);
+      toast(newName && said.length === 1 ? `✏️ Renamed: “${name}”` : `“${o.name}”: ${said.join(" · ")}`);
       renaming = null; await loadOutfits(); fillWardrobe(box);
     };
     span.querySelector("[data-ok]").addEventListener("click", save);
@@ -1159,7 +1169,7 @@ function fillWardrobe(box) {
     input.value = "";
     if (!file) return;
     const name = box.querySelector("[name=oname]").value.trim() || outfitNameOf(file.name);
-    const layer = box.querySelector("[name=olayer]:checked").value, rarity = rarityOf(box.querySelector("[name=orarity]")?.value);
+    const layer = box.querySelector("[name=olayer]:checked").value, rarity = rarityOf(box.querySelector("[name=orarity]")?.value), hours = hoursOf(box.querySelector("[name=odur]")?.value);
     if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
     box.querySelector(".mp-filebtn").classList.add("mp-busy");
     try {
@@ -1177,6 +1187,10 @@ function fillWardrobe(box) {
       if (S.fishingOk === true && rarity > 1) {
         try { await db.setOutfitRarity(id, rarity); rare = ` ✨ Limited edition: 1 in ${rarity}.`; }
         catch (err) { rare = ` ⚠️ Added as a normal outfit (${err.message}).`; }
+      }
+      if (S.fishingOk === true && hours) { // (durée réglée après l'ajout aussi : sans 28, durée commune)
+        try { await db.setOutfitDuration(id, hours); rare += ` ⏱ Lasts ${durText(hours)} once caught.`; }
+        catch (err) { rare += ` ⚠️ Added with the default duration (${err.message}).`; }
       }
       if (S.fishingOk === true) toast(`🎣 “${name}” is in the pool — catch it in Fishing!${anim ? " ✨" : ""}${rare}`, { ms: rare ? 9000 : 6000 });
       else { await db.wearOutfit(layer, id); toast(`👒 Tino is wearing “${name}”!${anim ? " ✨" : ""}`); } // (sans 20 : il la porte tout de suite, comme avant)
@@ -2125,7 +2139,7 @@ const catchRow = (c) => {
   if (c.kind === "junk") { const [e, n] = JUNK[c.junk] ?? ["🫧", c.junk]; return `<div class="mp-catch">${e} ${whoMark(c.by)} ${n}${FISH[c.junk] && S.feedingOk === true ? ` <span class="pl-legend">${c.eatenAt ? "· eaten 😋" : "· in the bucket"}</span>` : ""} ${when}</div>`; }
   const live = Date.parse(c.until) > Date.now();
   if (c.kind === "color") return `<div class="mp-catch"><span class="mp-swatch" style="background:${furOf(c.color).fill}"></span> ${whoMark(c.by)} a colour <span class="pl-legend">${live ? `· until ${hourOf(new Date(c.until))}` : "· faded"}</span> ${when}</div>`;
-  const end = new Date(Date.parse(c.at) + outfitMs()), on = +end > Date.now(); // (la durée réglée maintenant, pas celle du moment de la prise)
+  const end = new Date(Date.parse(c.at) + outfitMs(S.outfits.find((o) => o.id === c.outfit))), on = +end > Date.now(); // (la durée réglée maintenant, pas celle du moment de la prise)
   return `<div class="mp-catch">👒 ${whoMark(c.by)} “${esc(catchName(c))}”${(S.outfits.find((o) => o.id === c.outfit)?.rarity ?? 1) > 1 ? " ✨" : ""} <span class="pl-legend">${on ? `· until ${untilText(end)}` : "· back in the pool"}</span> ${when}</div>`;
 };
 function fillFishInfo(pane) {
@@ -2666,7 +2680,7 @@ function fillFishSet(box) {
   box.innerHTML = (h == null
     ? `<div class="pl-legend">👒 Caught outfits last 7 days. To choose how long, Tony needs to run <code>supabase/26_outfit_hours.sql</code>.</div>`
     : `<label>👒 Caught outfits last <select name="ohours">${opts.map((x) => `<option value="${x}"${x === h ? " selected" : ""}>${durText(x)}</option>`).join("")}</select></label>
-      <div class="pl-legend">For both of you — then they go back into the pool. It also counts for outfits already caught.</div>`)
+      <div class="pl-legend">For both of you — then they go back into the pool. It also counts for outfits already caught. An outfit can also have its own duration (✏️ in 🦭 Tino → 👒 Tino's wardrobe).</div>`)
     + `<label class="mp-check"><input type="checkbox" name="showpool"${showPool() ? " checked" : ""}> Show the outfit pool (🦭 Tino → 👒 Tino's wardrobe) — to see, rename or remove the outfits you can catch</label>
     <div class="pl-legend">This device only. Off: what's in the pool stays a surprise.</div>`;
   box.querySelector("[name=ohours]")?.addEventListener("change", async (ev) => {

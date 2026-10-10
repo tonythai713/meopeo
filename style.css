@@ -379,6 +379,11 @@ textarea { font: inherit; font-size: 16px; color: var(--text-normal); background
 .mp-light .mp-rare { color: #a86b00; }
 .mp-orare { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .mp-orename .mp-orare input, .mp-orarity input { width: 4.6em; font-size: 16px; padding: 3px 6px; }
+/* Durée propre d'une tenue (28) : « ⏱ [default (24 hours) ▾] » */
+.mp-orename .mp-orare select, .mp-orarity select { width: auto; flex: 0 1 auto; min-width: 0; max-width: 100%; font-size: 16px; padding: 3px 4px; }
+.mp-orename .mp-orare, .mp-orarity { max-width: 100%; min-width: 0; }
+/* Pendant l’édition (✏️), les boutons de la ligne sont cachés : le nom, la rareté et la durée ont toute la largeur */
+.mp-outfit:has(.mp-orename) > button { display: none; }
 .mp-orename input { width: 11em; min-width: 0; font-size: 16px; padding: 3px 6px; }
 .mp-orename button { min-height: 32px; padding: 2px 8px; }
 

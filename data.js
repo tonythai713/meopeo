@@ -16,9 +16,9 @@
 //     (supabase/07_tino_messages.sql) ; un message : { id, from, to, body, at: date ISO, seen: date ISO | null }
 //   listTinoLines(), addTinoLine(body), deleteTinoLine(id), getBigTino(), setBigTino(blob, meta), resetBigTino(),
 //   tinoFile(path), subscribeTinoExtras(onChange) → phrases de Tino et grand Tino (supabase/08_tino_extras.sql)
-//   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id), renameOutfit(id, name), setOutfitRarity(id, n),
+//   listOutfits(), addOutfit(blob, { name, layer, hideFlower }), wearOutfit(layer, id | null), deleteOutfit(id), renameOutfit(id, name), setOutfitRarity(id, n), setOutfitDuration(id, hours | null),
 //   subscribeOutfits(onChange) → garde-robe du petit Tino (supabase/12_tino_outfits.sql) ; une tenue a aussi caughtAt /
-//     caughtBy (20_fishing.sql : pêchée quand, par qui ; null = dans la réserve) et rarity (27_outfit_rarity.sql : « 1 sur N », 1 = normale)
+//     caughtBy (20_fishing.sql : pêchée quand, par qui ; null = dans la réserve) et rarity (27_outfit_rarity.sql : « 1 sur N », 1 = normale), hours (28_outfit_duration.sql : sa durée, null = la commune)
 //   fishTino() → la prise d'un lancer, listCatches() → { catches (les plus récentes d'abord), color (couleur active | null) },
 //   subscribeCatches(onChange) → la pêche (20_fishing.sql) ; une prise : { id, by, at, kind: "outfit" | "color" | "junk",
 //     outfit, outfitName, color: { h, s, l } | null, junk, until }
@@ -283,7 +283,7 @@ export function createBackend() {
       const rows = must(r1), worn = must(r2);
       return {
         hours: r3.error ? null : r3.data,
-        outfits: rows.map((r) => ({ id: r.id, by: r.author, name: r.name, layer: r.layer, path: r.path, hideFlower: r.hide_flower, anim: r.anim ?? null, at: r.created_at, caughtAt: r.caught_at ?? null, caughtBy: r.caught_by ?? null, rarity: r.rarity ?? 1 })),
+        outfits: rows.map((r) => ({ id: r.id, by: r.author, name: r.name, layer: r.layer, path: r.path, hideFlower: r.hide_flower, anim: r.anim ?? null, at: r.created_at, caughtAt: r.caught_at ?? null, caughtBy: r.caught_by ?? null, rarity: r.rarity ?? 1, hours: r.hours ?? null })),
         worn: { head: worn?.value?.head ?? null, body: worn?.value?.body ?? null },
       };
     },
@@ -382,6 +382,12 @@ export function createBackend() {
     async setOutfitRarity(id, rarity) {
       const { error } = await sb.from("tino_outfits").update({ rarity }).eq("id", id);
       if (error) throw new Error(["PGRST204", "42703"].includes(error.code) ? "Tony needs to run supabase/27_outfit_rarity.sql" : error.message);
+    },
+    // Durée propre d'une tenue pêchée (28_outfit_duration.sql) : 1 à 168 heures, null = la durée commune (26) ; les deux
+    // peuvent. Comme la rareté : réglée après l'ajout.
+    async setOutfitDuration(id, hours) {
+      const { error } = await sb.from("tino_outfits").update({ hours }).eq("id", id);
+      if (error) throw new Error(["PGRST204", "42703"].includes(error.code) ? "Tony needs to run supabase/28_outfit_duration.sql" : error.message);
     },
     // Supprimer une tenue (la base l'enlève aussi de ce que Tino porte), puis son fichier
     async deleteOutfit(id) {
