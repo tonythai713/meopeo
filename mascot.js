@@ -25,10 +25,10 @@ const STYLE = `
 .ms-arm-r { transform-origin: 75px 59px; }
 .ms-foot-l { transform-origin: 38px 90px; }
 .ms-foot-r { transform-origin: 62px 90px; }
-.ms-peo .ms-hold { transform-origin: 49px 71px; } .ms-thread { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
-.ms-thread .ms-thread-core { stroke-dasharray: 3 5; animation: ms-thread 1.6s linear infinite; }
-@keyframes ms-thread { to { stroke-dashoffset: -16; } }
-.ms-dreaming { opacity: 0.55; filter: grayscale(0.55) brightness(1.15) drop-shadow(0 0 5px rgba(205, 220, 255, 0.85)); } /* en rêve (pas là) */ .ms-tool-ladle .ms-ladle { display: inline; } .ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
+.ms-peo .ms-hold { transform-origin: 49px 71px; }
+.ms-tool-ladle .ms-ladle { display: inline; } .ms-dust circle { opacity: 0; transform-box: fill-box; transform-origin: center; } .ms-run .ms-dust circle { animation: ms-dust 0.5s ease-out infinite; } .ms-run .ms-dust circle:nth-child(2) { animation-delay: 0.17s; } .ms-run .ms-dust circle:nth-child(3) { animation-delay: 0.34s; } .ms-skid .ms-dust circle { animation-duration: 0.3s; }
+@keyframes ms-dust { 0% { opacity: 0.8; transform: translate(0, 0) scale(0.5); } 100% { opacity: 0; transform: translate(7px, -5px) scale(1.5); } }
+ .ms-peo .ms-head { transform-origin: 49.4px 51px; } .ms-peo .ms-face { transform-origin: 49px 40px; } .ms-peo .ms-arm-l { transform-origin: 40.3px 60px; } .ms-peo .ms-arm-r { transform-origin: 58px 60.2px; } /* PeoPeo : son cou et ses épaules */
 .ms-zzz, .ms-heart, .ms-anger, .ms-brows { opacity: 0; }
 .ms-mad .ms-brows { opacity: 1; }
 .ms-mad .ms-anger { animation: ms-anger 0.45s ease-in-out infinite alternate; }
@@ -56,7 +56,7 @@ const STYLE = `
 .ms-prop { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ms-prop[hidden] { display: none; }
 .ms-prop svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
-.ms-it, .ms-paddle, .ms-tool-paddle .ms-spatula { display: none; }
+.ms-it, .ms-paddle, .ms-tool-paddle .ms-spatula, .ms-fan, .ms-tool-fan .ms-spatula { display: none; } .ms-tool-fan .ms-fan { display: inline; }
 .ms[class*="ms-hold-"] .ms-hold, .ms-tool-on-r .ms-tool-r, .ms-tool-on-l .ms-tool-l, .ms-tool-paddle .ms-paddle,
 .ms-hold-controller .ms-it-controller, .ms-hold-matcha .ms-it-matcha, .ms-hold-beer .ms-it-beer, .ms-hold-pho .ms-it-pho, .ms-hold-fish .ms-it-fish { display: inline; }
 .ms-fishbody { transform: scale(var(--sip, 1)); transform-origin: 50px 76px; fill: #ff9f43; stroke: #d9772a; stroke-width: 1; }
@@ -165,7 +165,10 @@ const spatula = (s) => { const X = (x) => (s > 0 ? x : 100 - x); return `<path d
   <rect x="${s > 0 ? 110 : -22}" y="55" width="12" height="9" rx="1.8" transform="rotate(${-20 * s} ${X(116)} 59.5)" fill="#cfd4e0" stroke="#868ca3" stroke-width="1"/>`; };
 const paddle = (s) => { const X = (x) => (s > 0 ? x : 100 - x); return `<path d="M${X(87)} 69L${X(106)} 62" stroke="#e3d6b8" stroke-width="2.6" stroke-linecap="round"/>
   <ellipse cx="${X(111)}" cy="60" rx="6.5" ry="4.4" transform="rotate(${-20 * s} ${X(111)} 60)" fill="#fbf6ea" stroke="#cdbf9f" stroke-width="1"/>`; };
-const tools = (s) => `<g class="ms-tool-${s > 0 ? "r" : "l"}" display="none"><g class="ms-spatula">${spatula(s)}</g><g class="ms-paddle">${paddle(s)}</g></g>`;
+// Éventail en papier (uchiwa) : pour attiser le feu sous la marmite (action « stir »)
+const fan = (s) => { const X = (x) => (s > 0 ? x : 100 - x); return `<path d="M${X(86)} 66L${X(94)} 75" stroke="#8a5a3b" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="${X(100)}" cy="81" r="9" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.6"/><path d="M${X(100)} 81L${X(92)} 77M${X(100)} 81L${X(95)} 89M${X(100)} 81L${X(104)} 72.5M${X(100)} 81L${X(108.5)} 84" stroke="#e0956a" stroke-width="0.8"/><circle cx="${X(100)}" cy="81" r="3.2" fill="#e8604c"/>`; };
+const tools = (s) => `<g class="ms-tool-${s > 0 ? "r" : "l"}" display="none"><g class="ms-spatula">${spatula(s)}</g><g class="ms-paddle">${paddle(s)}</g><g class="ms-fan">${fan(s)}</g></g>`;
 
 // Tino, le phoque en peluche : grosse tête blanche, yeux fermés, nez gris en deux boules, fleur jaune sur le côté,
 // coussin crème à étoiles de couleur. Repère 100 × 100, pieds posés sur y = 98.
@@ -361,6 +364,10 @@ const CART = `<svg viewBox="0 0 60 56" aria-hidden="true">
   <g class="ms-wheel"><circle cx="48" cy="50" r="5" fill="#3a3c48"/><path d="M48 46V54M44 50H52" stroke="#9aa0b4" stroke-width="1.2"/></g>
 </svg>`;
 // Scooter (va vers la droite ; Tino assis sur la selle, les nageoires au guidon ; traits de vent derrière, roues qui tournent)
+// Tabouret en bois (Tino monte dessus pour touiller la marmite) : étiré à la hauteur voulue (preserveAspectRatio none)
+const STOOL = `<svg viewBox="0 0 40 30" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M8 5L4 29M32 5L36 29" stroke="#8a5a36" stroke-width="3.4" stroke-linecap="round"/><path d="M6 18H34" stroke="#8a5a36" stroke-width="2.2"/>
+  <rect x="1.5" y="1" width="37" height="6" rx="2.2" fill="#c08a55" stroke="#7a5030" stroke-width="1.2"/><path d="M5 3.2H35" stroke="#e0b07c" stroke-width="1" opacity="0.7"/></svg>`;
 const SCOOTER = `<svg viewBox="0 0 80 56" aria-hidden="true">
   <g class="ms-wind" stroke="#dfe7ff" stroke-width="1.6" stroke-linecap="round"><path d="M1 22H11"/><path d="M0 31H8"/><path d="M3 40H12"/></g>
   <g class="ms-wheel"><circle cx="18" cy="48" r="7" fill="#2f3346"/><path d="M18 43V53M13 48H23" stroke="#9aa0b4" stroke-width="1.4"/></g>
@@ -383,6 +390,7 @@ const PROPS = {
   rice: { svg: RICE, vb: [60, 50], w: 0.85, gap: 0.38, flip: true },
   shop: { svg: CART, vb: [60, 56], w: 1, gap: 0.36, flip: true, follow: true, trip: [1.5, 4] },
   scooter: { svg: SCOOTER, vb: [80, 56], w: 1.6, gap: -0.64, flip: true, follow: true, trip: [2.5, 8], seat: 0.7, round: true },
+  stool: { svg: STOOL, vb: [40, 30], w: 0.62, gap: 0, flip: false, center: true }, // (sous lui ; hauteur : prop.h)
 };
 // Coup de spatule : 0 la plupart du temps, puis de 0 à 1 (la saucisse / la crêpe saute et se retourne) à la fin de chaque période
 const flipK = (c, period) => clamp(((c % period) / period - 0.66) / 0.22, 0, 1);
@@ -397,6 +405,7 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
   <g class="ms-zzz-at"><g class="ms-zzz" fill="#d6e2ff" font-family="system-ui, sans-serif" font-weight="700"><text x="78" y="14" font-size="13">z</text><text x="88" y="3" font-size="10">z</text></g></g>
   <g class="ms-heart-at"><path class="ms-heart" d="M50 -2C47 -7 40 -5 41 0C42 4 50 9 50 9C50 9 58 4 59 0C60 -5 53 -7 50 -2Z" fill="#ff8fb3"/></g>
   <g class="ms-dizzy-at"><g class="ms-dizzy">${star(-8, 0, 3, "#ffe27a")}${star(7, -3, 2.6, "#ffd23f")}${star(1, 6, 2.8, "#fff1a8")}</g></g>
+  <g class="ms-dust-at"><g class="ms-dust" fill="rgba(150, 128, 100, 0.55)"><circle r="3"/><circle cx="-3" cy="-1" r="2.4"/><circle cx="2" cy="-2" r="2"/></g></g>
   <g class="ms-anger-at"><g class="ms-anger" style="transform-box: fill-box; transform-origin: center"><path d="M-7 -2Q-2 -2 -2 -7M2 -7Q2 -2 7 -2M7 2Q2 2 2 7M-2 7Q-2 2 -7 2" fill="none" stroke="#ff4d5e" stroke-width="2.6" stroke-linecap="round"/></g></g>
 </svg>`;
 
@@ -408,7 +417,8 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo"];
 export const KINDS = {
   peo: {
-    name: "PeoPeo", svg: () => peoSvg(), size: 50, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
+    name: "PeoPeo", svg: () => peoSvg(), size: 60, wide: 1.12, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
+    // size 60 : 1,5 fois la hauteur de Tino (mesurée sur les pixels : 92,8 unités de haut, Tino 92 → 55,7 px contre 36,8) ; wide : un peu élargi
     only: PEO_ACTIONS, calm: true, home: true, // home : il vit dans la marmite (voir mountMascots, homeTick)
     body: { cy: 56, support: Array(24).fill(42) },
   },
@@ -1075,6 +1085,74 @@ const ACTIONS = {
     busy: true,
   },
 };
+// Tino fait mijoter PeoPeo (absent : il dort dans la marmite) : il monte sur un tabouret à côté de la marmite et touille avec
+// une grande louche (dessinée par l'app dans la marmite : sa nageoire en tient le bout), descend de temps en temps attiser le
+// feu sous la marmite avec un éventail (les flammes grandissent), remonte touiller… L'app (option potFx de mountMascots)
+// dessine la louche, le feu, le bouillon et la vapeur. a.mode : walk (il y va), up / down (il monte / descend du tabouret),
+// stir, fan ; a.side : de quel côté de la marmite il est (+1 = à droite). Plus souvent à l'heure des repas.
+const STOOL_HOP = 0.35, STIR_W = 7; // (s) ; vitesse de la louche (rad/s) : la même pour sa nageoire et la louche de l'app
+ACTIONS.stir = {
+  weight: (m) => (m.eng.peoSimmer?.() && m.stirSpot() ? (m.eng.meal() ? 9 : 5) : 0),
+  make(m) {
+    const s = m.stirSpot();
+    return [...(s.k === m.k ? [] : m.pathTo({ k: s.k, x: s.x })), { type: "stir" }];
+  },
+  start(m, a) {
+    const s = m.stirSpot();
+    if (!s || s.k !== m.k) { a.cancel = true; return; }
+    Object.assign(a, { side: s.side, x: s.x, lift: s.lift, mode: "walk", mt: 0, seq: ["stir", "fan", "stir", ...(Math.random() < 0.5 ? ["fan", "stir"] : [])] });
+    a.fanX = a.x - a.side * m.size * 0.14; // (pour attiser le feu, il descend du tabouret, un petit pas vers la marmite)
+  },
+  step(m, a, dt) {
+    if (a.cancel) return true;
+    const u = a.t - a.mt, set = (mode) => { a.mode = mode; a.mt = a.t; a.dur = mode === "stir" ? rand(3.5, 5) : mode === "fan" ? rand(2.2, 3) : STOOL_HOP; };
+    const gone = !m.eng.peoSimmer?.(); // (PeoPeo est revenu, ou la marmite n'est plus à l'écran : il arrête)
+    if (gone) a.seq = [];
+    if (a.mode === "walk") {
+      if (gone) return true;
+      const d = a.x - m.x, sp = 30 * (m.size / 40) * dt;
+      if (Math.abs(d) > sp) { m.dir = Math.sign(d); m.x += Math.sign(d) * sp; return false; }
+      m.x = a.x; m.dir = -a.side;
+      if (a.lift) m.prop = { kind: "stool", k: m.k, x: a.x, side: 1, act: a, h: a.lift };
+      set("up"); a.seq.shift();
+      return false;
+    }
+    if (a.mode === "up") { m.x = lerp(a.from ?? a.x, a.x, clamp(u / STOOL_HOP, 0, 1)); if (u >= STOOL_HOP) set("stir"); return false; }
+    if (a.mode === "stir") { m.x = a.x; if (u >= a.dur || gone) set("down"); return false; }
+    if (a.mode === "down") {
+      const next = a.seq[0];
+      m.x = lerp(a.x, next === "fan" ? a.fanX : a.x, clamp(u / STOOL_HOP, 0, 1));
+      if (u < STOOL_HOP) return false;
+      a.seq.shift();
+      if (next === "fan") { set("fan"); return false; }
+      if (!gone && Math.random() < 0.5 && !m.bubble) m.say(pick(["Almost ready… 😋", "Simmering nicely 🍲", "Smells good! 😋"]), { ms: 2200 });
+      return true;
+    }
+    if (a.mode === "fan") { m.x = a.fanX; if (u >= a.dur || gone) { a.seq.shift(); set(gone ? "end" : "up"); a.from = a.fanX; if (gone) return true; } return false; }
+    return true;
+  },
+  look: (m, a) => (a.mode === "walk" ? facing(m) : -a.side * LOOK),
+  pose(m, a, p) {
+    if (a.cancel) return;
+    if (a.mode === "walk") { if (Math.abs(a.x - m.x) > 0.5) ACTIONS.walk.pose(m, a, p); return; }
+    const c = m.clock, u = a.t - a.mt, s = a.side, W = m.size, L = a.lift ?? 0, k = clamp(u / STOOL_HOP, 0, 1);
+    const pot = s > 0 ? "armL" : "armR", other = s > 0 ? "armR" : "armL"; // (nageoire du côté de la marmite ; levée : + à gauche, − à droite)
+    if (a.mode === "up" || a.mode === "down") { // il saute sur le tabouret / en descend
+      const h = a.mode === "up" ? k : 1 - k;
+      p.bob = -(L * h + Math.sin(Math.PI * k) * W * 0.16); p.armL = 50; p.armR = -50; p.sy = 1.04; p.sx = 0.97;
+      return;
+    }
+    if (a.mode === "stir") { // debout sur le tabouret, il touille (la louche suit sa nageoire)
+      const ph = c * STIR_W;
+      p.bob = -L; p[pot] = s * (52 + 13 * Math.sin(ph)); p[other] = -s * 18; p.rot = -s * (4 + 2.5 * Math.sin(ph)); p.head = -s * (3 + 2 * Math.sin(ph)); p.sx = 1 + 0.02 * Math.cos(ph);
+      return;
+    }
+    if (a.mode === "fan") { // accroupi près du feu, il agite l'éventail
+      const f = Math.max(0, Math.sin(c * 15));
+      p.sy = 0.9; p.sx = 1.06; p[pot] = s * (10 + 38 * f); p[other] = -s * 12; p.rot = -s * 7; p.head = -s * 5;
+    }
+  },
+};
 // Les actions « free » quittent les plateformes (la marmite est à côté du mois) : leur x n'est pas ramené sur la plateforme.
 // Il saute hors de la marmite (x0, y0 : le bord de la marmite) sur la plateforme p1, en x1 ; il jaillit d'abord (écrasé → étiré)
 ACTIONS.potOut = {
@@ -1128,10 +1206,27 @@ ACTIONS.potIn = {
   },
   busy: true, free: true,
 };
-// PeoPeo poursuit Tino : Tino s'enfuit en courant (flee) vers le bout de la ligne, PeoPeo court derrière (moins vite) ;
-// quand Tino s'arrête, il halète (pant) et PeoPeo fait coucou. Tino doit être libre (pas occupé, pas endormi, pas « reste »)
+// PeoPeo poursuit Tino : il s'approche à pas de loup, bondit → Tino sursaute (« ! ») et s'enfuit. Les deux accélèrent et
+// freinent (pas de vitesse d'un coup), se penchent en avant d'autant plus qu'ils vont vite, font des foulées au rythme de
+// leur vitesse (la phase avance avec la distance : les pieds ne glissent pas), bras en opposition (PeoPeo), petits nuages
+// de poussière ; Tino jette des coups d'œil en arrière. Au bout de la ligne, Tino freine en dérapant ; si PeoPeo est sur ses
+// talons, il fait demi-tour et repasse devant lui (PeoPeo, emporté, dérape, se retourne et repart). Une fois sur deux PeoPeo
+// finit par l'attraper (il le serre : la tête de Tino s'aplatit, « Gotcha! »), sinon Tino s'échappe ; puis ils soufflent
+// tous les deux (PeoPeo les mains sur les genoux). PeoPeo reste derrière Tino à l'écran. Moins de 13 s en tout.
+// Tino doit être libre (pas occupé, pas endormi, pas « reste »).
 const CHASE_FREE = [undefined, "idle", "walk", "sit", "wave", "chat"];
 const canFlee = (t) => !!t && !t.busy() && !t.stay && !t.bubble?.sticky && !t.eng.night() && CHASE_FREE.includes(t.act?.type);
+const RUN = { v: 100, acc: 340, brake: 420, stride: 0.5, max: 7.5 }; // vitesse de Tino (px/s pour une taille de 40), accélération, freinage (px/s²), foulée, plus longue course (× taille : 300 px, sinon trop long sur un ordinateur)
+const runSpeed = (t) => RUN.v * (t.size / 40);
+const chaseLane = (m, P) => [Math.max(P.x0, m.eng.v.left + 20), Math.min(P.x1, m.eng.v.right - 20)]; // (sa ligne, à l'écran)
+const stride = (m, a, dx) => { a.ph = (a.ph ?? 0) + Math.abs(dx) / (RUN.stride * m.size) * Math.PI; };
+// Course : k = vitesse / vitesse maximale ; penché en avant, il rebondit à chaque foulée, un pied puis l'autre
+function runPose(m, a, p, k) {
+  const s = Math.sin(a.ph ?? 0);
+  p.rot = m.dir * (3 + 10 * k) + 2 * s * k; p.bob = -Math.abs(s) * m.size * 0.1 * k;
+  p.footL = -Math.max(0, s) * 4.5 * k; p.footR = -Math.max(0, -s) * 4.5 * k;
+  p.run = k > 0.3;
+}
 ACTIONS.chase = {
   weight(m) {
     const t = m.eng.buddy?.(m, "tino");
@@ -1141,31 +1236,88 @@ ACTIONS.chase = {
     const t = m.eng.buddy?.(m, "tino"), side = t.x >= m.x ? 1 : -1, go = { type: "chase" }, after = { type: "wave", dur: 1.8 };
     if (t.k === m.k) return [go, after];
     const P = t.plat();
-    return [...m.pathTo({ k: t.k, x: clamp(t.x - side * m.size, P.x0, P.x1) }), go, after];
+    return [...m.pathTo({ k: t.k, x: clamp(t.x - side * m.size * 1.8, P.x0, P.x1) }), go, after]; // (d'un peu loin : il s'approche à pas de loup)
   },
   start(m, a) {
     const t = m.eng.buddy?.(m, "tino"), P = m.plat();
     if (!canFlee(t) || t.k !== m.k || !P) { a.skip = true; return; }
-    const lo = Math.max(P.x0, m.eng.v.left + 20), hi = Math.min(P.x1, m.eng.v.right - 20);
-    let away = t.x >= m.x ? 1 : -1, end = away > 0 ? hi : lo;
-    if (Math.abs(end - t.x) < 60) { away = -away; end = away > 0 ? hi : lo; } // (coincé au bout : il file de l'autre côté, en passant devant lui)
-    t.now([{ type: "flee", x: end }, { type: "pant", dur: rand(3, 4) }]);
-    a.tino = t;
+    a.tino = t; a.mode = "sneak"; a.v = 0; a.ph = 0; a.catch = Math.random() < 0.5;
   },
   step(m, a, dt, me) {
     if (a.skip) return true;
-    const t = a.tino, fleeing = t.act?.type === "flee" && t.k === m.k;
-    if (fleeing) {
-      const away = t.act.x >= t.x ? 1 : -1, d = t.x - away * t.size * 1.1 - m.x, sp = 70 * (m.size / 40) * dt;
-      if (Math.abs(d) > 1) { m.dir = d < 0 ? -1 : 1; m.x = clamp(m.x + clamp(d, -sp, sp), me.x0, me.x1); }
+    const t = a.tino, [lo, hi] = chaseLane(m, me), vt = runSpeed(t), gap = t.size * 0.38 + m.size * 0.25; // (contact : centre à centre)
+    if (a.mode === "pant") return a.t - a.mt > 2.4;
+    if (!t || t.el.hidden || t.inPot || t.k !== m.k || a.t > 13) return true;
+    const d = t.x - m.x, to = Math.sign(d) || m.dir, fleeing = t.act?.type === "flee", ta = t.act;
+    const go = (v) => { const dx = m.dir * v * dt, x = clamp(m.x + dx, lo, hi); stride(m, a, x - m.x); m.x = x; };
+    const mode = (x) => { a.mode = x; a.mt = a.t; };
+    if (a.mode === "sneak") { // à pas de loup, penché, les mains en avant
+      if (!canFlee(t)) return true;
+      m.dir = to;
+      if (Math.abs(d) > gap * 1.9 && a.t < 2.2) { go(18 * (m.size / 40)); return false; }
+      let away = to, end = away > 0 ? hi : lo;
+      if (Math.abs(end - t.x) < 60) { away = -away; end = away > 0 ? hi : lo; } // (coincé au bout : il file de l'autre côté, en passant devant lui)
+      end = clamp(end, t.x - RUN.max * t.size, t.x + RUN.max * t.size);
+      t.now([{ type: "flee", x: end, by: m, tired: a.catch }, { type: "pant", dur: rand(3, 4) }]);
+      mode("pounce");
+      return false;
     }
-    return (!fleeing && a.t > 0.4) || a.t > 8;
+    if (a.mode === "pounce") { if (a.t - a.mt > 0.35) mode("run"); return false; } // il bondit
+    if (a.mode === "tag") { // il le serre (Tino gigote, sa tête s'aplatit)
+      m.x = clamp(t.x - m.dir * gap * 0.75, lo, hi);
+      t.squishTo = 0.45 + 0.1 * Math.sin(m.clock * 9); t.squishUntil = t.clock + 0.15;
+      if (a.t - a.mt > 1.5) mode("pant");
+      return false;
+    }
+    if (a.mode === "skid") { a.v = Math.max(0, a.v - RUN.brake * 0.9 * dt); go(a.v); if (!a.v) { mode("turn"); if (!m.bubble) m.say("?!", { ms: 700 }); } return false; }
+    if (a.mode === "turn") { if (a.t - a.mt > 0.4) { m.dir = to; mode("run"); } return false; }
+    // il court : Tino repassé derrière lui → emporté, il dérape ; sinon il le rattrape (ou pas : une fois sur deux)
+    if (to !== m.dir && a.v > vt * 0.3) { mode("skid"); return false; }
+    m.dir = to;
+    const vmax = fleeing ? vt * (ta.turns ? (a.catch ? 1.3 : 0.8) : 0.9) : vt * (a.catch ? 1.1 : 0.55);
+    const stop = !fleeing && !a.catch ? Math.max(0, Math.abs(d) - gap * 1.8) : Infinity; // (il a perdu : il s'arrête avant lui)
+    a.v = Math.min(vmax, a.v + RUN.acc * 0.85 * dt, Math.sqrt(2 * RUN.brake * stop));
+    const headOn = fleeing && t.dir !== m.dir; // (Tino a fait demi-tour et revient vers lui : il ne freine pas, il le croise)
+    if (Math.abs(d) < gap) {
+      if (a.catch && ta?.mode !== "startle") {
+        mode("tag"); a.v = 0;
+        t.now([{ type: "caught", dur: 1.5, by: m }, { type: "pant", dur: rand(2.6, 3.4) }]);
+        m.love(); t.love(); if (!m.bubble) m.say("Gotcha! 😆", { ms: 1500 });
+        return false;
+      }
+      if (!headOn) a.v = Math.min(a.v, ta?.v ?? 0); // (juste derrière lui)
+    }
+    go(a.v);
+    if (!fleeing && !a.catch && a.v < 1 && Math.abs(d) <= gap * 1.9) mode("pant");
+    return false;
   },
-  look: facing,
-  pose(m, a, p) { // il court : grandes enjambées, bras qui balancent fort
-    const ph = m.clock * 17;
-    p.rot = m.dir * 6 + 4 * Math.sin(ph); p.bob = -Math.abs(Math.sin(ph)) * m.size * 0.09; p.armL = 40 * Math.sin(ph); p.armR = 40 * Math.sin(ph);
-    p.footL = -Math.max(0, Math.sin(ph)) * 4.5; p.footR = -Math.max(0, -Math.sin(ph)) * 4.5;
+  look: (m, a) => (a.mode === "turn" && a.t - a.mt < 0.25 ? -m.dir * LOOK : facing(m)),
+  pose(m, a, p) {
+    p.behind = true; // (derrière Tino à l'écran)
+    const c = m.clock, u = a.t - (a.mt ?? 0), vt = runSpeed(a.tino ?? m);
+    if (a.skip) return;
+    if (a.mode === "sneak") { // pas de loup : accroupi, penché, les mains en avant comme des griffes
+      const s = Math.sin(a.ph ?? 0);
+      p.sy = 0.9; p.sx = 1.04; p.rot = m.dir * 8; p.bob = -Math.abs(s) * m.size * 0.02;
+      p.armL = 75 + 8 * Math.sin(c * 6); p.armR = 60 + 8 * Math.sin(c * 6 + 1); p.footL = -Math.max(0, s) * 2.5; p.footR = -Math.max(0, -s) * 2.5; p.head = 4;
+    } else if (a.mode === "pounce") { // il bondit, bras tendus
+      const k = clamp(u / 0.35, 0, 1);
+      p.rot = m.dir * 18; p.sy = 1.06; p.sx = 0.95; p.bob = -Math.sin(Math.PI * k) * m.size * 0.12; p.armL = p.armR = 100;
+    } else if (a.mode === "skid") { // emporté : il dérape, penché en arrière, les bras en arrière
+      const k = clamp(a.v / vt, 0, 1);
+      p.rot = -m.dir * 14 * (0.4 + k); p.armL = p.armR = -55; p.footL = p.footR = -1; p.sy = 0.96; p.run = true; p.skid = true;
+    } else if (a.mode === "turn") { // il se retourne
+      const k = clamp(u / 0.4, 0, 1);
+      p.sx = 1 - 0.15 * Math.sin(Math.PI * k); p.armL = 30; p.armR = -30; p.head = 6 * Math.sin(c * 20) * (1 - k);
+    } else if (a.mode === "tag") { // il le serre dans ses bras
+      p.rot = m.dir * 10; p.armL = p.armR = 92 + 6 * Math.sin(c * 9); p.sy = 0.97; p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.02;
+    } else if (a.mode === "pant") ACTIONS.pant.pose(m, { t: u, dur: 2.4 }, p);
+    else { // il court, bras en opposition ; tout près de Tino : les mains tendues pour l'attraper
+      const k = clamp(a.v / vt, 0, 1), s = Math.sin(a.ph ?? 0), t = a.tino, reach = t && Math.abs(t.x - m.x) < (t.size * 0.38 + m.size * 0.25) * 1.7 && k > 0.4;
+      runPose(m, a, p, k);
+      if (reach) { p.armL = 95 + 10 * s; p.armR = 85 - 10 * s; }
+      else { p.armL = 55 * s * k; p.armR = -55 * s * k; }
+    }
   },
 };
 // Avec Tino (duo) : PeoPeo le rejoint quand il joue, cuisine, boit une bière ou fait la sieste, ou l'invite à le faire
@@ -1228,7 +1380,7 @@ ACTIONS.duo = {
     const r = a.ref;
     if (t.act !== r) return true; // Tino a fini (ou on l'a interrompu)
     let x;
-    if (a.kind === "game") { a.dir = r.side; x = t.x - r.side * 36; }
+    if (a.kind === "game") { a.dir = r.side; x = t.x - r.side * (t.size * 0.45 + m.size * 0.3); }
     else if (a.kind === "cook") { const D = PROPS[r.type]; a.dir = -r.side; x = t.x + r.side * ((D.gap + D.w / 2) * t.size + 22); }
     else if (a.kind === "scooter") {
       if (r.crashT != null) { // il vole aussi, un peu plus loin que Tino (pas sur lui)
@@ -1239,7 +1391,7 @@ ACTIONS.duo = {
       a.dir = r.side; x = t.x - r.side * 8;
       if (r.t >= 0.5 || a.riding) { a.riding = !r.ended; a.here = true; m.x = lerp(m.x, clamp(x, me.x0, me.x1), Math.min(1, dt * 12)); m.dir = a.dir; return false; }
     } else { // bière, sieste : à côté de lui, du côté où il est (ou de l'autre s'il n'y a pas la place)
-      const gap = a.kind === "beer" ? 27 : 24;
+      const gap = (a.kind === "beer" ? 0.42 : 0.38) * t.size + 0.25 * m.size; // (bière : les chopes se touchent ; sieste : sa main sur la tête de Tino)
       if (!a.bs) { a.bs = Math.sign(m.x - t.x) || 1; if (t.x + a.bs * gap < me.x0 || t.x + a.bs * gap > me.x1) a.bs = -a.bs; }
       a.dir = -a.bs; x = t.x + a.bs * gap;
       if (a.kind === "beer") r.with = a.bs;
@@ -1264,6 +1416,7 @@ ACTIONS.duo = {
   ladle: (m, a) => a.here && a.kind === "cook",
   look: facing,
   pose(m, a, p) {
+    p.behind = true; // (derrière Tino à l'écran : jamais devant lui)
     if (a.crashT != null) { crashPose(m, a, p); return; }
     if (!a.here) { if (a.moving) ACTIONS.walk.pose(m, a, p); return; }
     const c = m.clock, r = a.ref, t = a.tino;
@@ -1295,28 +1448,66 @@ function duoWalk(m, a, x, dt, me) {
   m.dir = d < 0 ? -1 : 1; m.x += clamp(d, -sp, sp);
   return false;
 }
-// Tino s'enfuit (poursuivi par PeoPeo) : il court vite en agitant les nageoires
+// Tino s'enfuit (poursuivi par PeoPeo, a.by) : il sursaute (« ! »), accélère, court en agitant les nageoires et jette des
+// coups d'œil en arrière ; au bout de sa ligne, il freine en dérapant ; s'il est talonné et qu'il y a la place, il fait
+// demi-tour une fois et repasse devant PeoPeo (a.turns). tired : une fois sur deux, il fatigue au retour (PeoPeo l'attrape)
 ACTIONS.flee = {
+  start(m, a) { a.mode = "startle"; a.v = 0; a.ph = 0; a.turns = 0; a.glance = 0; a.glanceT = rand(0.7, 1.1); if (!m.bubble) m.say("!", { ms: 700 }); },
   step(m, a, dt, me) {
-    const d = clamp(a.x, me.x0, me.x1) - m.x, sp = 95 * (m.size / 40) * dt;
-    if (d) m.dir = d < 0 ? -1 : 1;
-    if (Math.abs(d) <= sp || a.t > 5) { m.x += clamp(d, -sp, sp); return true; }
-    m.x += Math.sign(d) * sp;
+    const [lo, hi] = chaseLane(m, me), by = a.by, vmax = runSpeed(m) * (a.tired && a.turns ? 0.82 : 1);
+    if (a.mode === "startle") { if (a.t > 0.4) a.mode = "run"; return false; }
+    if (a.mode === "turn") { if (a.t - a.mt > 0.28) a.mode = "run"; return false; }
+    if (a.t > 11) return true;
+    const d = clamp(a.x, lo, hi) - m.x;
+    if (a.mode === "run") {
+      if (d) m.dir = d < 0 ? -1 : 1;
+      a.v = Math.min(vmax, a.v + RUN.acc * dt);
+      if (Math.abs(d) <= a.v * a.v / (2 * RUN.brake) + 2) a.mode = "skid";
+      if ((a.glanceT -= dt) < 0) { a.glance = a.glance ? 0 : 1; a.glanceT = a.glance ? 0.3 : rand(0.8, 1.4); } // coup d'œil en arrière
+    } else { // il dérape jusqu'au bout
+      a.v = Math.max(0, a.v - RUN.brake * dt);
+      if (a.v < 1) {
+        const near = by && !by.el.hidden && by.k === m.k && Math.abs(by.x - m.x) < (m.size + by.size) * 1.2, other = m.dir > 0 ? lo : hi;
+        if (near && a.turns < 1 && Math.abs(other - m.x) > 3 * m.size) { a.turns++; a.x = clamp(other, m.x - RUN.max * m.size, m.x + RUN.max * m.size); a.mode = "turn"; a.mt = a.t; a.v = 0; a.glance = 0; return false; }
+        return true;
+      }
+    }
+    const x = clamp(m.x + m.dir * a.v * dt, lo, hi);
+    stride(m, a, x - m.x); m.x = x;
+    return false;
   },
-  look: facing,
+  look: (m, a) => (a.mode === "startle" || a.mode === "turn" || a.glance ? -m.dir * LOOK : m.dir * LOOK),
   pose(m, a, p) {
-    const ph = m.clock * 20;
-    p.rot = m.dir * 7 + 5 * Math.sin(ph); p.bob = -Math.abs(Math.sin(ph)) * m.size * 0.1;
-    p.armL = 65 + 25 * Math.sin(ph); p.armR = -(65 + 25 * Math.sin(ph + 1));
-    p.footL = -Math.max(0, Math.sin(ph)) * 3.5; p.footR = -Math.max(0, -Math.sin(ph)) * 3.5;
+    const c = m.clock;
+    if (a.mode === "startle") { // il sursaute : petit bond, nageoires en l'air
+      const k = clamp(a.t / 0.4, 0, 1);
+      p.bob = -Math.sin(Math.PI * k) * m.size * 0.28; p.armL = 120; p.armR = -120; p.sy = 1.06; p.sx = 0.95; return;
+    }
+    if (a.mode === "turn") { p.sx = 1 - 0.18 * Math.sin(Math.PI * clamp((a.t - a.mt) / 0.28, 0, 1)); p.armL = 100; p.armR = -100; return; }
+    const k = clamp(a.v / runSpeed(m), 0, 1), s = Math.sin(a.ph ?? 0);
+    if (a.mode === "skid") { // freine : penché en arrière, nageoires qui battent l'air
+      p.rot = -m.dir * 12 * (0.3 + k); p.armL = 80 + 25 * Math.sin(c * 30); p.armR = -(80 + 25 * Math.sin(c * 30 + 1)); p.footL = p.footR = -1; p.sy = 0.96; p.run = k > 0.1; p.skid = true; return;
+    }
+    runPose(m, a, p, k);
+    p.armL = 55 + 35 * s * k + 10 * Math.sin(c * 25); p.armR = -(55 - 35 * s * k + 10 * Math.sin(c * 25 + 1)); // il agite les nageoires
   },
 };
-// … puis il halète, essoufflé (il souffle vite, la tête qui bat, « huff… huff… 💦 »)
+// Attrapé (PeoPeo le serre) : il gigote, la tête aplatie, puis il rit
+ACTIONS.caught = {
+  look: (m, a) => (a.by ? Math.sign(a.by.x - m.x) * LOOK : 0),
+  pose(m, a, p) {
+    const c = m.clock;
+    p.armL = 70 + 30 * Math.sin(c * 22); p.armR = -(70 + 30 * Math.sin(c * 22 + 1)); p.footL = 2 * Math.sin(c * 18); p.footR = -p.footL; p.sy = 0.95; p.sx = 1.05;
+    if (a.t > 1) p.bob = -Math.abs(Math.sin(c * 10)) * m.size * 0.05; // (il rit)
+  },
+};
+// … puis il halète, essoufflé (il souffle vite, « huff… huff… 💦 ») ; PeoPeo : penché, les mains sur les genoux, sans bulle
 ACTIONS.pant = {
-  start(m, a) { if (!m.bubble) m.say("huff… huff… 💦", { ms: a.dur * 1000 }); },
-  look: () => 0,
+  start(m, a) { if (!m.bubble && !m.def.home) m.say("huff… huff… 💦", { ms: a.dur * 1000 }); },
+  look: (m) => (m.def.home ? facing(m) : 0),
   pose(m, a, p) {
     const c = m.clock, k = smooth(clamp((a.dur - a.t) / 0.6, 0, 1)), b = Math.abs(Math.sin(c * 9)) * k;
+    if (m.def.home) { p.rot = m.dir * 16 * k; p.sy = 1 - 0.05 * b; p.sx = 1 + 0.03 * b; p.head = 6 * k + 3 * Math.sin(c * 9) * k; p.armL = 35 * k; p.armR = 25 * k; p.bob = m.size * 0.02 * k; return; }
     p.sy = 1 - 0.06 * b; p.sx = 1 + 0.045 * b; p.head = 8 * k + 4 * Math.sin(c * 9) * k; p.armL = -26 * k; p.armR = 26 * k; p.rot = 2 * Math.sin(c * 4.5) * k;
   },
 };
@@ -1335,7 +1526,7 @@ class Mascot {
     this.el.mascot = this; // (pour les essais depuis la console : document.querySelector(".ms").mascot)
     this.el.innerHTML = `<div class="ms-in">${def.svg()}</div>${FX}`;
     this.inner = this.el.firstChild;
-    for (const k of ["head", "face", "cheeks", "flush", "dizzy-at", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "bub-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    for (const k of ["head", "face", "cheeks", "flush", "dizzy-at", "dust-at", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "bub-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
     this.holdG = this.el.querySelector(".ms-hold"); this.inHands = null; // ce qu'il tient devant lui (classe ms-hold-<nom>) — (this.hold : minuterie de l'appui long)
     this.taps = [];
     if (eng.outfit) this.wear(eng.outfit);
@@ -1422,6 +1613,23 @@ class Mascot {
     if (this.dropIn("top")) this.x = this.act.x1;
   }
   rollDist() { return Math.PI * 0.72 * this.size; } // distance d'un tour complet (il roule sans glisser)
+  // Faire mijoter PeoPeo : où se mettre à côté de la marmite (eng.home("peo") : { x, y = bord, bottom = fond, half = demi-largeur }),
+  // sur la plateforme à l'écran juste sous la marmite (au plus 40 px plus bas), du côté où il y a la place (de préférence le
+  // sien) ; lift = hauteur du tabouret pour que sa nageoire levée arrive juste au-dessus du bord ; null s'il n'y a pas moyen
+  stirSpot() {
+    const H = this.eng.home?.("peo"), v = this.eng.v;
+    if (!H?.bottom || H.y - 20 < v.top || H.bottom > v.bottom) return null;
+    const P = this.eng.plats.filter((q) => this.eng.visible(q) && q.y >= H.bottom - 2 && q.y - H.bottom <= 40 && H.x >= q.x0 - 60 && H.x <= q.x1 + 60).sort((a, b) => a.y - b.y)[0];
+    if (!P) return null;
+    const W = this.size, lift = Math.max(0, P.y - (H.y - 4) - 0.48 * W); // (nageoire levée : 48 % de sa taille au-dessus de ses pieds)
+    if (lift > 0.9 * W) return null;
+    const first = Math.sign(this.x - H.x) || 1;
+    for (const side of [first, -first]) {
+      const x = H.x + side * (H.half + W * 0.36);
+      if (x - W * 0.4 >= Math.max(P.x0 - 10, v.left) && x + W * 0.4 <= Math.min(P.x1 + 10, v.right)) return { k: P.key, x, side, lift: lift < 4 ? 0 : lift };
+    }
+    return null;
+  }
   // Où se mettre pour poser un objet à côté de lui sur sa plateforme (sans déborder de plus de 10 px, ni sortir de
   // l'écran) : { side, x } — du côté où il regarde si possible, en marchant un peu si besoin ; null s'il n'y a pas la place
   propSpot(kind, me = this.plat()) {
@@ -1479,7 +1687,6 @@ class Mascot {
     const t = performance.now();
     this.taps = [...this.taps.filter((x) => t - x < TEASE_MS), t];
     if (this.taps.length >= TEASE_TAPS && !this.def.calm) { this.taps = []; this.grumble(); } // trop c'est trop
-    else if (this.dream) { if (!this.bubble) this.say(`💤 ${this.def.name} isn't here right now`, { ms: 2800 }); } // (en rêve : ce n'est pas vraiment lui)
     else { if (this.act?.type !== "swim") this.now([{ type: "react" }]); this.love(); } // dans l'eau : juste un cœur, il continue
     this.el.style.pointerEvents = "none";
     const under = document.elementFromPoint(ev.clientX, ev.clientY);
@@ -1722,13 +1929,14 @@ class Mascot {
     const bw = this.bedK > 0.001 ? this.bedWidth() : 0, onMattress = this.bedK * bw * (BED_H - MATTRESS) / BED_W; // dans son lit : posé sur le matelas
     const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * (this.def.sink ?? SINK) * u + lift - onMattress;
     const mir = this.def.facesLeft && this.dir > 0 ? -1 : 1, look = this.look * mir; // (PeoPeo regarde vers la gauche : retourné en entier quand il va à droite)
-    this.el.classList.toggle("ms-sleep", !!A.zzz || !!this.dream);
-    this.el.classList.toggle("ms-dreaming", !!this.dream);
+    this.el.classList.toggle("ms-sleep", !!A.zzz);
     this.el.classList.toggle("ms-mad", a.type === "angry" || (a.t !== undefined && gameMad(a)));
     this.el.classList.toggle("ms-swim", a.type === "swim" && !!a.wet);
     const busyHands = a.t !== undefined && ["cook", "bbq", "rice"].includes(a.type); // spatule dans la nageoire du côté de l'objet
-    this.el.classList.toggle("ms-tool-on-r", busyHands && a.side > 0);
-    this.el.classList.toggle("ms-tool-on-l", busyHands && a.side < 0);
+    const fanning = a.type === "stir" && a.mode === "fan"; // (éventail dans la nageoire du côté de la marmite : à gauche s'il est à droite de la marmite)
+    this.el.classList.toggle("ms-tool-on-r", (busyHands && a.side > 0) || (fanning && a.side < 0));
+    this.el.classList.toggle("ms-tool-on-l", (busyHands && a.side < 0) || (fanning && a.side > 0));
+    this.el.classList.toggle("ms-tool-fan", fanning);
     this.el.classList.toggle("ms-tool-paddle", a.type === "rice"); // (spatule à riz)
     this.el.classList.toggle("ms-fish-big", a.type === "eat" && a.fish === "big_fish"); // (poisson qu'il mange : gros, doré)
     this.el.classList.toggle("ms-fish-gold", a.type === "eat" && a.fish === "golden_fish" && !a.burnt); // (un poisson doré cuit reste doré)
@@ -1744,7 +1952,7 @@ class Mascot {
     }
     this.el.style.transform = `translate3d(${(this.x - W / 2).toFixed(1)}px, ${(this.y - W * 0.98).toFixed(1)}px, 0)`;
     this.inner.style.transform = `translateY(${down.toFixed(2)}px)` + (p.spin ? ` translateY(${pivot.toFixed(2)}px) rotate(${p.spin.toFixed(1)}deg) translateY(${(-pivot).toFixed(2)}px)` : "")
-      + ` rotate(${p.rot.toFixed(2)}deg) scale(${(p.sx * mir).toFixed(3)}, ${p.sy.toFixed(3)})`;
+      + ` rotate(${p.rot.toFixed(2)}deg) scale(${(p.sx * mir * (this.def.wide ?? 1)).toFixed(3)}, ${p.sy.toFixed(3)})`;
     this.head.style.transform = `rotate(${(p.head + look * 0.4).toFixed(2)}deg)` + (f ? ` scale(${(1 + 0.24 * f).toFixed(3)}, ${(1 - 0.42 * f).toFixed(3)})` : "");
     // Rouge : quand il boit une bière, et encore 2 min après (s'efface dans les 20 dernières secondes) ; joues aussi quand on le frotte
     const red = Math.max(p.blush, this.redUntil ? this.redMax * clamp((this.redUntil - Date.now()) / 20000, 0, 1) : 0);
@@ -1754,6 +1962,8 @@ class Mascot {
     if (fk !== this.flushK) { this.flushK = fk; this.flush.setAttribute("opacity", (0.045 * fk).toFixed(3)); }
     this.el.classList.toggle("ms-undressed", !!A.zzz && this.lie > 0.5); // il dort couché : sans ses habits
     this.el.classList.toggle("ms-dizzy-on", p.dizzy);
+    this.el.classList.toggle("ms-run", !!p.run); this.el.classList.toggle("ms-skid", !!p.skid); // (poussière derrière ses pieds)
+    if (p.run) this.dust_at.style.transform = `translate(${(50 - this.dir * 16).toFixed(1)}px, 97px) scaleX(${-this.dir})`;
     this.face.style.transform = `translateX(${look.toFixed(2)}px) scaleX(${(1 - Math.abs(look) / 90).toFixed(3)})`;
     this.flower.style.transform = `translate(${(-look * 0.5).toFixed(2)}px, ${(Math.abs(look) * 0.15).toFixed(2)}px)`;
     this.arm_l.style.transform = `translateX(${(look * 0.2).toFixed(2)}px) rotate(${p.armL.toFixed(1)}deg)`;
@@ -1781,9 +1991,9 @@ class Mascot {
     const pr = this.prop, P = pr && this.plat(pr.k), show = this.propK > 0.01 && !!P;
     this.propEl.style.visibility = show ? "visible" : "hidden";
     if (!show) { this.bannerEl.style.visibility = "hidden"; return; }
-    const D = PROPS[pr.kind], W = this.size, w = W * D.w, h = w * D.vb[1] / D.vb[0];
+    const D = PROPS[pr.kind], W = this.size, w = W * D.w, h = pr.h ?? w * D.vb[1] / D.vb[0];
     if (this.propKind !== pr.kind) { this.propKind = pr.kind; this.propEl.innerHTML = D.svg; this.propFood = this.propEl.querySelector(".ms-food"); }
-    const near = (D.follow && !pr.stay ? this.x : pr.x) + pr.side * W * D.gap, left = pr.side > 0 ? near : near - w; // (caddie, scooter : le suit ; accident : reste là)
+    const near = (D.follow && !pr.stay ? this.x : pr.x) + pr.side * W * D.gap, left = D.center ? pr.x - w / 2 : pr.side > 0 ? near : near - w; // (caddie, scooter : le suit ; accident : reste là ; tabouret : centré)
     this.propEl.style.width = w.toFixed(1) + "px";
     this.propEl.style.height = h.toFixed(1) + "px";
     this.propEl.style.opacity = this.propK.toFixed(3);
@@ -1888,7 +2098,7 @@ const pageView = () => ({ top: scrollY, bottom: scrollY + innerHeight, left: scr
 // grumbles() : ses phrases râleuses quand on le touche 5 fois de suite
 // siesta() : sa sieste après le repas (12:30 – 13:00 par défaut) — il dort dans son lit, comme la nuit ;
 // meal() : l'heure des repas (11:30 – 12:30 et 18:30 – 19:30 par défaut) — il cuisine ou fait un barbecue (et ne joue pas)
-export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, siesta = isSiesta, meal = isMeal, tapThrough = () => true, lines = () => [], grumbles = () => [], belly = () => null, home = () => null, onHome = () => {}, together = () => false }) {
+export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, siesta = isSiesta, meal = isMeal, tapThrough = () => true, lines = () => [], grumbles = () => [], belly = () => null, home = () => null, onHome = () => {}, together = () => false, potFx = () => {} }) {
   injectStyle();
   layer.classList.add("ms-layer");
   // (la sieste fait tout comme la nuit : case d'aujourd'hui, lit, pas de nage…) ; ensemble (MeoMeo et PeoPeo là) : Tino reste éveillé
@@ -1902,28 +2112,17 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
   // L'autre personnage (key), s'il est à l'écran (pas parti, pas dans la marmite)
   eng.buddy = (m, key) => list.find((x) => x !== m && x.def.key === key && !x.away && !x.inPot && !x.el.hidden) ?? null;
-  // Le fil de l'âme (PeoPeo absent : son âme se promène, son corps dort dans la marmite) : de sa tête dans la marmite à
-  // l'âme, en coordonnées de la page, redessiné à chaque image ; ondule doucement
-  const thread = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  thread.setAttribute("class", "ms-thread");
-  thread.setAttribute("aria-hidden", "true");
-  thread.innerHTML = '<path class="ms-thread-glow" fill="none" stroke="rgba(190, 215, 255, 0.28)" stroke-width="6" stroke-linecap="round"/>'
-    + '<path class="ms-thread-mid" fill="none" stroke="rgba(215, 232, 255, 0.55)" stroke-width="2" stroke-linecap="round"/>'
-    + '<path class="ms-thread-core" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"/>';
-  layer.append(thread);
-  const threadPaths = [...thread.querySelectorAll("path")];
-  let threadOn = false;
-  const drawThread = () => {
-    const m = list.find((x) => x.def.home);
-    const H = m && m.dream && !m.inPot && !m.away && !m.el.hidden && !reduce.matches ? home(m.def.key) : null;
-    if (!H) { if (threadOn) { thread.style.display = "none"; threadOn = false; } return; }
-    if (!threadOn) { thread.style.display = ""; threadOn = true; }
-    const t = performance.now() / 1000, hx = H.x, hy = H.y - 20, sx = m.x, sy = m.y - m.size * 0.8;
-    const lift = Math.min(90, 30 + Math.hypot(sx - hx, sy - hy) * 0.25);
-    const c1x = hx + 14 * Math.sin(t * 1.3), c1y = Math.min(hy, sy) - lift + 8 * Math.sin(t * 0.9);
-    const c2x = sx + 16 * Math.sin(t * 1.1 + 1), c2y = sy - lift * 0.8 + 8 * Math.cos(t * 1.2);
-    const d = `M${hx.toFixed(1)} ${hy.toFixed(1)}C${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${sx.toFixed(1)} ${sy.toFixed(1)}`;
-    threadPaths.forEach((p) => p.setAttribute("d", d));
+  // PeoPeo est absent et dort dans sa marmite : Tino peut le faire mijoter (action « stir »)
+  eng.peoSimmer = () => { const p = list.find((x) => x.def.home); return !!p && !!p.dream && p.inPot && !p.away && !together(); };
+  // La marmite pendant que Tino fait mijoter PeoPeo : l'app (potFx) dessine la louche jusqu'à sa nageoire, le feu, la vapeur
+  // — à chaque image ; null quand c'est fini, interrompu, ou que l'animation s'arrête (autre onglet, plus d'animations…)
+  let potOn = false;
+  const potLink = (off = false) => {
+    const t = list.find((x) => x.def.key === "tino"), a = t?.act;
+    const on = !off && !!a && a.type === "stir" && a.t !== undefined && !a.cancel && !t.el.hidden && !t.away && !reduce.matches;
+    if (!on && !potOn) return;
+    potOn = on;
+    potFx(on ? { mode: a.mode, side: a.side, phase: t.clock * STIR_W, paw: t.el.querySelector(a.side > 0 ? ".ms-arm-l > ellipse" : ".ms-arm-r > ellipse") } : null);
   };
   const hideAll = (m, h) => { m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = h; if (m.bubble) m.bubble.el.hidden = h; };
   // Il plonge dans la marmite (fin de potIn) : caché, sa tête ressort de la marmite (onHome → l'app)
@@ -1947,9 +2146,16 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   // La marmite (home) : dedans, il en sort au bout de potT (si elle est à l'écran, le jour, avec des plateformes) ; dehors, au
   // bout de outT — ou à la nuit — il y retourne (si elle est à l'écran ; sinon il attend), pas au milieu d'une poursuite.
   // Ensemble : c'est la scène commune qui dit s'il est dedans ou dehors (et en sortant, il fait tout de suite sa part de la scène)
+  // Absent (dream) : il reste dans la marmite, endormi (Tino le fait mijoter : action « stir ») ; s'il était dehors, il y
+  // retourne — en sautant si la marmite est à l'écran, sinon directement (pas au milieu d'un accident de scooter)
   const homeTick = (m, dt) => {
     if (!m.def.home || m.away || !eng.plats.length) return;
     const H = home(m.def.key), seen = !!H && H.y >= eng.v.top && H.y <= eng.v.bottom;
+    if (m.dream) {
+      if (m.inPot || m.act?.type === "potIn" || m.busy()) return;
+      if (seen && !reduce.matches) m.now([{ type: "potIn" }]); else eng.enterPot(m);
+      return;
+    }
     if (together()) {
       const sc = scene(slotNow());
       if (m.inPot) { if (sc.peoOut && seen && !reduce.matches && leavePot(m, H)) m.plan = buddyScene(m, sc); }
@@ -2015,6 +2221,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       if (reduce.matches) still(m);
       m.render();
     });
+    potLink(reduce.matches || !eng.plats.length);
   }
 
   // « Réduire les animations » : une pose fixe — la nuit, couché dans son lit (dans la case d'aujourd'hui si elle est à
@@ -2045,11 +2252,11 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     if ((since += dt) > 0.5) {
       since = 0;
       measure();
-      if (!eng.plats.length) { raf = 0; return; }
+      if (!eng.plats.length) { raf = 0; potLink(true); return; }
     } else eng.v = view();
     sceneTick();
     list.forEach((m) => { homeTick(m, dt); if (m.away || m.inPot) return; follow(m); m.update(dt); m.render(); });
-    drawThread();
+    potLink();
     raf = requestAnimationFrame(frame);
   }
 
@@ -2077,7 +2284,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   function run() {
     cancelAnimationFrame(raf);
     raf = 0;
-    if (document.hidden || reduce.matches || !eng.plats.length) return;
+    if (document.hidden || reduce.matches || !eng.plats.length) { potLink(true); return; }
     last = performance.now();
     raf = requestAnimationFrame(frame);
   }
@@ -2112,14 +2319,15 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       m.placed = false; // (au prochain mesurage : la case d'aujourd'hui si elle est à l'écran, sinon il tombe du haut)
       refresh(); run();
     },
-    // PeoPeo n'a pas l'app ouverte (on) / est là : en rêve — il dort dans la marmite et c'est son âme qui sort (pâle et
-    // transparente, yeux fermés, « z », reliée par le fil) ; elle fait tout pareil (sorties, Tino…) ; toucher → « isn't here »
+    // PeoPeo n'a pas l'app ouverte (on) / est là : absent, il reste dans la marmite, endormi (homeTick l'y ramène s'il était
+    // dehors) ; Tino le fait mijoter de temps en temps (action « stir »)
     setDream(kind, on) {
       const m = list.find((x) => x.def.key === kind);
       if (!m || m.dream === !!on) return;
       m.dream = !!on; m.away = false;
+      if (m.dream && !m.inPot && (reduce.matches || !eng.plats.length)) eng.enterPot(m); // (pas d'animation : directement)
       onHome(kind, m.inPot);
-      refresh(); run(); drawThread();
+      refresh(); run();
     },
     hush() { tino?.hush(true); },
     inPot(kind) { return !!list.find((x) => x.def.key === kind)?.inPot; },
@@ -2127,7 +2335,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
     // On l'a nourri (ici ou chez l'autre) : il mange son poisson (pas s'il dort, ni sans animations)
     eat(fish, opt = {}) { if (tino && !reduce.matches && !eng.night() && !tino.el.hidden) tino.now([{ type: "eat", fish, ...opt }]); },
-    destroy() { thread.remove(); cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); m.propEl.remove(); m.bannerEl.remove(); }); },
+    destroy() { potLink(true); cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); m.propEl.remove(); m.bannerEl.remove(); }); },
   };
 }
 
@@ -2138,7 +2346,7 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
   injectStyle();
   const lines = ["Drink some water 💧", "You've got this!"];
   const plat = { key: "demo", y: size, x0: size / 2, x1: size / 2, cell };
-  const eng = { plats: [plat], byKey: new Map([["demo", plat]]), v: { top: -Infinity, bottom: Infinity, left: -Infinity, right: Infinity }, visible: () => true, today: null, night: () => ["sleep", "nap", "bed"].includes(type), meal: () => true, tapThrough: () => false, layer: box, lines: () => (type === "chat" ? lines : []), grumbles: () => ["Stop poking me! 😤"] };
+  const eng = { plats: [plat], byKey: new Map([["demo", plat]]), v: { top: -Infinity, bottom: Infinity, left: -Infinity, right: Infinity }, visible: () => true, peoSimmer: () => true, today: null, night: () => ["sleep", "nap", "bed"].includes(type), meal: () => true, tapThrough: () => false, layer: box, lines: () => (type === "chat" ? lines : []), grumbles: () => ["Stop poking me! 😤"] };
   const m = new Mascot(eng, { ...KINDS[kind], size });
   box.style.position = "relative";
   box.style.width = box.style.height = size + "px";
@@ -2147,6 +2355,9 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
   if (type === "tipsy") { m.redUntil = Date.now() + 1e9; m.redMax = 1; } // (rouge après une bière, pour toujours)
   if (type === "hungry" || type === "full") eng.belly = () => ({ level: type, lines: [type === "hungry" ? "I'm SO hungry… 🥺" : "So full 😋"] });
   if (["shop", "scooter", "crash", "bounce"].includes(type)) m.update = function (dt) { Mascot.prototype.update.call(this, dt); this.x = size / 2; }; // (avance sur place)
+  if (type === "chaserun" || type === "flee") m.update = function (dt) { // (il court sur place : PeoPeo qui poursuit, Tino qui s’enfuit)
+    this.clock += dt; this.act ??= this.think(); this.act.ph += dt * 9; this.act.t = 1; this.dir = dir; this.ease(dt);
+  };
   box.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl);
   m.k = "demo"; m.x = size / 2; m.y = size; m.dir = dir;
   if (type === "walk") m.update = function (dt) { this.clock += dt; this.act ??= { type: "walk", t: 0, x: this.x }; this.dir = dir; this.ease(dt); }; // marche sur place
@@ -2186,6 +2397,10 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
     eatgold: { type: "eat", fish: "golden_fish" },
     hungry: { type: "belly", dur: 4.4 },
     full: { type: "belly", dur: 4.4 },
+    stir: { type: "stir", t: 0, mode: "stir", mt: 0, side: -dir, x: m.x, fanX: m.x, lift: 0, seq: [], dur: 1e9 }, // (la marmite est du côté où il regarde)
+    fan: { type: "stir", t: 0, mode: "fan", mt: 0, side: -dir, x: m.x, fanX: m.x, lift: 0, seq: [], dur: 1e9 },
+    flee: { type: "flee", t: 1, mode: "run", v: 1e3, ph: 0, x: m.x + dir * 1e9, glanceT: 1, glance: 0, turns: 0 },
+    chaserun: { type: "chase", t: 1, mode: "run", v: 1e3, ph: 0 },
   }[type] ??{ type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
   if (!animate) return m;
   let last = performance.now();
