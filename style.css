@@ -273,7 +273,7 @@ input[type=radio], input[type=checkbox] { accent-color: #ffe8a3; width: 18px; he
 .mp-wsetup ol { margin: 6px 0; padding-left: 20px; }
 .mp-wsetup textarea { width: 100%; box-sizing: border-box; font: 0.78em/1.35 ui-monospace, Consolas, monospace; color: var(--text-normal); background: rgba(0, 0, 20, 0.45); border: 1px solid var(--pl-line); border-radius: 8px; padding: 6px; resize: vertical; }
 
-/* Messages via Tino : carte sous la page (hors de #app, pour survivre aux réaffichages) */
+/* Messages (via son avatar) : carte sous la page (hors de #app, pour survivre aux réaffichages) */
 .mp-has-tino #app { padding-bottom: 0; }
 .mp-tino-host { max-width: 1400px; margin: 16px auto 0; padding: 0 12px calc(28px + env(safe-area-inset-bottom)); }
 .mp-tino { max-width: 640px; }
@@ -627,6 +627,7 @@ a { color: var(--text-accent); }
 .mp-pot-meo { transform-origin: 46px 28px; } .mp-pot-tino { transform-origin: 32px 28px; } /* (Tino : quand PeoPeo et MeoMeo l'y ont jeté) */
 .mp-pot-head.mp-up { transform: translateY(0); animation: mp-lurk 4.5s ease-in-out 0.6s infinite; }
 .mp-pot-meo.mp-up { animation-delay: 2.1s; }
+.mp-pot.mp-swirl .mp-pot-head.mp-up { animation: none; } /* on les cuisine : elles tournent dans la marmite (potSwirl), pas de guet */
 .mp-pot-head.mp-dream.mp-up { animation-duration: 9s; } /* pas là : il / elle dort dans la marmite */
 @keyframes mp-lurk { 0%, 100% { transform: translate(0, 2px); } 20% { transform: translate(-3px, 0) rotate(-6deg); } 45% { transform: translate(0, 4px); } 65% { transform: translate(3px, 0) rotate(6deg); } 85% { transform: translate(0, 1px); } }
 @media (prefers-reduced-motion: reduce) { .mp-pot-head.mp-up { animation: none; } }

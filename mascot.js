@@ -2376,16 +2376,32 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     onHome(m.def.key, false);
     return true;
   };
+  // Un message à dire (m.pendingSay) alors qu'il / elle est dans la marmite : il / elle en sort pour le dire — en sautant si
+  // la marmite est à l'écran, sinon (ou sans animation, force) directement sur la page (case d'aujourd'hui, ou il / elle tombe
+  // du haut) ; pas de plateformes (onglets Tino, Settings) : plus tard
+  const deliver = (m, force = false) => {
+    if (!m.pendingSay || !eng.plats.length || m.away) return;
+    if (m.inPot) {
+      const H = home(m.def.key), seen = !!H && H.y >= eng.v.top && H.y <= eng.v.bottom;
+      if (force || !seen || reduce.matches || !leavePot(m, H)) {
+        m.inPot = false; m.placed = false; m.act = null; m.plan = []; hideAll(m, false); onHome(m.def.key, false); measure();
+      }
+    }
+    const [text, opts] = m.pendingSay;
+    m.pendingSay = null;
+    m.say(text, opts);
+  };
   // La marmite (home) : dedans, il en sort au bout de potT (si elle est à l'écran, le jour, avec des plateformes) ; dehors, au
   // bout de outT — ou à la nuit — il y retourne (si elle est à l'écran ; sinon il attend), pas au milieu d'une poursuite.
   // Ensemble : c'est la scène commune qui dit s'il est dedans ou dehors (et en sortant, il fait tout de suite sa part de la scène)
   // Absent (dream) : il reste dans la marmite, endormi (Tino le fait mijoter : action « stir ») ; s'il était dehors, il y
-  // retourne — en sautant si la marmite est à l'écran, sinon directement (pas au milieu d'un accident de scooter)
+  // retourne — en sautant si la marmite est à l'écran, sinon directement (pas au milieu d'un accident de scooter ; pas tant
+  // qu'il dit un message pas encore lu)
   const homeTick = (m, dt) => {
     if (!m.def.home || m.away || !eng.plats.length) return;
     const H = home(m.def.key), seen = !!H && H.y >= eng.v.top && H.y <= eng.v.bottom;
     if (m.dream) {
-      if (m.inPot || m.act?.type === "potIn" || m.busy()) return;
+      if (m.inPot || m.act?.type === "potIn" || m.busy() || m.bubble?.sticky) return;
       if (seen && !reduce.matches) m.now([{ type: "potIn" }]); else eng.enterPot(m);
       return;
     }
@@ -2399,7 +2415,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       leavePot(m, H);
       return;
     }
-    if (m.busy() || m.stay || ["chase", "potIn", "duo"].includes(m.act?.type)) return;
+    if (m.busy() || m.stay || m.bubble?.sticky || ["chase", "potIn", "duo"].includes(m.act?.type)) return;
     if ((m.outT -= dt) > 0 && !eng.night()) return;
     if (seen) m.now([{ type: "potIn" }]);
   };
@@ -2446,7 +2462,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     const sc = scene(k), tp = list.find((x) => x.def.key === "tino" && x.inPot);
     if (tp && sc.tino !== "soak" && !cookingTino()) { const H = home("tino"); tinoOut(tp, !H || H.y < eng.v.top || H.y > eng.v.bottom); } // (fin du bain : il sort tout de suite, pour que PeoPeo et MeoMeo le trouvent)
     list.forEach((m) => {
-      if (m.away || m.inPot || m.el.hidden || reduce.matches) return;
+      if (m.away || m.inPot || m.el.hidden || reduce.matches || m.bubble?.sticky) return; // (un message à lire : il / elle reste là)
       const st = m.def.home ? buddyScene(m, sc) : tinoScene(m, sc);
       m.stay = false;
       if (st.length) m.now(st);
@@ -2484,6 +2500,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     const tp = list.find((x) => x.def.key === "tino" && x.inPot);
     if (tp && (reduce.matches || document.hidden)) tinoOut(tp, true); // (sans animation : Tino ne reste pas caché dans la marmite)
     measure();
+    list.forEach((m) => deliver(m, reduce.matches || document.hidden));
     list.forEach((m) => {
       if (!eng.plats.length || m.away || m.inPot) return;
       if (reduce.matches) still(m);
@@ -2523,7 +2540,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       if (!eng.plats.length) { raf = 0; potLink(true); return; }
     } else eng.v = view();
     sceneTick();
-    list.forEach((m) => { homeTick(m, dt); if (m.away || m.inPot) return; follow(m); m.update(dt); m.render(); });
+    list.forEach((m) => { deliver(m); homeTick(m, dt); if (m.away || m.inPot) return; follow(m); m.update(dt); m.render(); });
     tinoPotTick(dt);
     potLink();
     raf = requestAnimationFrame(frame);
@@ -2576,7 +2593,16 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
         if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) m.flyAway();
       });
     },
-    say(text, opts) { tino?.say(text, opts); },
+    // Un personnage dit quelque chose (kind : « tino », ou l'avatar de celui ou celle qui a écrit un message : « peo » / « meo ») ;
+    // dans la marmite, il / elle en sort d'abord pour le dire (deliver)
+    say(text, opts, kind = "tino") {
+      const m = list.find((x) => x.def.key === kind) ?? tino;
+      if (!m) return;
+      if (!m.def.home || !m.inPot) { m.say(text, opts); return; }
+      m.pendingSay = [text, opts];
+      deliver(m);
+      if (reduce.matches) refresh();
+    },
     wear(o) { eng.outfit = o; tino?.wear(o); }, // (les habits de Tino : seulement Tino pour l'instant)
     // Un personnage arrive ou s'en va (PeoPeo : l'app ouverte chez lui ou non) : il tombe du haut de l'écran en arrivant
     setAway(kind, away) {
@@ -2598,7 +2624,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       onHome(kind, m.inPot);
       refresh(); run();
     },
-    hush() { tino?.hush(true); },
+    hush(kind) { list.forEach((m) => { if (kind && m.def.key !== kind) return; m.pendingSay = null; m.hush(true); }); }, // (sans prévenir : lu ailleurs, déconnexion)
     inPot(kind) { return !!list.find((x) => x.def.key === kind)?.inPot; },
     scene() { return together() ? scene(slotNow()) : null; }, // (essais : la scène commune en cours) // (PeoPeo est dans la marmite : sa tête en sort)
     flyAway() { if (!reduce.matches) tino?.flyAway(); },

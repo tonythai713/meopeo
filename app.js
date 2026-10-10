@@ -534,7 +534,7 @@ function alignColumns() {
 // Personnages qui se promènent sur la page (mascot.js : Tino, le phoque). Calque posé sur la page, hors de l'app : il survit
 // aux réaffichages. Plateformes (coordonnées de page), avec une clé qui ne change pas d'un affichage à l'autre :
 // - onglet Calendar : haut du calendrier, haut de chaque semaine, bas du calendrier (« cal:N »), haut de chaque carte (tâches,
-//   jour choisi, messages via Tino) et haut de chaque tâche (seulement au-dessus du texte : jamais sur une case à cocher ni ✏️) ;
+//   jour choisi, messages) et haut de chaque tâche (seulement au-dessus du texte : jamais sur une case à cocher ni ✏️) ;
 // - onglet Notes : haut et fond de la carte, haut de chaque note ; onglets Tino et Settings : aucune (Tino n'y est pas).
 let mascots = null;
 function calDays() { return [...(root?.querySelectorAll(".pl-cal .pl-day") ?? [])]; }
@@ -617,13 +617,15 @@ function refreshMascots() {
   document.body.append(layer);
   mascots = mountMascots({ layer, kinds: ["tino", "peo", "meo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo,
     home: (kind) => potSpot(kind), onHome: () => presenceChanged(), together: bothHere, potFx });
+  presenceChanged(); // (tout de suite : qui dort dans la marmite — avant qu'un message ne fasse sortir un avatar)
   syncTinoBubble();
   applyOutfit();
 }
 
-// ---------- Messages via Tino (supabase/07_tino_messages.sql) ----------
-// L'un écrit un petit mot en bas de la page ; chez l'autre, Tino le dit dans une bulle (+ notification) jusqu'à ce qu'on
-// le touche. La carte vit hors de #app : les réaffichages (temps réel) n'effacent pas un message en cours d'écriture.
+// ---------- Messages (supabase/07_tino_messages.sql ; 29 : la notification vient de l'avatar) ----------
+// L'un écrit un petit mot en bas de la page ; chez l'autre, SON avatar (PeoPeo / MeoMeo, plus Tino depuis la 2026-10-10.6)
+// le dit dans une bulle (+ notification) jusqu'à ce qu'on le touche — s'il / si elle dort dans la marmite, il / elle en
+// sort pour le dire. La carte vit hors de #app : les réaffichages (temps réel) n'effacent pas un message en cours d'écriture.
 let tinoHost = null, tinoShown = null, unsubTino = null;
 const tinoWhen = (at) => { const d = new Date(at); return `${relDay(iso(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
@@ -632,7 +634,7 @@ function tinoBox() {
   tinoHost = document.createElement("section");
   tinoHost.className = "mp-tino-host";
   tinoHost.hidden = true;
-  tinoHost.innerHTML = `<div class="pl-card mp-tino"><h4>🦭 Message via Tino</h4>
+  tinoHost.innerHTML = `<div class="pl-card mp-tino"><h4>💌 Message</h4>
     <form class="mp-tino-form"><input type="text" name="tinomsg" maxlength="200" autocomplete="off" enterkeyhint="send" required>
       <button type="submit" class="mp-cta">Send 💌</button></form>
     <div class="mp-tino-list"></div><div class="pl-legend mp-tino-legend"></div></div>`;
@@ -647,8 +649,7 @@ function tinoBox() {
     form.querySelector("button").disabled = false;
     if (!ok) return;
     form.tinomsg.value = "";
-    if (!tinoShown) mascots?.say(`Okay! I'll tell ${P.label} 💌`, { ms: 3000 }); // (sans cacher un message pas encore lu)
-    mascots?.flyAway(); // il part porter le message
+    mascots?.say(`Okay! I'll tell ${P.label} 💌`, { ms: 3000 }, kindOf(S.me.label)); // (mon avatar ; le message de l'autre est sur le sien)
     loadTino();
   });
   return tinoHost;
@@ -668,11 +669,12 @@ function renderTino() {
   document.body.classList.toggle("mp-has-tino", show);
   if (!show) return;
   const form = box.querySelector("form"), list = box.querySelector(".mp-tino-list"), legend = box.querySelector(".mp-tino-legend");
-  form.tinomsg.placeholder = `Tino will tell ${P.label}…`;
+  box.querySelector("h4").textContent = `💌 Message via ${S.me.label}`;
+  form.tinomsg.placeholder = `${S.me.label} will tell ${P.label}…`;
   form.tinomsg.disabled = form.querySelector("button").disabled = S.tinoOk === false;
   if (S.tinoOk === false) {
     list.innerHTML = "";
-    legend.textContent = "Messages via Tino aren't available yet."; // (supabase/07_tino_messages.sql pas encore exécuté)
+    legend.textContent = "Messages aren't available yet."; // (supabase/07_tino_messages.sql pas encore exécuté)
     return;
   }
   list.innerHTML = S.tino.slice(0, 5).map((m) => {
@@ -680,20 +682,21 @@ function renderTino() {
     const state = mine ? (m.seen ? " · seen ✓" : " · not seen yet") : (m.seen ? "" : " · new");
     return `<div class="mp-tino-row${mine ? " mine" : ""}"><span class="mp-tino-meta">${esc(who)} · ${tinoWhen(m.at)}${state}</span><span class="mp-tino-text">${esc(m.body)}</span></div>`;
   }).join("");
-  legend.textContent = `Tino says it on ${P.label}'s calendar and sends a notification. A message for you: tap Tino or the bubble once it's read.`;
+  legend.textContent = `${S.me.label} says it on ${P.label}'s calendar and sends a notification. A message for you: ${P.label} comes to say it — tap ${P.label} or the bubble once it's read.`;
 }
 
-// Le plus ancien message reçu pas encore lu → Tino le dit (un à la fois) ; lu ailleurs → la bulle disparaît
+// Le plus ancien message reçu pas encore lu → l'avatar de l'autre le dit (un à la fois) ; lu ailleurs → la bulle disparaît
+const kindOf = (label) => Object.keys(POT_HEADS).find((k) => POT_HEADS[k].label === label) ?? "tino";
 function syncTinoBubble() {
   if (!mascots || !S.user) return;
   const P = S.partner, next = S.tino.filter((m) => m.to === S.user.id && !m.seen).sort((a, b) => a.id - b.id)[0];
-  if (!next || !P) { if (tinoShown) { mascots.hush(); tinoShown = null; } return; }
+  if (!next || !P || P.id !== next.from) { if (tinoShown) { mascots.hush(); tinoShown = null; } return; } // (P.id ≠ from : l'autre pas encore relu après un changement de compte)
   if (tinoShown === next.id) return;
   tinoShown = next.id;
   mascots.say(next.body, {
-    sticky: true, who: `${P.mark} ${P.label}:`, color: P.color,
+    sticky: true, who: "💌", color: P.color,
     onClose: async () => { tinoShown = null; if (await guard(() => db.markTinoSeen(next.id))) loadTino(); },
-  });
+  }, kindOf(P.label));
 }
 
 // ---------- Grand Tino au-dessus du calendrier + petites phrases de Tino (supabase/08_tino_extras.sql) ----------
@@ -2582,14 +2585,14 @@ const POT_HEADS = { peo: { label: "PeoPeo", x: 18, box: 'x="2" y="-6" width="32"
   tino: { label: null, x: 32, box: 'x="14" y="-6" width="36" height="32.4"', svg: () => tinoHeadSvg() } };
 // Absent (pas l'app ouverte) : il / elle reste dans la marmite, endormi(e) ; là : sa tête sort quand il / elle est dans la marmite
 const potAway = (kind) => !!POT_HEADS[kind].label && !isHere(personId(POT_HEADS[kind].label));
-const potUp = (kind) => (kind === "tino" ? !!mascots?.inPot("tino") : mascots ? potAway(kind) || mascots.inPot(kind) : true);
+const potUp = (kind) => (kind === "tino" ? !!mascots?.inPot("tino") : mascots ? mascots.inPot(kind) : true); // (absent mais sorti dire un message : pas de tête dans la marmite)
 const potAsleep = (kind) => kind !== "tino" && (potAway(kind) || (!bothHere() && (tinoNight() || tinoNap())));
 const potHead = (kind) => `<g class="mp-pot-head mp-pot-${kind}${potUp(kind) ? " mp-up" : ""}${potAway(kind) ? " mp-dream" : ""}${potAsleep(kind) ? " ms-sleep" : ""}" data-kind="${kind}"><g class="mp-pot-bob"><svg ${POT_HEADS[kind].box}>${POT_HEADS[kind].svg()}</svg></g></g>`;
 function potButton() {
   const P = S.partner;
   // repère 64 × 60 (y de −8 à 52) ; bord de la marmite : ellipse de centre (32, 24), 26 × 5 ; l'arrière du bord est dessiné
   // derrière la tête, l'avant devant ; la tête est coupée sous le bord avant (clipPath) : elle est DANS la marmite
-  return `<button type="button" class="pl-toggle mp-pot${potState ? " mp-pot-hot" : ""}${potFanned ? " mp-pot-fan" : ""}" aria-pressed="${UI.showPartner}" title="${UI.showPartner ? "Hide" : "Show"} ${esc(P.label)}'s tasks on the calendar">
+  return `<button type="button" class="pl-toggle mp-pot${potState ? " mp-pot-hot" : ""}${potFanned ? " mp-pot-fan" : ""}${swirl.k > 0.01 ? " mp-swirl" : ""}" aria-pressed="${UI.showPartner}" title="${UI.showPartner ? "Hide" : "Show"} ${esc(P.label)}'s tasks on the calendar">
     <svg class="mp-pot-art" viewBox="0 -8 64 60" aria-hidden="true">
       <defs>
         <linearGradient id="mp-pot-gold" x1="0" x2="1"><stop offset="0" stop-color="#b9821c"/><stop offset="0.3" stop-color="#f7d675"/><stop offset="0.55" stop-color="#e5ae3e"/><stop offset="1" stop-color="#a86f14"/></linearGradient>
@@ -2625,7 +2628,7 @@ function potSpot(kind = "pot") {
 }
 // Tino fait mijoter PeoPeo (mascot.js, action « stir » ; PeoPeo dans la marmite) : feu sous la marmite (plus
 // grand quand il l'attise à l'éventail), bouillon qui frémit, vapeur ; la louche part du bouillon et finit dans sa nageoire
-// (mesurée à chaque image, comme la canne à pêche) ; la tête de PeoPeo est un peu remuée. potState = ce que dessine
+// (mesurée à chaque image, comme la canne à pêche) ; les têtes tournent dans la marmite (potSwirl). potState = ce que dessine
 // potButton() quand le calendrier est refait. Sans nouvelles pendant 0,5 s (animation arrêtée) : tout s'éteint.
 let potState = null, potFanned = false, potOff = 0;
 function potFx(st) {
@@ -2637,10 +2640,7 @@ function potFx(st) {
   }
   const art = root?.querySelector(".mp-pot .mp-pot-art"), spoon = art?.querySelector(".mp-pot-spoon");
   const stir = mode === "stir" && st.paw ? st : null;
-  art?.querySelectorAll(".mp-pot-head").forEach((h, i) => { // (les deux têtes remuent, un peu décalées)
-    const ph = (stir?.phase ?? 0) + i * 1.3, cx = POT_HEADS[h.dataset.kind]?.x ?? 32;
-    h.querySelector(".mp-pot-bob")?.setAttribute("transform", stir ? `rotate(${(4 * Math.sin(ph)).toFixed(2)} ${cx} 28) translate(${(1.2 * Math.cos(ph)).toFixed(2)} 0)` : "");
-  });
+  potSwirl(!!stir, !!mode, stir?.phase ?? 0);
   let drawn = false;
   if (stir && spoon) {
     const r = stir.paw.getBoundingClientRect(), M = art.getScreenCTM()?.inverse();
@@ -2655,6 +2655,34 @@ function potFx(st) {
   }
   if (spoon) spoon.style.display = drawn ? "" : "none";
   if (st) potOff = setTimeout(() => potFx(null), 500);
+}
+// Les têtes dans la marmite tournent avec le bouillon pendant qu'on les cuisine : chacune sur un cercle (vu de biais : une
+// ellipse de rayon SWIRL_R, devant = un peu plus bas et plus grand), en partant de sa place (PeoPeo à gauche, MeoMeo à
+// droite : face à face ; Tino devant) ; le bouillon accélère quand on touille et ralentit pendant qu'on attise le feu
+// (swirl.w), puis les têtes reviennent à leur place quand c'est fini (swirl.k) ; celle de devant est dessinée par-dessus.
+// Pendant ce temps, pas de « guet » (.mp-swirl) : les déplacer dans la page relancerait leur animation.
+const SWIRL_R = 14, SWIRL_W = 2.2, SWIRL_BASE = { peo: Math.PI, meo: 0, tino: Math.PI / 2 };
+let swirl = { ang: 0, w: 0, k: 0, at: 0 }, swirlRaf = 0;
+function potSwirl(stirring, cooking, phase = 0) {
+  cancelAnimationFrame(swirlRaf);
+  const now = performance.now(), dt = swirl.at ? Math.min(0.05, (now - swirl.at) / 1000) : 0;
+  swirl.at = now;
+  swirl.w += ((stirring ? SWIRL_W : 0) - swirl.w) * Math.min(1, dt * 1.6);
+  swirl.k += ((cooking ? 1 : 0) - swirl.k) * Math.min(1, dt * 2.5);
+  swirl.ang += swirl.w * dt;
+  const done = !cooking && swirl.k < 0.01;
+  if (done) swirl = { ang: 0, w: 0, k: 0, at: 0 };
+  const art = root?.querySelector(".mp-pot .mp-pot-art"), k = swirl.k;
+  art?.closest(".mp-pot")?.classList.toggle("mp-swirl", !done);
+  const heads = [...(art?.querySelectorAll(".mp-pot-head") ?? [])].map((h) => {
+    const kind = h.dataset.kind, cx = POT_HEADS[kind]?.x ?? 32, a = (SWIRL_BASE[kind] ?? 0) + swirl.ang, d = k * Math.sin(a);
+    const dx = k * (32 + SWIRL_R * Math.cos(a) - cx), dy = 1.5 * d, s = 1 + 0.06 * d, r = stirring ? 3 * k * Math.sin(phase + cx) : 0;
+    h.querySelector(".mp-pot-bob")?.setAttribute("transform", done ? "" : `translate(${dx.toFixed(2)} ${dy.toFixed(2)}) translate(${cx} 28) scale(${s.toFixed(3)}) rotate(${r.toFixed(2)}) translate(${-cx} -28)`);
+    return { h, d };
+  });
+  const spoon = art?.querySelector(".mp-pot-spoon"), order = [...heads].sort((p, q) => p.d - q.d);
+  if (spoon && order.some((o, i) => heads[i].h !== o.h)) order.forEach((o) => spoon.before(o.h)); // (devant = dessiné en dernier, sous les baguettes)
+  if (!cooking && !done) swirlRaf = requestAnimationFrame(() => potSwirl(false, false)); // (fini : elles reviennent à leur place)
 }
 // Quelqu'un arrive ou s'en va, PeoPeo sort de la marmite ou y retourne, la nuit tombe : la tête dans la marmite suit (sans
 // redessiner le calendrier)
