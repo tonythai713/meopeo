@@ -132,6 +132,16 @@ const STYLE = `
 .ms-hit .ms-in > svg { filter: brightness(1.9) drop-shadow(0 0 6px #9be0ff); }
 .ms-staff-glow { opacity: calc(0.15 + 0.85 * var(--glint, 0)); }
 .ms-tool-staff .ms-staff { display: inline; }
+
+/* Activités à plusieurs : tapioca dans les matchas, perle soufflée à la paille, bol posé par terre, la nouille partagée ;
+   moustache dessinée sur Tino qui dort ; calques des effets (combat, activités) */
+.ms-boba-on .ms-boba, .ms-stache-on .ms-stache { display: inline; }
+.ms-fx-boss, .ms-fx-duo { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.ms-pearl, .ms-bowl, .ms-noodle { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; will-change: transform; }
+.ms-pearl { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #8a6a52, #2b1a0f 70%); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
+.ms-noodle { overflow: visible; }
+.ms-bowl svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
+.ms-bowl .ms-chop { display: none; }
 `;
 
 // Petite étoile à 5 branches (le coussin de Tino en est couvert)
@@ -156,7 +166,9 @@ const CONTROLLER = `<path d="M33 68H67Q75 68 75 76Q75 83 69 83Q65 83 62 79H38Q35
 const MATCHA = `<path d="M53 67L49 52" stroke="#f28fb0" stroke-width="2.4" stroke-linecap="round"/>
   <path d="M41 66H59L57 85Q57 87 55 87H45Q43 87 43 85Z" fill="rgba(235, 245, 255, 0.55)" stroke="#a9bccf" stroke-width="1.1"/>
   <g class="ms-liquid" style="transform-box: fill-box; transform-origin: 50% 100%"><path d="M42.4 71H57.6L56.6 85Q56.6 86.2 55 86.2H45Q43.4 86.2 43.4 85Z" fill="#8cc56a"/><path d="M42.4 71H57.6L57.4 74H42.6Z" fill="#dcefc8"/></g>
-  <rect x="45" y="75" width="4.5" height="4.5" rx="1" fill="#f2f9ff" opacity="0.75" transform="rotate(12 47 77)"/>`;
+  <rect x="45" y="75" width="4.5" height="4.5" rx="1" fill="#f2f9ff" opacity="0.75" transform="rotate(12 47 77)"/>
+  <g class="ms-boba" display="none"><g fill="#3b2516"><circle cx="46" cy="83.6" r="1.7"/><circle cx="49.6" cy="84.2" r="1.7"/><circle cx="53.2" cy="83.4" r="1.7"/><circle cx="51" cy="80.8" r="1.7"/><circle cx="47.6" cy="80.6" r="1.6"/></g><g fill="#fff" opacity="0.35"><circle cx="45.4" cy="83" r="0.5"/><circle cx="49" cy="83.6" r="0.5"/><circle cx="52.6" cy="82.8" r="0.5"/><circle cx="50.4" cy="80.2" r="0.5"/></g></g>
+  <circle class="ms-straw-tip" cx="49" cy="52" r="0.5" fill="none"/>`;
 const BEER = `<path d="M60 70Q67 70 67 76Q67 82 60 82" fill="none" stroke="#c9d6e3" stroke-width="2.4"/>
   <rect x="41" y="66" width="20" height="20" rx="2.5" fill="#f2b233" stroke="#c98a12" stroke-width="1.1"/>
   <path d="M46 72V83M51 72V83M56 72V83" stroke="#ffd36b" stroke-width="1.2" opacity="0.8"/>
@@ -223,6 +235,8 @@ function sealSvg() {
       <ellipse cx="43.5" cy="46" rx="1.7" ry="1.1" fill="#8e919d"/>
       <ellipse cx="53.5" cy="46" rx="1.7" ry="1.1" fill="#8e919d"/>
       <g fill="#7d8291"><circle cx="35" cy="49" r="0.9"/><circle cx="37.5" cy="52.5" r="0.9"/><circle cx="65" cy="49" r="0.9"/><circle cx="62.5" cy="52.5" r="0.9"/></g>
+      <path class="ms-stache" display="none" d="M50 53.5Q45 50.5 40 53Q38 55.5 35.5 54Q38 58.5 43 56.6Q47.5 55.4 50 53.5Q52.5 55.4 57 56.6Q62 58.5 64.5 54Q62 55.5 60 53Q55 50.5 50 53.5Z" fill="#2f3038"/>
+      <circle class="ms-mouth" cx="50" cy="55" r="0.5" fill="none"/>
     </g>
     <g class="ms-flower">
       <rect x="16.5" y="24" width="3" height="6.5" rx="1" fill="#4f8fe0" transform="rotate(18 18 27)"/>
@@ -255,6 +269,7 @@ function peoHead(gid) {
     <g class="ms-face">
       <radialGradient id="${gid}"><stop offset="0" stop-color="#ff5468" stop-opacity="0.9"/><stop offset="1" stop-color="#ff5468" stop-opacity="0"/></radialGradient>
       <ellipse class="ms-flush" cx="49" cy="44" rx="15" ry="7" fill="url(#${gid})" opacity="0"/>
+      <circle class="ms-mouth" cx="47.5" cy="45" r="0.5" fill="none"/>
       <g class="ms-cheeks"></g>
     </g>
     <g class="ms-flower"></g>
@@ -267,7 +282,7 @@ function peoSvg(gid = "ms-flush-peo") {
   <g class="ms-foot-r">${peoImg("shoe-r", 52.82, 91.07, 10.33, 7.67)}</g>
   ${peoImg("body", 37.3, 49.04, 30.83, 43.83)}
   <g class="ms-wear-body"></g>
-  <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(49 71) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(49 70) scale(0.55) translate(-51 -76)">${BEER}</g></g>
+  <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(49 71) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(49 70) scale(0.55) translate(-51 -76)">${BEER}</g><g class="ms-it ms-it-matcha" transform="translate(49 70) scale(0.55) translate(-50 -76)">${MATCHA}</g></g>
   <g class="ms-arm-l">${staffSvg(39.2, 66.6, 35.1, 90.3, 34.9, 91.8)}<g class="ms-ladle" display="none"><path d="M37.5 71L35.0 97" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M39.1 71.2L37.7 97" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M38 73L35 80" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="32" cy="85.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M32 85.5L27 82M32 85.5L29 91M32 85.5L36 80M32 85.5L38 88" stroke="#e0956a" stroke-width="0.6"/><circle cx="32" cy="85.5" r="2.2" fill="#e8604c"/></g>${peoImg("arm-l", 34.63, 57.99, 7.33, 16.17)}<circle class="ms-hand" cx="38" cy="73.5" r="0.6" fill="none"/></g>
   <g class="ms-arm-r">${peoImg("arm-r", 56.33, 58.14, 7.33, 16.17)}</g>
   ${peoHead(gid)}
@@ -290,6 +305,7 @@ function meoHead(gid) {
     <g class="ms-face">
       <radialGradient id="${gid}"><stop offset="0" stop-color="#ff5468" stop-opacity="0.9"/><stop offset="1" stop-color="#ff5468" stop-opacity="0"/></radialGradient>
       <ellipse class="ms-flush" cx="50" cy="44" rx="15" ry="5.5" fill="url(#${gid})" opacity="0"/>
+      <circle class="ms-mouth" cx="49.5" cy="45.5" r="0.5" fill="none"/>
       <g class="ms-cheeks"></g>
     </g>
     <g class="ms-flower"></g>
@@ -308,7 +324,7 @@ function meoSvg(gid = "ms-flush-meo") {
   <g class="ms-foot-l">${meoImg("shoe-l", 42.8, 90.34, 7.45, 7.39)}</g>
   <g class="ms-foot-r">${meoImg("shoe-r", 49.08, 90.34, 7.66, 7.66)}</g>
   <g class="ms-wear-body"></g>
-  <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(50 70) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(50 69) scale(0.55) translate(-51 -76)">${BEER}</g></g>
+  <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(50 70) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(50 69) scale(0.55) translate(-51 -76)">${BEER}</g><g class="ms-it ms-it-matcha" transform="translate(50 69) scale(0.55) translate(-50 -76)">${MATCHA}</g></g>
   ${meoHead(gid)}
   <g class="ms-arm-l">${staffSvg(41, 67.6, 37.6, 91.3, 37.4, 92.8)}<g class="ms-ladle" display="none"><path d="M39.5 73.5L37.0 99.5" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M41.1 73.7L39.7 99.5" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M40 74L37 81" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="34" cy="86.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M34 86.5L29 83M34 86.5L31 92M34 86.5L38 81M34 86.5L40 89" stroke="#e0956a" stroke-width="0.6"/><circle cx="34" cy="86.5" r="2.2" fill="#e8604c"/></g>${meoImg("arm-l", 37.91, 58.55, 5.89, 16.74)}<circle class="ms-hand" cx="40" cy="74.5" r="0.6" fill="none"/></g>
   <g class="ms-arm-r">${meoImg("arm-r", 53.96, 58.07, 5.97, 16.59)}</g>
@@ -532,7 +548,7 @@ function seeded(n) {
 }
 const pickSeeded = (rnd, list) => { let r = rnd() * list.reduce((x, [w]) => x + w, 0); return list.find(([w]) => (r -= w) < 0)?.[1] ?? list[0][1]; };
 const SOLO = [[3, "game"], [2, "cook"], [2, "bbq"], [2, "rice"], [2, "pho"], [2, "matcha"], [1.5, "beer"], [3, "scooter"], [2, "shop"], [2, "roll"], [1, "swim"], [1, "wave"]];
-const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [2, "chase"], [2, "kiss"], [2, "solo"]];
+const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [3, "matcha"], [3, "pho"], [2, "shop"], [2, "chase"], [2, "kiss"], [2, "solo"]];
 const SOAK_DUOS = [[1, "kiss"], [4, "solo"]]; // (Tino est dans la marmite : PeoPeo et MeoMeo font leur vie, ou un bisou)
 // La scène n° k : { k, peoOut, duo (ce que PeoPeo fait avec Tino, ou null), tino (ce que fait Tino), dur, win, crash, bounce }
 // cookTino : PeoPeo et MeoMeo jettent Tino dans la marmite ; stirBy touille (du côté side), l'autre attise le feu ; tino « soak » :
@@ -548,14 +564,15 @@ function sceneOf(k) {
   else tino = duo === "chase" || duo === "cookTino" || duo === "boss" ? "wait" : duo;
   if (duo === "solo") duo = null;
   return { k, peoOut: true, duo, tino, dur: 11 + 5 * rnd(), win: rnd() < 0.6, crash: rnd() < 0.5, bounce: rnd() < 0.5,
-    snatch: rnd() < SNATCH_P, kissBy: rnd() < 0.5 ? "peo" : "meo", stirBy: rnd() < 0.5 ? "peo" : "meo", side: rnd() < 0.5 ? 1 : -1 };
+    snatch: rnd() < SNATCH_P, kissBy: rnd() < 0.5 ? "peo" : "meo", stirBy: rnd() < 0.5 ? "peo" : "meo", side: rnd() < 0.5 ? 1 : -1,
+    twist: rnd() < TWIST_P, who: rnd() < 0.5 ? "peo" : "meo" }; // (twist : la surprise des activités à plusieurs ; who : qui la commence)
 }
 // Ce que Tino fait pour la scène (là où il est, sur son écran) ; si ce n'est pas possible ici (pas la place…), il se promène
 function tinoScene(m, sc) {
   const me = m.plat();
   if (!me) return [];
   const kind = sc.tino, ctx = { plats: m.eng.plats, today: m.eng.today, lines: m.eng.lines() };
-  if (kind === "wait") return [{ type: "idle", dur: 5 }];
+  if (kind === "wait") return m.spread([{ type: "idle", dur: 5 }]); // (il attend… pas sur quelqu'un)
   if (kind === "soak") { // (la marmite pas à l'écran, ou un message à lire : il se promène)
     const H = m.eng.home?.("tino");
     return H && H.y >= m.eng.v.top && H.y <= m.eng.v.bottom && !m.bubble?.sticky ? [{ type: "potIn", soak: true }] : ACTIONS.walk.make(m, me, ctx);
@@ -577,7 +594,7 @@ function buddyScene(m, sc) {
   const t = m.eng.buddy?.(m, "tino");
   if (sc.duo === "kiss") {
     const o = (m.eng.peers?.(m) ?? [])[0];
-    return o ? [{ type: "kiss", lead: m.def.key === sc.kissBy, with: o }, { type: "wave", dur: 1.4 }] : [];
+    return o ? [{ type: "kiss", lead: m.def.key === sc.kissBy, with: o }, { type: "walk", apart: true }, { type: "wave", dur: 1.4 }] : []; // (après le bisou : un pas pour ne pas rester l'un sur l'autre)
   }
   if (!sc.duo || !t) return [];
   const P = t.plat(), side = t.x >= m.x ? 1 : -1;
@@ -587,7 +604,7 @@ function buddyScene(m, sc) {
     return [{ type: "goto", prefer: -sc.side, next: { type: "fanpot", prefer: -sc.side, dur: 14 } }, { type: "wave", dur: 1.6 }];
   }
   if (sc.duo === "boss") return [...way, { type: "fight", seed: sc.k, win: sc.win }, { type: "wave", dur: 1.6 }]; // (combat de boss : même script sur les deux téléphones)
-  return [...way, sc.duo === "chase" ? { type: "chase" } : { type: "duo", kind: sc.duo === "game" || sc.duo === "beer" || sc.duo === "scooter" ? sc.duo : "cook", snatchRoll: sc.snatch ? 0 : 1 }, { type: "wave", dur: 1.6 }];
+  return [...way, sc.duo === "chase" ? { type: "chase" } : { type: "duo", kind: ["game", "beer", "scooter", "matcha", "pho", "shop"].includes(sc.duo) ? sc.duo : "cook", snatchRoll: sc.snatch ? 0 : 1, twistRoll: sc.twist ? 0 : 1, who: sc.who }, { type: "wave", dur: 1.6 }];
 }
 const CHEERS = 1.5; // bière avec PeoPeo : « chin chin » (s)
 const SNATCH_GRAB = 0.5, SNATCH_MAD = 2.4, SNATCH_P = 0.35; // MeoMeo prend la bière de Tino (s), puis elle est fâchée (s) avant de la boire ; pas toujours : 35 % des fois (sinon « chin chin »)
@@ -732,6 +749,7 @@ const ACTIONS = {
   walk: {
     weight: () => 30,
     make: (m, me) => [{ type: "walk", x: clamp(m.x + rand(30, 120) * pick([-1, 1]), me.x0, me.x1) }],
+    start(m, a) { if (a.apart) a.x = m.freeX(m.k, m.x); }, // (un pas de côté jusqu'à une place libre)
     step(m, a, dt, me) {
       const d = clamp(a.x, me.x0, me.x1) - m.x, s = 26 * (m.size / 40) * dt;
       if (d) m.dir = d < 0 ? -1 : 1;
@@ -955,10 +973,13 @@ const ACTIONS = {
     make: () => [{ type: "pho", dur: rand(9, 14) }],
     sit: true,
     step(m, a) { if (!a.ended && a.t >= a.dur - 1.2) { a.ended = true; m.love(); } return a.t >= a.dur; },
+    look: (m, a) => { const N = noodleState(a); return N && !N.done && N.n.b === m ? Math.sign(N.n.a.x - m.x) * LOOK : 0; },
     pose(m, a, p) {
       const c = m.clock, slurp = Math.max(0, Math.sin(((c % 2.2) / 2.2) * 2 * Math.PI - 1.9)) ** 2;
       p.armL = -48; p.armR = 48; p.head = -3 * slurp + 2 * Math.sin(c * 1.1); p.sy = 0.97 + 0.02 * slurp; p.sx = 1.02;
       if (a.ended) p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.06;
+      const N = noodleState(a);
+      if (N && !N.done && N.n.b === m) { const k = N.back > 0 ? 1 - N.back : smooth(N.s), d = Math.sign(N.n.a.x - m.x) || 1; p.rot = d * (N.meet ? 12 : 7 * k); p.head = -4 * k; p.blush = N.meet || N.back > 0 ? 1 : 0; } // (la nouille avec PeoPeo / MeoMeo : « boop »)
     },
   },
   // Pause boisson, assis : un matcha glacé à la paille la journée (le niveau baisse), une bière le soir (gorgées, ses
@@ -969,11 +990,12 @@ const ACTIONS = {
     start(m) { m.gaze = pick([-LOOK * 0.4, LOOK * 0.4]); },
     sit: true,
     look: (m) => m.gaze,
-    step(m, a) { if (!a.ended && a.t >= a.dur - 1) { a.ended = true; m.love(); } return a.t >= a.dur; },
+    step(m, a) { if (a.war) warTick(m, a); if (!a.ended && a.t >= a.dur - 1) { a.ended = true; m.love(); } return a.t >= a.dur; },
     pose(m, a, p) {
       const c = m.clock, sip = Math.max(0, Math.sin(c * 2.2)) ** 6;
       p.armL = -50; p.armR = 50; p.head = 2 * Math.sin(c * 0.8) - 4 * sip; p.sy = 0.97 - 0.02 * sip; p.sx = 1.02;
       p.sip = 1 - 0.85 * clamp(a.t / a.dur, 0, 1);
+      if (a.war) warPose(m, a, p); // (bataille de tapioca avec PeoPeo / MeoMeo)
     },
   },
   // a.snatched : le moment où MeoMeo lui a pris sa chope (il n'a plus rien en main, il boude un peu, puis passe à autre chose)
@@ -1515,6 +1537,7 @@ ACTIONS.chase = {
       if (!headOn) a.v = Math.min(a.v, ta?.v ?? 0); // (juste derrière lui)
     }
     go(a.v);
+    if (a.joined) { const lead = (m.eng.peers?.(m) ?? []).find((q) => q.act?.type === "chase" && q.act.tino === t && !q.act.joined); if (lead && lead.k === m.k) { const g = (m.size + lead.size) * 0.5; if (Math.abs(m.x - lead.x) < g) m.x = clamp(lead.x - m.dir * g, lo, hi); } } // (le 2e poursuivant reste derrière le 1er : pas l'un sur l'autre)
     if (!fleeing && !a.catch && a.v < 1 && Math.abs(d) <= gap * 1.9) mode("pant");
     return false;
   },
@@ -1554,15 +1577,18 @@ ACTIONS.chase = {
 // côté, face à face (chin chin, puis ils boivent ; il rougit aussi) ; sieste = à côté, il tapote la tête de Tino, qui
 // s'aplatit (Tino dort toujours) ; scooter = assis derrière Tino sur la selle (derrière lui à l'écran) ; si Tino a un
 // accident, PeoPeo vole aussi (salto, à plat ventre ou rebonds, vertige).
-const DUO_OF = { game: "game", cook: "cook", bbq: "cook", rice: "cook", beer: "beer", nap: "squish", sleep: "squish" };
+const DUO_OF = { game: "game", cook: "cook", bbq: "cook", rice: "cook", beer: "beer", nap: "squish", sleep: "squish", matcha: "matcha", pho: "pho", shop: "shop" };
 const duoLeft = (ta) => (ta?.t !== undefined && ta.dur != null ? ta.dur - ta.t : 0);
-const joinable = (ta) => !!ta && !!DUO_OF[ta.type] && ta.t !== undefined && duoLeft(ta) > 5 && !ta.stay && ta.dur !== Infinity;
+const joinable = (ta) => !!ta && !!DUO_OF[ta.type] && ta.t !== undefined && !ta.stay && (ta.type === "shop" ? !ta.ended && ta.t < 1.5 : duoLeft(ta) > 5 && ta.dur !== Infinity); // (courses : seulement au départ)
 function duoInvite(m, t) { // ce que PeoPeo propose à Tino (libre) : null s'il n'y a rien de possible
   const opts = [], meal = m.eng.meal(), now = minutesNow();
   if (!meal && t.propSpot("game")) opts.push([3, "game"]);
   for (const k of ["cook", "bbq", "rice"]) if (t.propSpot(k)) opts.push([meal ? 4 : 0.6, k]);
   if (!meal && now >= 17 * 60 && !m.def.snatch) opts.push([5, "beer"]); // (MeoMeo ne l'invite pas à boire : elle lui prendrait sa bière)
   if (t.trip("scooter")) opts.push([meal ? 0.5 : 3, "scooter"]);
+  if (!meal && now < 18 * 60) opts.push([2.5, "matcha"]);
+  opts.push([meal ? 4 : 1, "pho"]);
+  if (t.trip("shop")) opts.push([meal ? 0.5 : 2, "shop"]);
   return opts.length ? weighted(opts) : null;
 }
 ACTIONS.duo = {
@@ -1619,6 +1645,24 @@ ACTIONS.duo = {
     if (a.kind === "game") { a.dir = r.side; x = t.x - r.side * (t.size * 0.45 + m.size * 0.3 + a.slot * m.size * 0.6); } // (le 2e un peu plus loin)
     else if (a.kind === "cook" && a.slot) { a.dir = r.side; x = t.x - r.side * (t.size * 0.45 + m.size * 0.3); } // (le 2e : de l'autre côté de Tino)
     else if (a.kind === "cook") { const D = PROPS[r.type]; a.dir = -r.side; x = t.x + r.side * ((D.gap + D.w / 2) * t.size + 22); }
+    else if (a.kind === "shop") { // courses : à pied derrière Tino, ou (surprise) assis dans le caddie qu'il pousse
+      if (r.twist == null) r.twist = (a.twistRoll ?? Math.random()) < TWIST_P;
+      if (r.twist && !r.rider && (!a.who || a.who === m.def.key || a.t > 2.5)) r.rider = m;
+      a.dir = r.side;
+      if (r.rider === m) {
+        x = t.x + r.side * (PROPS.shop.gap + PROPS.shop.w / 2) * t.size;
+        if (a.here) {
+          a.riding = true; m.x = clamp(x, me.x0, me.x1); m.dir = a.dir;
+          if (!a.wheee && a.t - a.hereT > 0.4) { a.wheee = true; if (!m.bubble) m.say(pick(["Wheee! 🛒", "Faster, Tino! 🛒", "Weee! 😆"]), { ms: 1600 }); }
+          return false;
+        }
+      } else x = t.x - r.side * (t.size * 0.45 + m.size * 0.3 + (a.slot && !r.rider ? m.size * 0.55 : 0));
+    }
+    else if (a.kind === "pho" && (r.layout ??= m.eng.together?.() ? phoLayout(t, m, me) : { ok: false }).ok) { // pho à deux (ensemble) : côte à côte devant un bol posé par terre
+      const L = r.layout, inner = !a.slot;
+      r.bowl ??= { x: t.x + L.side * L.D, w: m.size * 0.4 }; // (petit : à hauteur de leurs genoux, pas devant leurs visages)
+      a.dir = inner ? L.side : -L.side; x = t.x + L.side * (L.D + (inner ? -1 : 1) * m.size * 0.36);
+    }
     else if (a.kind === "scooter") {
       if (r.crashT != null) { // il vole aussi, un peu plus loin que Tino (pas sur lui)
         a.side = r.side; a.bounce = Math.random() < 0.5; a.riding = false; startCrash(m, a, me);
@@ -1627,8 +1671,8 @@ ACTIONS.duo = {
       }
       a.dir = r.side; x = t.x - r.side * (8 + a.slot * m.size * 0.45); // (le 2e passager derrière le 1er)
       if (r.t >= 0.5 || a.riding) { a.riding = !r.ended; a.here = true; m.x = lerp(m.x, clamp(x, me.x0, me.x1), Math.min(1, dt * 12)); m.dir = a.dir; return false; }
-    } else { // bière, sieste : à côté de lui, du côté où il est (ou de l'autre s'il n'y a pas la place)
-      const gap = (a.kind === "beer" ? 0.42 : 0.38) * t.size + 0.25 * m.size; // (bière : les chopes se touchent ; sieste : sa main sur la tête de Tino)
+    } else { // bière, matcha, pho (dans son bol), sieste : à côté de lui, du côté où il est (ou de l'autre s'il n'y a pas la place)
+      const gap = ({ beer: 0.42, matcha: 0.42, pho: 0.34 }[a.kind] ?? 0.38) * t.size + (a.kind === "pho" ? 0.2 : 0.25) * m.size; // (bière, matcha : les verres se touchent ; pho : il / elle pioche dans son bol ; sieste : sa main sur la tête de Tino)
       if (!a.bs) {
         const first = (m.eng.peers?.(m) ?? []).find((q) => q.act?.type === "duo" && q.act.ref === r && q.act.bs);
         const out = (bs) => t.x + bs * gap < me.x0 || t.x + bs * gap > me.x1;
@@ -1650,17 +1694,47 @@ ACTIONS.duo = {
       if (u > CHEERS + 1) { if (Date.now() > m.redUntil) m.redMax = 0; m.redUntil = Date.now() + RED_MS; m.redMax = Math.max(m.redMax, clamp(u / 10, 0, 1)); }
     }
     if (a.kind === "squish") {
-      const pat = Math.max(0, Math.sin(m.clock * 5)) ** 2;
-      t.squishTo = 0.55 * pat; t.squishUntil = t.clock + 0.15;
-      if (pat > 0.95 && m.clock - (a.heartT ?? -9) > 1.6) { a.heartT = m.clock; t.love(); }
+      if (r.twist == null) r.twist = (a.twistRoll ?? Math.random()) < TWIST_P;
+      if (r.twist && !r.drawer) r.drawer = m;
+      a.drawing = r.drawer === m && u > 1.5 && u < 3.7; // (surprise : il / elle lui dessine une moustache)
+      if (r.drawer === m && u >= 3.7 && !a.drew) { a.drew = true; t.stacheUntil = Date.now() + 60000; if (!m.bubble) m.say(pick(["hehe 🤭", "Nice mustache, Tino 🤭"]), { ms: 1800 }); }
+      if (!a.drawing) {
+        const pat = Math.max(0, Math.sin(m.clock * 5)) ** 2;
+        t.squishTo = 0.55 * pat; t.squishUntil = t.clock + 0.15;
+        if (pat > 0.95 && m.clock - (a.heartT ?? -9) > 1.6) { a.heartT = m.clock; t.love(); }
+      }
+    }
+    if (a.kind === "matcha") { // chacun son matcha (au tapioca) ; surprise : bataille de perles à la paille
+      r.boba = true;
+      if (r.twist == null) r.twist = (a.twistRoll ?? Math.random()) < TWIST_P;
+      if (r.twist && !r.war && u > 2.5) startWar(r, t, [m, ...(m.eng.peers?.(m) ?? []).filter((q) => q.act?.type === "duo" && q.act.ref === r && q.act.here)], a.who);
+    }
+    if (a.kind === "pho") { // dans le même bol ; surprise : une seule nouille aspirée des deux bouts
+      if (r.twist == null) r.twist = (a.twistRoll ?? Math.random()) < TWIST_P;
+      const mates = (m.eng.peers?.(m) ?? []).filter((q) => q.act?.type === "duo" && q.act.ref === r && q.act.here);
+      if (r.twist && !r.noodle && u > 2) {
+        if (r.layout?.ok) { if (mates.length) r.noodle = { t0: r.t, a: m, b: mates[0], kiss: true }; } // (côte à côte : jusqu'au bisou)
+        else if (!a.slot) r.noodle = { t0: r.t, a: m, b: t, kiss: false }; // (avec Tino : jusqu'au « boop »)
+        if (r.noodle) r.dur = Math.max(r.dur, r.t + NOODLE.SLURP + NOODLE.MEET + NOODLE.BACK + 1.5);
+      }
+      const N = noodleState(r);
+      if (N && !N.done && (N.n.a === m || N.n.b === m)) { // ils se rapprochent en l'aspirant
+        const o = N.n.a === m ? N.n.b : N.n.a, d = Math.sign(o.x - m.x) || a.dir, k = N.back > 0 ? 1 - smooth(N.back) : smooth(N.s);
+        const goal = N.n.kiss ? r.bowl.x - d * (m.size + o.size) * 0.1 : o.x - d * (t.size * 0.3 + m.size * 0.18);
+        m.x = clamp(lerp(x, goal, k), me.x0, me.x1); m.dir = d;
+        if (N.meet && !a.met && N.n.a === m) {
+          a.met = true; m.love(); o.love();
+          if (!m.bubble) m.say(N.n.kiss ? "💋" : "boop! 💕", { ms: 1400 });
+        }
+      }
     }
     return false;
   },
   busy: (m, a) => a.crashT != null || !!a.riding,
-  sit: (m, a) => (a.here && (a.kind === "game" || (a.kind === "beer" && (!a.snatch || a.t - a.hereT > SNATCH_MAD)))) || !!a.riding, // (MeoMeo s'assoit pour boire la bière volée)
-  hold: (m, a) => (a.here && a.crashT == null && !(a.snatch && !a.got) ? { game: "controller", beer: "beer" }[a.kind] : null),
+  sit: (m, a) => (a.here && (a.kind === "game" || a.kind === "matcha" || a.kind === "pho" || (a.kind === "beer" && (!a.snatch || a.t - a.hereT > SNATCH_MAD)))) || !!a.riding, // (MeoMeo s'assoit pour boire la bière volée)
+  hold: (m, a) => (a.here && a.crashT == null && !(a.snatch && !a.got) ? { game: "controller", beer: "beer", matcha: "matcha" }[a.kind] : null),
   mad: (m, a) => !!a.got && a.t - a.hereT < SNATCH_MAD, // (« 💢 » : elle est fâchée)
-  ladle: (m, a) => a.here && a.kind === "cook",
+  ladle: (m, a) => a.here && (a.kind === "cook" || a.kind === "pho"), // (cuisine, pho : les baguettes)
   look: facing,
   pose(m, a, p) {
     p.behind = true; // (derrière Tino à l'écran : jamais devant lui)
@@ -1684,9 +1758,28 @@ ACTIONS.duo = {
       const u = a.t - a.hereT;
       if (u < CHEERS) { const k = smooth(clamp(Math.min(u, CHEERS - u) / 0.35, 0, 1)); p.holdY = -9 * k; p.holdRot = -18 * k; p.armL = -40 + 30 * k; p.armR = 40 + 10 * k; p.sy = 0.97; }
       else { const gulp = Math.max(0, Math.sin(c * 1.5 + 1)) ** 4; p.holdY = -6 * gulp; p.holdRot = -12 * gulp; p.head = -5 * gulp; p.armL = -40; p.armR = 40; p.sy = 0.97; p.blush = clamp(u / 10, 0, 1); }
+    } else if (a.kind === "squish" && a.drawing) { // il / elle lui dessine une moustache (la main gribouille sous son nez)
+      p.armL = 88 + 8 * Math.sin(c * 14); p.armR = 10; p.rot = -3; p.head = 6 + 2 * Math.sin(c * 7);
     } else if (a.kind === "squish") { // il tapote la tête de Tino (qui dort)
       const pat = Math.max(0, Math.sin(c * 5)) ** 2;
       p.armL = 95 - 30 * pat; p.armR = 10; p.rot = -4 * pat; p.head = 4;
+      if (a.drew) p.bob = -Math.abs(Math.sin(c * 10)) * m.size * 0.03; // (il / elle pouffe)
+    } else if (a.kind === "matcha") { // il / elle sirote son matcha au tapioca
+      const u = a.t - a.hereT, sip = Math.max(0, Math.sin(c * 2.1 + (a.slot ? 1.7 : 0))) ** 6;
+      p.armL = -40; p.armR = 40; p.holdY = -4 * sip; p.head = -5 * sip; p.sy = 0.97; p.sip = 1 - 0.8 * clamp(u / 12, 0, 1);
+      if (r.war) warPose(m, r, p);
+    } else if (a.kind === "pho") {
+      const N = noodleState(r);
+      if (N && !N.done && (N.n.a === m || N.n.b === m)) { // la nouille à la bouche, ils se penchent l'un vers l'autre
+        const k = N.back > 0 ? 1 - N.back : smooth(N.s);
+        p.armL = 105; p.armR = 25; p.rot = m.dir * (N.meet ? 16 : 9 * k); p.head = -5 * k; p.sy = 0.97; p.blush = N.meet || N.back > 0 ? 1 : 0.3 * k;
+      } else { // les baguettes dans le bol, puis à la bouche
+        const cyc = (c + (a.slot ? 1.1 : 0)) % 2.4, up = smooth(clamp((cyc - 0.9) / 0.5, 0, 1)) * (1 - smooth(clamp((cyc - 1.9) / 0.4, 0, 1)));
+        p.armL = lerp(62, 118, up); p.armR = 18; p.rot = m.dir * 6 * (1 - up); p.head = -4 * up; p.sy = 0.97;
+      }
+    } else if (a.kind === "shop") {
+      if (r.rider === m) { p.bob = -PROPS.shop.vb[1] / PROPS.shop.vb[0] * PROPS.shop.w * t.size * 0.42; p.armL = 120 + 12 * Math.sin(c * 9); p.armR = -120 - 12 * Math.sin(c * 9 + 1); p.head = 4 * Math.sin(c * 7); } // dans le caddie, les bras en l'air
+      else if (t.act === r && r.t > 0.4 && !r.ended) ACTIONS.walk.pose(m, a, p);
     } else if (a.kind === "scooter") { // assis derrière Tino, les mains devant lui (il le tient)
       const k = smooth(clamp((r.t - 0.1) / 0.45, 0, 1)) * (r.ended ? 1 - smooth(clamp((r.t - r.endT) / 0.5, 0, 1)) : 1);
       p.bob = -PROPS.scooter.seat * t.size * k + (a.riding ? Math.sin(c * 40) * 0.3 : 0); p.armL = 35 * k; p.armR = 10 * k; p.rot = -a.dir * 3 * k; p.behind = true;
@@ -1764,6 +1857,62 @@ ACTIONS.pant = {
     p.sy = 1 - 0.06 * b; p.sx = 1 + 0.045 * b; p.head = 8 * k + 4 * Math.sin(c * 9) * k; p.armL = -26 * k; p.armR = 26 * k; p.rot = 2 * Math.sin(c * 4.5) * k;
   },
 };
+// ---- Activités à plusieurs (matcha, pho, courses) et leurs « surprises » (TWIST_P : environ 1 fois sur 2 ou 3 ; ensemble :
+// tirée par la scène, la même sur les deux téléphones) ----
+const TWIST_P = 0.4;
+// Bataille de tapioca (matcha) : chacun son tour souffle une perle dans sa paille sur un autre (préparation, vol, il / elle
+// la reçoit) ; puis tout le monde rit
+const WAR = { WIND: 0.55, FLY: 0.35, HIT: 0.6, EACH: 1.5, LAUGH: 1.4 };
+// Une seule nouille (pho) aspirée des deux bouts : SLURP s pour la manger en se rapprochant, MEET s le nez à nez (bisou entre
+// PeoPeo et MeoMeo, « boop » avec Tino), BACK s pour se rasseoir
+const NOODLE = { SLURP: 3, MEET: 1.6, BACK: 0.6 };
+// Le point d'un repère (.ms-mouth, .ms-straw-tip…) dans le repère de la page (comme le calque) ; secours : devant son visage
+function markAt(m, sel) {
+  const e = m.el.querySelector(sel), r = e?.getBoundingClientRect(), L = m.eng.layer?.getBoundingClientRect();
+  return r && (r.width || r.height) ? [r.left + r.width / 2 - (L?.left ?? 0), r.top + r.height / 2 - (L?.top ?? 0)] : [m.x + m.dir * m.size * 0.08, m.y - m.size * 0.55];
+}
+// La bataille de tapioca : les tirs (tireur, cible), dans le même ordre sur les deux téléphones (par nom)
+function startWar(r, t, comps, who) {
+  const cs = [...comps].sort((x, y) => (x.def.key < y.def.key ? -1 : 1));
+  if (who) cs.sort((x, y) => (x.def.key === who ? -1 : y.def.key === who ? 1 : 0));
+  const [a, b] = cs;
+  r.war = { t0: r.t, shots: b ? [[a, b], [b, a], [a, t], [t, b]] : [[a, t], [t, a], [a, t]] };
+  r.dur = Math.max(r.dur, r.t + r.war.shots.length * WAR.EACH + WAR.LAUGH + 1);
+}
+// À chaque image (Tino, pendant son matcha) : le tir en cours part du bout de la paille du tireur (mesuré quand il part) vers
+// la bouche de la cible ; la cible réagit au premier coup
+function warTick(t, r) {
+  const W = r.war, i = Math.floor((r.t - W.t0) / WAR.EACH);
+  if (i >= W.shots.length) { if (!W.laughed) { W.laughed = true; for (const m of new Set(W.shots.flat())) m.love(); } return; }
+  const [by, to] = W.shots[i], fire = W.t0 + i * WAR.EACH + WAR.WIND;
+  if (r.t >= fire && W.fired !== i) { W.fired = i; r.shot = { t0: r.t, from: markAt(by, ".ms-it-matcha .ms-straw-tip"), to: markAt(to, ".ms-mouth") }; }
+  if (r.t >= fire + WAR.FLY && W.hit !== i) {
+    W.hit = i;
+    if (!to.bubble) to.say(to === t ? pick(["Pfft!? 😳", "Hey!! 😤"]) : pick(["Hey! 😠", "Pfft! 😝", "Take that! 😤"]), { ms: 1100 });
+  }
+}
+// La pose pendant la bataille : le tireur vise (la paille à la bouche, joues gonflées), la cible encaisse, puis on rit
+function warPose(m, r, p) {
+  const W = r.war, e = r.t - W.t0, i = Math.floor(e / WAR.EACH), u = e - i * WAR.EACH;
+  if (i >= W.shots.length) { const k = clamp((W.shots.length * WAR.EACH + WAR.LAUGH - e) / 0.4, 0, 1); p.bob = -Math.abs(Math.sin(m.clock * 9)) * m.size * 0.06 * k; p.head = 5 * Math.sin(m.clock * 11) * k; return; }
+  const [by, to] = W.shots[i];
+  if (by === m && u < WAR.WIND + 0.2) { const k = smooth(clamp(u / 0.3, 0, 1)), d = Math.sign(to.x - m.x) || m.dir; p.holdY = -5 * k; p.head = -6 * k; p.sx *= 1 + 0.05 * k; p.rot = d * 6 * k; }
+  if (to === m && u > WAR.WIND + WAR.FLY && u < WAR.WIND + WAR.FLY + WAR.HIT) { const k = Math.sin(Math.PI * (u - WAR.WIND - WAR.FLY) / WAR.HIT), d = Math.sign(by.x - m.x) || m.dir; p.rot = -d * 12 * k; p.head = 9 * k; p.sy *= 1 - 0.04 * k; }
+}
+// La nouille : qui la mange (a, b), depuis quand ; où en est-on (s : 0 → 1 pendant qu'ils l'aspirent ; meet : nez à nez)
+function noodleState(r) {
+  const n = r.noodle;
+  if (!n) return null;
+  const e = r.t - n.t0;
+  return { n, e, s: clamp(e / NOODLE.SLURP, 0, 1), meet: e >= NOODLE.SLURP && e < NOODLE.SLURP + NOODLE.MEET, back: clamp((e - NOODLE.SLURP - NOODLE.MEET) / NOODLE.BACK, 0, 1), done: e >= NOODLE.SLURP + NOODLE.MEET + NOODLE.BACK };
+}
+// Pho à deux (ensemble) : PeoPeo et MeoMeo côte à côte, un bol posé par terre entre eux, du côté de Tino où il y a la place ;
+// sinon (pas la place) ils mangent dans le bol de Tino, de part et d'autre de lui (et pas de nouille partagée)
+function phoLayout(t, m, P) {
+  const D = t.size * 0.5 + m.size * 0.75, need = D + m.size * 0.36 + m.size * 0.45;
+  for (const side of [Math.sign(m.x - t.x) || 1, -(Math.sign(m.x - t.x) || 1)]) if (t.x + side * need <= P.x1 && t.x + side * need >= P.x0) return { ok: true, side, D };
+  return { ok: false };
+}
 // ⚔️ Combat de boss « à la Elden Ring » : PeoPeo et / ou MeoMeo affrontent Tino. Tout le combat est écrit dans l'action de
 // Tino (boss) : le « script » — tiré d'un nombre, le même sur les deux téléphones quand ils sont ensemble (scène « boss »),
 // donc mêmes attaques, même vie, même fin —, la vie de Tino (qui suit le script, pas les sorts vraiment lancés), qui lance
@@ -1942,7 +2091,7 @@ ACTIONS.boss = {
     a.casters = []; a.targets = []; a.from = [];
     a.script = bossScript(a.seed ?? Math.floor(Math.random() * 2 ** 31), a.win ?? Math.random() < BOSS.WIN);
     m.eng.lastFight = Date.now();
-    if (!m.fx) { m.fxEl.innerHTML = BOSS_FX; const q = (s) => m.fxEl.querySelector(s); m.fx = { hp: q(".ms-hp"), fill: q(".ms-hp-fill"), lag: q(".ms-hp-lag"), dmg: q(".ms-hp-dmg"), glint: q(".ms-glint"), burst: q(".ms-burst"), shock: q(".ms-shock") }; }
+    if (!m.fx) { const box = document.createElement("div"); box.className = "ms-fx-boss"; box.innerHTML = BOSS_FX; m.fxEl.append(box); const q = (s) => box.querySelector(s); m.fx = { hp: q(".ms-hp"), fill: q(".ms-hp-fill"), lag: q(".ms-hp-lag"), dmg: q(".ms-hp-dmg"), glint: q(".ms-glint"), burst: q(".ms-burst"), shock: q(".ms-shock") }; }
     m.fxEl.hidden = m.el.hidden;
     if (!m.bubble) m.say(pick(["RAAAWR!! 💢", "You dare challenge me?! 💢", "Come at me! 💢"]), { ms: 1300 });
   },
@@ -2037,6 +2186,7 @@ function bossHp(a) {
   }
   return { hp, lag: Math.max(lag, hp), combo, since: a.t - last };
 }
+const FREE_MOVES = ["idle", "walk", "hop", "sit", "wave", "sleep", "today", "chat", "belly", "nap"]; // (petits mouvements : on s'écarte des autres, voir spread)
 const CALM =["idle", "sit", "wave"]; // quand il a un message à dire, il reste là pour qu'on puisse le lire
 
 class Mascot {
@@ -2199,6 +2349,39 @@ class Mascot {
   // Ce qu'il fait quand on lui a demandé de rester (appui long) : assis le jour ; la nuit (et la sieste), couché dans son
   // lit — jamais assis à côté du lit (« il dort debout malgré le lit » : sans doute un appui long en zoomant)
   stayStep() { return this.eng.night() && !this.bubble ? (this.def.only ? { type: "sleep", dur: Infinity, stay: true } : { type: "nap", dur: Infinity, bed: true, stay: true }) : { type: "sit", dur: Infinity, stay: true }; }
+  // La place libre la plus proche de x sur la ligne k : personne debout là, ni en train d'y aller (marche, saut), à moins de
+  // ~0,35 × leurs deux tailles (sinon on s'empile)
+  freeX(k, x) {
+    const P = this.plat(k), all = this.eng.all?.() ?? [];
+    if (!P) return x;
+    const taken = [];
+    for (const o of all) {
+      if (o === this || o.el.hidden || o.inPot || o.away) continue;
+      const g = (this.size + o.size) * 0.35;
+      if (o.k === k) taken.push([o.x, g]);
+      let kk = o.k;
+      for (const st of [o.act, ...o.plan]) {
+        if (!st) continue;
+        if (st.type === "hop" || st.type === "fly") kk = st.p1 ?? kk;
+        const to = st.type === "walk" ? st.x : st.type === "hop" || st.type === "fly" ? st.x1 : null;
+        if (kk === k && to != null) taken.push([to, g]);
+      }
+    }
+    const ok = (v) => taken.every(([t, g]) => Math.abs(v - t) >= g);
+    for (let d = 0; d <= P.x1 - P.x0; d += 4) for (const v of [x + d, x - d]) if (v >= P.x0 && v <= P.x1 && ok(v)) return v;
+    return clamp(x, P.x0, P.x1);
+  }
+  // Petits mouvements libres (pas les activités à plusieurs, qui placent chacun) : arrivées de marche et de saut sur une place
+  // libre ; et avant de s'arrêter là où quelqu'un est déjà, un petit pas de côté
+  spread(steps) {
+    let k = this.k;
+    for (const st of steps) {
+      if (st.type === "hop") { k = st.p1; st.x1 = this.freeX(k, st.x1); }
+      else if (st.type === "walk") st.x = this.freeX(k, st.x);
+    }
+    if (["idle", "sit", "wave", "sleep", "chat", "belly"].includes(steps[0]?.type)) { const fx = this.freeX(this.k, this.x); if (Math.abs(fx - this.x) > 2) steps.unshift({ type: "walk", x: fx }); }
+    return steps;
+  }
   // Fait faire une action tout de suite (ou juste après celle en cours si elle ne s'interrompt pas ; s'il nage, il sort de l'eau)
   now(steps) {
     if (!this.busy()) { this.plan = steps.slice(1); this.act = steps[0]; return; }
@@ -2351,7 +2534,8 @@ class Mascot {
       if (T && this.eng.visible(T) && (t.k !== this.k || Math.abs(t.x - this.x) > 4)) { this.plan = this.pathTo(t); return this.plan.shift(); }
       return { type: "nap", dur: Infinity, bed: true };
     } else name = weighted(Object.keys(ACTIONS).filter((n) => !this.def.only || this.def.only.includes(n)).map((n) => [ACTIONS[n].weight?.(this, ctx) ?? 0, n]));
-    const steps = (ACTIONS[name].make ?? (() => [{ type: name }]))(this, me, ctx);
+    let steps = (ACTIONS[name].make ?? (() => [{ type: name }]))(this, me, ctx);
+    if (FREE_MOVES.includes(name)) steps = this.spread(steps);
     this.plan = [...steps.slice(1), { type: "idle", dur: rand(0.6, 2.4) }];
     return steps[0];
   }
@@ -2475,6 +2659,8 @@ class Mascot {
     const inHands = a.t !== undefined ? (A.hold ? A.hold(this, a) : HOLD_OF[a.type]) ?? null : null; // manette, matcha, bière, bol de pho
     this.el.classList.toggle("ms-tool-ladle", a.t !== undefined && !!A.ladle?.(this, a)); // (PeoPeo : la grande louche)
     this.el.classList.toggle("ms-tool-staff", a.t !== undefined && !!A.staff?.(this, a)); // (PeoPeo / MeoMeo : le bâton des sorts)
+    this.el.classList.toggle("ms-boba-on", (a.type === "matcha" && !!a.boba) || (a.type === "duo" && a.kind === "matcha")); // (matcha à plusieurs : au tapioca)
+    this.el.classList.toggle("ms-stache-on", Date.now() < (this.stacheUntil ?? 0)); // (moustache dessinée pendant sa sieste, 1 min)
     const gl = a.t !== undefined && A.glint ? Math.round(clamp(A.glint(this, a), 0, 1) * 20) / 20 : 0; // (la pierre du bâton s'illumine)
     if (gl !== this.glintK) { this.glintK = gl; this.el.style.setProperty("--glint", String(gl)); }
     const z = p.behind ? "-1" : ""; if (this.el.style.zIndex !== z) this.el.style.zIndex = z; // (passager du scooter : derrière Tino)
@@ -2516,6 +2702,7 @@ class Mascot {
     this.placeBed(bw);
     this.placeProp();
     this.placeBoss(a);
+    this.placeDuoFx(a);
     this.wearFrames();
   }
 
@@ -2552,7 +2739,7 @@ class Mascot {
   placeBoss(a) {
     const on = a.type === "boss" && a.t !== undefined && !!a.script && !!this.fx;
     if (!on) {
-      if (this.fxOn) { this.fxOn = false; this.el.classList.remove("ms-hit"); for (const e of this.fxEl.children) e.style.visibility = "hidden"; }
+      if (this.fxOn) { this.fxOn = false; this.el.classList.remove("ms-hit"); for (const k of ["hp", "glint", "burst", "shock"]) this.fx[k].style.visibility = "hidden"; } // (seulement les siens : le calque des activités est à part)
       return;
     }
     this.fxOn = true;
@@ -2601,6 +2788,32 @@ class Mascot {
     }
     bn.style.visibility = "visible"; bn.style.opacity = clamp(Math.min(bs / 0.5, (bl - bs) / 0.45), 0, 1).toFixed(3);
     bn.style.transform = `translate3d(${((v.left + v.right - this.bannerW) / 2).toFixed(1)}px, ${(v.top + (v.bottom - v.top) * 0.36 - this.bannerH / 2).toFixed(1)}px, 0) scale(${(1 + 0.05 * bs / bl).toFixed(4)})`;
+  }
+
+  // Activités à plusieurs (sur Tino, pendant son matcha ou son pho) : la perle de tapioca en vol, le bol posé par terre (pho
+  // côte à côte), la nouille aspirée des deux bouts (de bouche à bouche, qui plonge dans le bol) — depuis l'état, à chaque image
+  placeDuoFx(a) {
+    const on = (a.type === "matcha" || a.type === "pho") && a.t !== undefined && (!!a.shot || !!a.bowl || !!a.noodle);
+    if (!on && !this.dfx?.on) return;
+    if (!this.dfx) {
+      const box = document.createElement("div"); box.className = "ms-fx-duo";
+      box.innerHTML = `<div class="ms-pearl"></div><div class="ms-bowl"><svg viewBox="30 55 40 33" aria-hidden="true">${PHO}</svg></div><svg class="ms-noodle" width="1" height="1" aria-hidden="true"><path d="" fill="none" stroke="#f3dca2" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+      this.fxEl.append(box);
+      this.dfx = { pearl: box.querySelector(".ms-pearl"), bowl: box.querySelector(".ms-bowl"), noodle: box.querySelector(".ms-noodle"), path: box.querySelector(".ms-noodle path"), on: false };
+    }
+    const D = this.dfx, show = (el, yes) => { el.style.visibility = yes ? "visible" : "hidden"; };
+    D.on = on;
+    const s = on && a.shot ? (a.t - a.shot.t0) / WAR.FLY : -1;
+    show(D.pearl, s >= 0 && s < 1);
+    if (s >= 0 && s < 1) { const [x0, y0] = a.shot.from, [x1, y1] = a.shot.to; D.pearl.style.transform = `translate3d(${lerp(x0, x1, s).toFixed(1)}px, ${(lerp(y0, y1, s) - Math.sin(Math.PI * s) * 10).toFixed(1)}px, 0)`; }
+    show(D.bowl, on && !!a.bowl);
+    if (on && a.bowl) { const w = a.bowl.w, h = w * 33 / 40; D.bowl.style.width = w.toFixed(1) + "px"; D.bowl.style.height = h.toFixed(1) + "px"; D.bowl.style.transform = `translate3d(${(a.bowl.x - w / 2).toFixed(1)}px, ${(this.y - h).toFixed(1)}px, 0)`; }
+    const N = on ? noodleState(a) : null, live = !!N && N.e < NOODLE.SLURP + 0.15;
+    show(D.noodle, live);
+    if (live) {
+      const [ax, ay] = markAt(N.n.a, ".ms-mouth"), [bx, by] = markAt(N.n.b, ".ms-mouth"), sag = lerp(24, 3, N.s);
+      D.path.setAttribute("d", `M${ax.toFixed(1)} ${ay.toFixed(1)}Q${((ax + bx) / 2).toFixed(1)} ${(Math.max(ay, by) + sag).toFixed(1)} ${bx.toFixed(1)} ${by.toFixed(1)}`);
+    }
   }
 
   // Lit centré sur sa place de la nuit, tête de lit du côté de sa tête ; couverture de ses pieds jusqu'au cou
@@ -2697,6 +2910,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   let sceneCache = null;
   const scene = (k) => (sceneCache?.k === k ? sceneCache : (sceneCache = sceneOf(k)));
   const list = kinds.map((k) => new Mascot(eng, { ...(KINDS[k] ?? KINDS.tino), key: KINDS[k] ? k : "tino" }));
+  eng.all = () => list; // (pour ne pas s'empiler : freeX)
   const room = Math.max(...list.map((m) => m.size)) * 1.05; // place au-dessus d'une plateforme pour qu'il y tienne
   eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
   // L'autre personnage (key), s'il est à l'écran (pas parti, pas dans la marmite)
