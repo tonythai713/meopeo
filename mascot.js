@@ -217,6 +217,7 @@ function sealSvg() {
   ${stars}
   <g class="ms-dirt" opacity="0" fill="#8a6a48"><ellipse cx="33" cy="84" rx="4.5" ry="3" opacity="0.45"/><ellipse cx="62" cy="70" rx="3.2" ry="2.4" opacity="0.4"/><ellipse cx="55" cy="88" rx="2.6" ry="2" opacity="0.4"/><ellipse cx="70" cy="82" rx="2.2" ry="1.8" opacity="0.35"/></g>
   <g class="ms-wear-body"></g>
+  <g class="ms-stuck-body"></g>
   <g class="ms-hold" display="none">${Object.entries(HELD).map(([k, svg]) => `<g class="ms-it ms-it-${k}">${svg}</g>`).join("")}</g>
   <g class="ms-arm-l">${tools(-1)}<ellipse class="ms-fur" cx="17" cy="62" rx="7.5" ry="9.5" transform="rotate(35 17 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/><g class="ms-dirt" opacity="0" fill="#8a6a48"><ellipse cx="15" cy="66" rx="2.6" ry="2" opacity="0.5"/></g></g>
   <g class="ms-arm-r">${tools(1)}<ellipse class="ms-fur" cx="83" cy="62" rx="7.5" ry="9.5" transform="rotate(-35 83 62)" fill="${fur}" stroke="${line}" stroke-width="1.3"/><g class="ms-dirt" opacity="0" fill="#8a6a48"><ellipse cx="85" cy="58" rx="2.2" ry="1.8" opacity="0.45"/></g></g>
@@ -245,6 +246,7 @@ function sealSvg() {
       <circle cx="22" cy="19" r="3" fill="#eeac25"/>
     </g>
     <g class="ms-wear-head"></g>
+    <g class="ms-stuck-head"></g>
   </g>
 </svg>`;
 }
@@ -1885,10 +1887,14 @@ function warTick(t, r) {
   const W = r.war, i = Math.floor((r.t - W.t0) / WAR.EACH);
   if (i >= W.shots.length) { if (!W.laughed) { W.laughed = true; for (const m of new Set(W.shots.flat())) m.love(); } return; }
   const [by, to] = W.shots[i], fire = W.t0 + i * WAR.EACH + WAR.WIND;
-  if (r.t >= fire && W.fired !== i) { W.fired = i; r.shot = { t0: r.t, from: markAt(by, ".ms-it-matcha .ms-straw-tip"), to: markAt(to, ".ms-mouth") }; }
+  if (r.t >= fire && W.fired !== i) {
+    W.fired = i; W.spot = to === t ? t.pearlSpot() : null; // (sur Tino, elle va rester collée là où elle tombe)
+    r.shot = { t0: r.t, from: markAt(by, ".ms-it-matcha .ms-straw-tip"), to: markAt(to, W.spot ? ".ms-tapi-wait" : ".ms-mouth") };
+  }
   if (r.t >= fire + WAR.FLY && W.hit !== i) {
     W.hit = i;
     if (!to.bubble) to.say(to === t ? pick(["Pfft!? 😳", "Hey!! 😤"]) : pick(["Hey! 😠", "Pfft! 😝", "Take that! 😤"]), { ms: 1100 });
+    if (W.spot) { t.stickPearl(W.spot); W.spot = null; } // (elle reste collée sur lui : il faut le laver)
   }
 }
 // La pose pendant la bataille : le tireur vise (la paille à la bouche, joues gonflées), la cible encaisse, puis on rit
@@ -2370,6 +2376,34 @@ class Mascot {
     const ok = (v) => taken.every(([t, g]) => Math.abs(v - t) >= g);
     for (let d = 0; d <= P.x1 - P.x0; d += 4) for (const v of [x + d, x - d]) if (v >= P.x0 && v <= P.x1 && ok(v)) return v;
     return clamp(x, P.x0, P.x1);
+  }
+  // Perles de tapioca collées sur Tino (bataille de tapioca) : elles restent jusqu'à ce qu'on le lave (l'app les garde sur
+  // l'appareil et les enlève après un bain : eng.onPearl, handle.pearls) ; sur sa tête (elles suivent sa tête : front, côtés,
+  // menton — jamais sur ses yeux, son nez ni sa fleur) ou sur les côtés de son coussin (pas derrière ce qu'il tient) ; 12 au
+  // plus. pearlSpot : où la prochaine va se coller (posée tout de suite, invisible — .ms-tapi-wait —, pour que la perle vole
+  // jusque-là) ; stickPearl : elle y est
+  pearlSpot() {
+    let p = { x: 34, y: 80, part: "body" };
+    for (let i = 0; i < 60; i++) {
+      const head = Math.random() < 0.7, x = head ? rand(21, 79) : Math.random() < 0.5 ? rand(29, 39) : rand(61, 71), y = head ? rand(9, 62) : rand(68, 88);
+      if (head && (((x - 50) / 28) ** 2 + ((y - 36) / 25) ** 2 > 1 || (y > 29 && y < 57 && x > 25 && x < 75) || (x < 32 && y < 30))) continue;
+      p = { x: +x.toFixed(1), y: +y.toFixed(1), part: head ? "head" : "body" };
+      break;
+    }
+    this.setPearls([...this.stuck(), { ...p, wait: true }]);
+    return p;
+  }
+  stickPearl(p) {
+    this.setPearls([...this.stuck(), p].slice(-12));
+    this.eng.onPearl?.(p);
+  }
+  stuck() { return (this.pearls ?? []).filter((q) => !q.wait); }
+  setPearls(list = []) {
+    this.pearls = list;
+    for (const part of ["head", "body"]) {
+      const g = this.el.querySelector(".ms-stuck-" + part);
+      if (g) g.innerHTML = list.map((p, i) => (p.part !== part ? "" : `<g class="ms-tapi${p.wait ? " ms-tapi-wait" : ""}" data-i="${i}"${p.wait ? ' opacity="0"' : ""}><circle cx="${p.x}" cy="${p.y}" r="4" fill="#3b2516"/><circle cx="${(p.x - 1.2).toFixed(1)}" cy="${(p.y - 1.2).toFixed(1)}" r="1.2" fill="#fff" opacity="0.45"/></g>`)).join("");
+    }
   }
   // Petits mouvements libres (pas les activités à plusieurs, qui placent chacun) : arrivées de marche et de saut sur une place
   // libre ; et avant de s'arrêter là où quelqu'un est déjà, un petit pas de côté
@@ -2900,7 +2934,7 @@ const pageView = () => ({ top: scrollY, bottom: scrollY + innerHeight, left: scr
 // grumbles() : ses phrases râleuses quand on le touche 5 fois de suite
 // siesta() : sa sieste après le repas (12:30 – 13:00 par défaut) — il dort dans son lit, comme la nuit ;
 // meal() : l'heure des repas (11:30 – 12:30 et 18:30 – 19:30 par défaut) — il cuisine ou fait un barbecue (et ne joue pas)
-export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, siesta = isSiesta, meal = isMeal, tapThrough = () => true, lines = () => [], grumbles = () => [], belly = () => null, home = () => null, onHome = () => {}, together = () => false, potFx = () => {} }) {
+export function mountMascots({ layer, kinds = ["tino"], platforms, today = () => null, view = pageView, night = isNight, siesta = isSiesta, meal = isMeal, tapThrough = () => true, lines = () => [], grumbles = () => [], belly = () => null, home = () => null, onHome = () => {}, together = () => false, potFx = () => {}, onPearl = null }) {
   injectStyle();
   layer.classList.add("ms-layer");
   // (la sieste fait tout comme la nuit : case d'aujourd'hui, lit, pas de nage…) ; ensemble (MeoMeo et PeoPeo là) : Tino reste éveillé
@@ -2911,6 +2945,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   const scene = (k) => (sceneCache?.k === k ? sceneCache : (sceneCache = sceneOf(k)));
   const list = kinds.map((k) => new Mascot(eng, { ...(KINDS[k] ?? KINDS.tino), key: KINDS[k] ? k : "tino" }));
   eng.all = () => list; // (pour ne pas s'empiler : freeX)
+  eng.onPearl = onPearl; // (une perle de tapioca vient de se coller sur Tino : l'app la garde)
   const room = Math.max(...list.map((m) => m.size)) * 1.05; // place au-dessus d'une plateforme pour qu'il y tienne
   eng.visible = (P) => !!P && P.y - room >= eng.v.top && P.y <= eng.v.bottom;
   // L'autre personnage (key), s'il est à l'écran (pas parti, pas dans la marmite)
@@ -3205,6 +3240,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       onHome(kind, m.inPot);
       refresh(); run();
     },
+    pearls(l) { tino?.setPearls(l); }, // (les perles de tapioca collées sur Tino : celles gardées par l'app, moins celles parties au bain)
     hush(kind) { list.forEach((m) => { if (kind && m.def.key !== kind) return; m.pendingSay = null; m.hush(true); }); }, // (sans prévenir : lu ailleurs, déconnexion)
     inPot(kind) { return !!list.find((x) => x.def.key === kind)?.inPot; },
     scene() { return together() ? scene(slotNow()) : null; }, // (essais : la scène commune en cours) // (PeoPeo est dans la marmite : sa tête en sort)

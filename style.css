@@ -615,6 +615,8 @@ a { color: var(--text-accent); }
 .mp-foam-stick.mp-rinse { animation: mp-foam-rinse 0.8s ease-in forwards; }
 @keyframes mp-foam-rinse { from { opacity: 0.95; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, 40%) scale(0.6); } }
 .mp-drop { position: absolute; top: 0; z-index: 5; width: 5px; height: 9px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: #8fd0ff; pointer-events: none; animation: mp-drop 0.9s ease-in forwards; }
+.mp-tapi-fall { position: absolute; z-index: 5; margin: -2px 0 0 -2px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #8a6a52, #2b1a0f 70%); pointer-events: none; animation: mp-tapi-fall 0.9s ease-in forwards; }
+@keyframes mp-tapi-fall { 20% { transform: translate(3px, -6px); } to { opacity: 0; transform: translate(10px, 120px) rotate(200deg); } }
 @keyframes mp-drop { from { opacity: 0; transform: translateY(-10px); } 15% { opacity: 1; } to { opacity: 0; transform: translateY(150px); } }
 
 /* La marmite (à la place de la case « MeoMeo ») : PeoPeo (et MeoMeo plus tard) y guettent quand ils ont l'app ouverte */

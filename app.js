@@ -616,7 +616,8 @@ function refreshMascots() {
   const layer = document.createElement("div");
   document.body.append(layer);
   mascots = mountMascots({ layer, kinds: ["tino", "peo", "meo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo,
-    home: (kind) => potSpot(kind), onHome: () => presenceChanged(), together: bothHere, potFx });
+    home: (kind) => potSpot(kind), onHome: () => presenceChanged(), together: bothHere, potFx, onPearl: keepPearl });
+  mascots.pearls(tapiocaNow());
   presenceChanged(); // (tout de suite : qui dort dans la marmite — avant qu'un message ne fasse sortir un avatar)
   syncTinoBubble();
   applyOutfit();
@@ -2045,6 +2046,7 @@ function fillShowcase(card) {
   };
   m.eng.grumbles = grumbleLines;
   m.eng.belly = bellyInfo;
+  m.setPearls(tapiocaNow()); // (le tapioca collé sur lui : on le voit en le lavant)
   showcase = { m, card };
   dressShowcase();
 }
@@ -2197,6 +2199,7 @@ function fishScene(pane) {
   tbox.style.cssText = `left:${((TX - 31) / W) * 100}%;top:${((DOCK - 62) / H) * 100}%`;
   tbox.append(box);
   const m = demoPose(box, "tino", "sit", size);
+  m.setPearls(tapiocaNow());
   m.think = () => ({ type: "sit", dur: Infinity });
   m.eng.grumbles = grumbleLines;
   const dress = async () => m.wear(await wornLook());
@@ -2467,9 +2470,22 @@ let unsubBath = null, bathSeen = null, dirtTimer = 0, bathing = null;
 const dirtNow = () => (S.bathOk === true && S.bath?.at ? Math.min(100, (BATH.perDay * (Date.now() - Date.parse(S.bath.at))) / 86400e3) : 0);
 const dirtLevel = (v) => (v < BATH.clean ? "clean" : v < BATH.dirty ? "grubby" : "dirty");
 const dirtOpacity = (v) => (v < 8 ? 0 : Math.min(0.9, 0.15 + 0.75 * (v / 100)));
-// Les taches de Tino (variable --ms-dirt sur <html>, comme la couleur) ; se refait toutes les minutes (il se salit)
+// Perles de tapioca collées sur Tino (bataille de tapioca, mascot.js) : gardées sur cet appareil jusqu'au prochain bain (le bain
+// est commun : un bain chez l'autre les enlève aussi) ; sans bain possible (23 pas exécuté) : 24 h au plus
+const tapiocaKey = () => "tapioca." + S.user?.id;
+function tapiocaNow() {
+  if (!S.user) return [];
+  const since = S.bathOk === true && S.bath?.at ? Date.parse(S.bath.at) : Date.now() - 86400e3;
+  return store.get(tapiocaKey(), []).filter((p) => p.at > since);
+}
+function keepPearl(p) { if (S.user) store.set(tapiocaKey(), [...tapiocaNow(), { ...p, at: Date.now() }].slice(-12)); }
+// Les taches de Tino (variable --ms-dirt sur <html>, comme la couleur) ; se refait toutes les minutes (il se salit) ; et son
+// tapioca (parti après un bain)
 function applyDirt() {
   clearTimeout(dirtTimer);
+  const pearls = tapiocaNow();
+  mascots?.pearls(pearls); if (!bathing) showcase?.m.setPearls(pearls); // (pendant un bain : celles que le savon a fait tomber restent tombées)
+  if (S.bathOk === true && store.get(tapiocaKey(), []).length !== pearls.length) store.set(tapiocaKey(), pearls); // (parties au bain)
   const o = dirtOpacity(dirtNow()), r = document.documentElement.style;
   if (o) r.setProperty("--ms-dirt", o.toFixed(2)); else r.removeProperty("--ms-dirt");
   if (S.bathOk === true) dirtTimer = setTimeout(() => { applyDirt(); document.querySelectorAll(".mp-bath").forEach((b) => { if (!bathing) fillBath(b); }); }, 60000);
@@ -2495,7 +2511,7 @@ function fillBath(box) {
   box.innerHTML = `<div class="mp-tummy-head"><span>${emo} Cleanliness: <b>${label}</b></span><span class="pl-legend">${Math.round(clean)}%</span></div>
     <div class="mp-tummy-bar mp-bath-bar mp-${level}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(clean)}" aria-label="Tino's cleanliness"><i style="width:${clean.toFixed(1)}%"></i></div>
     <span class="mp-row"><button type="button" data-bath>🧽 Give him a bath</button></span>
-    <div class="pl-legend">He gets dirty in about 12 hours — give him a bath twice a day. A bath also washes off his colour${colorNow() ? " (the one he has now!)" : ""}.</div>`;
+    <div class="pl-legend">He gets dirty in about 12 hours — give him a bath twice a day. A bath also washes off his colour${colorNow() ? " (the one he has now!)" : ""}${tapiocaNow().length ? " and the tapioca stuck on him 🧋" : ""}.</div>`;
   box.querySelector("[data-bath]").addEventListener("click", () => startBath(box));
 }
 // Le bain (sans baignoire : demande de Tony) : chaque toucher sur le grand Tino le frotte au savon (mousse, il fait « boing »), ses taches
@@ -2504,13 +2520,31 @@ function startBath(box) {
   const sc = showcase;
   if (!sc?.card.isConnected || bathing) return;
   if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
-  const stage = sc.card.querySelector(".mp-show-stage"), dirt0 = dirtOpacity(dirtNow());
+  const stage = sc.card.querySelector(".mp-show-stage"), dirt0 = dirtOpacity(dirtNow()), pearls0 = tapiocaNow();
   let n = 0, done = false;
   sc.card.classList.add("mp-bathing");
   const say = (t) => { const b = box.querySelector(".mp-bath-msg") ?? box.appendChild(Object.assign(document.createElement("div"), { className: "pl-legend mp-bath-msg" })); b.textContent = t; };
   box.querySelector("[data-bath]").disabled = true;
   say(`🧼 Tap Tino to rub the soap on him! (0/${SCRUBS})`);
-  const end = () => { stage.removeEventListener("click", scrub, true); stage.querySelectorAll(".mp-foam-stick, .mp-soap").forEach((f) => f.remove()); sc.card.classList.remove("mp-bathing"); sc.card.style.removeProperty("--ms-dirt"); bathing = null; };
+  const end = () => { stage.removeEventListener("click", scrub, true); stage.querySelectorAll(".mp-foam-stick, .mp-soap").forEach((f) => f.remove()); sc.card.classList.remove("mp-bathing"); sc.card.style.removeProperty("--ms-dirt"); sc.m.setPearls(tapiocaNow()); bathing = null; };
+  // Le tapioca collé : le savon fait tomber les perles les plus proches de là où on frotte (il en reste keep) ; elles tombent
+  function unstick(x, y, keep) {
+    const r0 = stage.getBoundingClientRect(), at = [...sc.m.el.querySelectorAll(".ms-tapi")].map((g) => {
+      const b = g.getBoundingClientRect();
+      return { i: +g.dataset.i, x: b.left + b.width / 2 - r0.left, y: b.top + b.height / 2 - r0.top, w: b.width };
+    }).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
+    const off = at.slice(0, Math.max(0, at.length - keep));
+    if (!off.length) return;
+    for (const p of off) {
+      const f = document.createElement("i");
+      f.className = "mp-tapi-fall";
+      f.style.left = `${p.x}px`; f.style.top = `${p.y}px`; f.style.width = f.style.height = `${Math.max(4, p.w).toFixed(1)}px`;
+      stage.append(f);
+      setTimeout(() => f.remove(), 1000);
+    }
+    const gone = new Set(off.map((p) => p.i));
+    sc.m.setPearls(sc.m.pearls.filter((_, i) => !gone.has(i)));
+  }
   async function scrub(ev) {
     ev.stopPropagation(); ev.preventDefault(); // (pas le saut / la colère du toucher habituel)
     if (done) return;
@@ -2533,6 +2567,7 @@ function startBath(box) {
     }
     sc.m.flat = 0.45; sc.m.flatV = 0; // (il fait « boing » sous la brosse)
     sc.card.style.setProperty("--ms-dirt", (dirt0 * (1 - n / SCRUBS)).toFixed(2)); // ses taches pâlissent
+    unstick(x, y, n < SCRUBS ? Math.ceil(pearls0.length * (1 - n / SCRUBS)) : 0); // et le tapioca tombe
     say(n < SCRUBS ? `🧼 Scrub scrub… (${n}/${SCRUBS})` : "🚿 Rinsing…");
     if (n < SCRUBS) return;
     done = true;
