@@ -278,10 +278,21 @@ function peoHead(gid) {
     <g class="ms-wear-head"></g>
   </g>`;
 }
+// Ses flancs : quand on a séparé ses bras du dessin, le corps a été coupé tout droit sous les bras (x 42,3 et 56,1, de y 60 à 70) ;
+// un bras qui s'écarte laissait voir la coupure, et même un trou entre le bras et le corps (jusqu'à la bretelle du sac). Le
+// pull continue donc dessous, jusqu'au bord qu'aurait son corps (de l'épaule au bas du pull, avec son trait) ; à gauche, le bas
+// est blanc (le grand rond blanc du pull arrive jusqu'au bord). Dessiné SOUS le corps : il ne se voit que dans ces trous.
+const PEO_FLANKS = `<g class="ms-flanks">
+    <path d="M40.5 58.2C40.2 61 40.5 64 40.8 66.6L42.9 66.4L42.9 58.2Z" fill="#3c3539"/>
+    <path d="M40.8 66.6C40.9 67.8 41 68.8 41.15 69.8L42.9 69.8L42.9 66.4Z" fill="#f6f2f3"/>
+    <path d="M60.7 58.4C60.6 62 58.9 66.8 57.3 69.8L55.8 69.8L55.8 58.4Z" fill="#3c3539"/>
+    <path d="M40.5 58.2C40.2 61 40.5 64 40.8 66.6C40.9 67.8 41 68.8 41.15 69.8M60.7 58.4C60.6 62 58.9 66.8 57.3 69.8" fill="none" stroke="#1f0f13" stroke-width="0.45" stroke-linecap="round"/>
+  </g>`;
 function peoSvg(gid = "ms-flush-peo") {
   return `<svg class="ms-peo" viewBox="0 0 100 100" aria-hidden="true">
   <g class="ms-foot-l">${peoImg("shoe-l", 36.6, 90.98, 10.83, 8)}</g>
   <g class="ms-foot-r">${peoImg("shoe-r", 52.82, 91.07, 10.33, 7.67)}</g>
+  ${PEO_FLANKS}
   ${peoImg("body", 37.3, 49.04, 30.83, 43.83)}
   <g class="ms-wear-body"></g>
   <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(49 71) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(49 70) scale(0.55) translate(-51 -76)">${BEER}</g><g class="ms-it ms-it-matcha" transform="translate(49 70) scale(0.55) translate(-50 -76)">${MATCHA}</g></g>
@@ -499,7 +510,7 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo", "fight"];
 export const KINDS = {
   peo: {
-    name: "PeoPeo", svg: () => peoSvg(), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
+    name: "PeoPeo", cutout: true, svg: () => peoSvg(), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
     // size 60 : 1,5 fois la hauteur de Tino (mesurée sur les pixels : 92,8 unités de haut, Tino 92 → 55,7 px contre 36,8) ; wide : un peu élargi
     only: PEO_ACTIONS, calm: true, home: true, // home : il vit dans la marmite (voir mountMascots, homeTick)
     body: { cy: 56, support: Array(24).fill(42) },
@@ -507,7 +518,7 @@ export const KINDS = {
   // MeoMeo : les mêmes actions que PeoPeo ; size 56 : 1,4 × la hauteur de Tino (92 unités de haut, comme PeoPeo — réglable) ;
   // snatch : quand Tino boit une bière, elle la lui prend, s'énerve et la boit (duo « beer »)
   meo: {
-    name: "MeoMeo", armMax: 135, svg: () => meoSvg(), size: 56, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
+    name: "MeoMeo", cutout: true, armMax: 135, svg: () => meoSvg(), size: 56, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
     only: PEO_ACTIONS, calm: true, home: true,
     body: { cy: 56, support: Array(24).fill(42) },
   },
@@ -785,6 +796,7 @@ const ACTIONS = {
     pose(m, a, p) {
       const ph = m.clock * 11;
       p.rot = 5 * Math.sin(ph); p.bob = -Math.abs(Math.sin(ph)) * m.size * 0.06; p.armL = p.armR = 16 * Math.sin(ph); p.sx = p.sy = 1;
+      if (m.def.cutout) { p.armL = 12 * Math.sin(ph); p.armR = -p.armL; } // (PeoPeo / MeoMeo : un bras vers l'avant, l'autre vers l'arrière)
       p.footL = -Math.max(0, Math.sin(ph)) * 3; p.footR = -Math.max(0, -Math.sin(ph)) * 3; // un pied puis l'autre
     },
   },
@@ -2690,6 +2702,7 @@ class Mascot {
     const p = { sx: 1 - 0.015 * breathe, sy: 1 + 0.025 * breathe, rot: 0, bob: 0, spin: 0, head: 2 * Math.sin(c * 0.9), armL: 0, armR: 0, footL: 0, footR: 0, holdY: 0, holdRot: 0, sip: 1, blush: 0, dizzy: false };
     if (a.t !== undefined) A.pose?.(this, a, p);
     if (this.def.armMax) { p.armL = clamp(p.armL, -this.def.armMax, this.def.armMax); p.armR = clamp(p.armR, -this.def.armMax, this.def.armMax); } // (MeoMeo : bras levés pas trop haut)
+    const cut = !!this.def.cutout; // (PeoPeo / MeoMeo : dessinés en morceaux — voir plus bas, bras et pieds)
     // Couché sur le côté : tout le corps pivote, il respire lentement, les pattes se relâchent
     if (this.lie > 0.01) {
       p.spin += this.side * LIE * this.lie;
@@ -2699,9 +2712,9 @@ class Mascot {
     }
     // Assis : les pieds pendent sous la ligne et se balancent (doucement s'il dort)
     if (this.sink > 0.01) {
-      const swing = A.zzz ? 0.6 : 3;
-      p.footL = lerp(p.footL, 4 + swing * Math.sin(c * 3.2), this.sink);
-      p.footR = lerp(p.footR, 4 + swing * Math.sin(c * 3.2 + Math.PI), this.sink);
+      const swing = (A.zzz ? 0.6 : 3) * (cut ? 0.25 : 1), hang = cut ? 0.8 : 4;
+      p.footL = lerp(p.footL, hang + swing * Math.sin(c * 3.2), this.sink);
+      p.footR = lerp(p.footR, hang + swing * Math.sin(c * 3.2 + Math.PI), this.sink);
     }
     // Tête aplatie (on la frotte) : elle s'écrase sur son cou (la tenue et la fleur avec), le corps se tasse un peu
     const f = this.flat;
@@ -2753,10 +2766,14 @@ class Mascot {
     if (p.run) this.dust_at.style.transform = `translate(${(50 - this.dir * 16).toFixed(1)}px, 97px) scaleX(${-this.dir})`;
     this.face.style.transform = `translateX(${look.toFixed(2)}px) scaleX(${(1 - Math.abs(look) / 90).toFixed(3)})`;
     this.flower.style.transform = `translate(${(-look * 0.5).toFixed(2)}px, ${(Math.abs(look) * 0.15).toFixed(2)}px)`;
-    this.arm_l.style.transform = `translateX(${(look * 0.2).toFixed(2)}px) rotate(${p.armL.toFixed(1)}deg)`;
-    this.arm_r.style.transform = `translateX(${(look * 0.2).toFixed(2)}px) rotate(${p.armR.toFixed(1)}deg)`;
-    this.foot_l.style.transform = `translate(${(look * 0.35).toFixed(2)}px, ${p.footL.toFixed(2)}px)`;
-    this.foot_r.style.transform = `translate(${(look * 0.35).toFixed(2)}px, ${p.footR.toFixed(2)}px)`;
+    // PeoPeo / MeoMeo (dessinés en morceaux) : leurs jambes sont dans le dessin du corps et ne bougent pas — leurs chaussures
+    // restent au bout des jambes (à peine levées en marchant, à peine pendantes assis) ; et bras et chaussures ne glissent pas de
+    // côté quand ils regardent ailleurs (sinon ils se détachent du corps)
+    const foot = (v) => (cut ? clamp(v < 0 ? v * 0.5 : v * 0.3, -1.5, 0.6) : v), sa = cut ? 0 : look * 0.2, sf = cut ? 0 : look * 0.35;
+    this.arm_l.style.transform = `translateX(${sa.toFixed(2)}px) rotate(${p.armL.toFixed(1)}deg)`;
+    this.arm_r.style.transform = `translateX(${sa.toFixed(2)}px) rotate(${p.armR.toFixed(1)}deg)`;
+    this.foot_l.style.transform = `translate(${sf.toFixed(2)}px, ${foot(p.footL).toFixed(2)}px)`;
+    this.foot_r.style.transform = `translate(${sf.toFixed(2)}px, ${foot(p.footR).toFixed(2)}px)`;
     // « z », cœur et bulle suivent la tête (même couché, même aplatie), sans tourner
     const [hx, hy] = this.def.head, rx = hx - 50, ry = hy - B.cy, drop = 23 * f; // tête aplatie : son sommet descend
     const nx = 50 + rx * Math.cos(th) - (ry + drop) * Math.sin(th), ny = B.cy + rx * Math.sin(th) + (ry + drop) * Math.cos(th) + down / u;
