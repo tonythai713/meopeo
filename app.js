@@ -77,7 +77,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, online: new Set() };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, bdays: [], bdayOk: null, letters: [], online: new Set() };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -106,7 +106,7 @@ export async function start(backend) {
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
   document.addEventListener("visibilitychange", () => { if (document.hidden) presenceCh?.set(false); presenceChanged(); }); // (en arrière-plan : il n'est plus « là »)
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyTheme(); runClocks(); } }); // (minuteries endormies en arrière-plan)
   runClocks();
@@ -167,6 +167,7 @@ async function boot(user) {
   loadDoodles();
   loadSeries();
   loadDecor();
+  loadBirthdays();
   resubscribe();
   ensurePush();
 }
@@ -256,6 +257,7 @@ function showLogin() {
   unsubCatches?.(); unsubCatches = null; S.catches = []; S.color = null; S.fishingOk = null; lastCatch = null; applyColor(); clearTimeout(fishTimer);
   unsubFeeding?.(); unsubFeeding = null; S.feeding = null; S.hungerLines = []; S.feedingOk = null; feedSeen = null; clearTimeout(tummyTimer);
   unsubBath?.(); unsubBath = null; S.bath = null; S.bathOk = null; bathSeen = null; applyDirt();
+  S.bdays = []; S.bdayOk = null; S.letters = []; partyPreview = null; letterUi?.el.remove(); letterUi = null; letterBrought = null; applyParty(); // (plus de fête)
   presenceCh?.stop(); presenceCh = null; S.online = new Set();
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
   unsubNotes?.(); unsubNotes = null; S.notes = []; S.notesOk = null;
@@ -322,13 +324,14 @@ function render() {
   const off = S.offline ? new Date(S.offline) : null;
   root.innerHTML = `${off ? `<div class="mp-offline">📴 Offline — showing your tasks as of ${off.getDate()}.${pad(off.getMonth() + 1)} at ${pad(off.getHours())}:${pad(off.getMinutes())}. Changes can't be saved until you're back online.</div>` : ""}<header class="pl-hello"><span class="mp-date">${dayTitle(now)}, ${now.getFullYear()} <span class="mp-clocks">${clocksHtml()}</span></span>
       <span class="mp-who">${esc(S.me.mark)} ${esc(S.me.label)}</span>
-      <button class="pl-refresh" data-act="refresh" title="Reload">⟳</button></header>
+      <button class="pl-refresh" data-act="refresh" title="Reload">⟳</button></header>${partyHtml()}
     <div class="pl-split"><div class="pl-left"></div><div class="pl-right"></div></div>
     <div class="pl-bottom"><div class="mp-partner"></div></div>`;
   renderMine(root.querySelector(".pl-left"));
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); resubscribe(); });
+  bindParty(root);
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
@@ -615,9 +618,10 @@ function refreshMascots() {
   if (mascots) { presenceChanged(); return mascots.refresh(); }
   const layer = document.createElement("div");
   document.body.append(layer);
-  mascots = mountMascots({ layer, kinds: ["tino", "peo", "meo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => S.lines.map((l) => l.body), grumbles: grumbleLines, belly: bellyInfo,
+  mascots = mountMascots({ layer, kinds: ["tino", "peo", "meo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => [...(partyLines() ?? []), ...S.lines.map((l) => l.body)], grumbles: grumbleLines, belly: bellyInfo,
     home: (kind) => potSpot(kind), onHome: () => presenceChanged(), together: bothHere, potFx, onPearl: keepPearl });
   mascots.pearls(tapiocaNow());
+  const party = partyNow(); mascots.party(party ? { crown: kindOf(party.who.label) } : null); // (fête d'anniversaire)
   presenceChanged(); // (tout de suite : qui dort dans la marmite — avant qu'un message ne fasse sortir un avatar)
   syncTinoBubble();
   applyOutfit();
@@ -691,9 +695,9 @@ const kindOf = (label) => Object.keys(POT_HEADS).find((k) => POT_HEADS[k].label 
 function syncTinoBubble() {
   if (!mascots || !S.user) return;
   const P = S.partner, next = S.tino.filter((m) => m.to === S.user.id && !m.seen).sort((a, b) => a.id - b.id)[0];
-  if (!next || !P || P.id !== next.from) { if (tinoShown) { mascots.hush(); tinoShown = null; } return; } // (P.id ≠ from : l'autre pas encore relu après un changement de compte)
+  if (!next || !P || P.id !== next.from) { if (tinoShown) { mascots.hush(); tinoShown = null; letterBrought = null; } bringLetter(); return; } // (P.id ≠ from : l'autre pas encore relu après un changement de compte ; plus de message : la lettre d'anniversaire, s'il y en a une)
   if (tinoShown === next.id) return;
-  tinoShown = next.id;
+  tinoShown = next.id; letterBrought = null; // (le message prend la bulle de l'avatar : la lettre reviendra après)
   mascots.say(next.body, {
     sticky: true, who: "💌", color: P.color,
     onClose: async () => { tinoShown = null; if (await guard(() => db.markTinoSeen(next.id))) loadTino(); },
@@ -2599,6 +2603,262 @@ function startBath(box) {
   bathing = { end };
 }
 
+// ---------- Anniversaires : la fête et la lettre (supabase/30_birthdays.sql) ----------
+// Le jour de l'anniversaire de l'un — dans SON fuseau (chez l'autre, la fête commence à l'heure qui correspond) —, fête chez les
+// deux : bannière avec un gâteau (le toucher souffle les bougies : confettis, et tout le monde lui souhaite), ballons, chapeaux de
+// fête (couronne pour la personne fêtée), Tino qui chante. Une lettre écrite à l'avance par l'autre (onglet Notes) s'ouvre ce
+// jour-là chez la personne fêtée : son avatar la lui apporte — la base la cache avant. Chez la personne fêtée, rien ne
+// parle de SON anniversaire avant le jour J (la carte de la lettre ne montre que l'anniversaire de l'AUTRE, LETTER_DAYS jours
+// avant ; l'aperçu de la fête est dans cette carte et n'écrit rien). Dates et fuseaux : seulement dans la base.
+const LETTER_DAYS = 45, DAY_MS = 86400e3;
+let partyTimer = 0, partyOn = null, partyPreview = null, partyBlown = false, partySeen = null, letterUi = null, letterBrought = null;
+// La date du jour dans un fuseau (« 2026-11-05 ») ; le décalage d'un fuseau à l'instant t ; minuit d'un jour dans un fuseau (ms)
+const ymdIn = (tz, t = Date.now()) => { // (construite morceau par morceau : le format d'une date toute faite change selon les navigateurs)
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(t).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
+};
+function tzOffset(tz, t) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    .formatToParts(t).map((x) => [x.type, x.value]));
+  return Date.UTC(+p.year, p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(t / 1000) * 1000;
+}
+const midnightIn = (tz, y, m, d) => { const g = Date.UTC(y, m - 1, d); return g - tzOffset(tz, g - tzOffset(tz, g)); };
+// L'anniversaire en cours ou le prochain de b ({ month, day, tz }) : { start, end, key } — comme birthday_start (30) ; né un
+// 29 février → le 28 les autres années
+function bdayWindow(b, at = Date.now()) {
+  const today = ymdIn(b.tz, at), y = +today.slice(0, 4);
+  for (const yy of [y, y + 1]) {
+    const d = Math.min(b.day, new Date(Date.UTC(yy, b.month, 0)).getUTCDate()), key = `${yy}-${pad(b.month)}-${pad(d)}`;
+    if (key >= today) return { start: midnightIn(b.tz, yy, b.month, d), end: midnightIn(b.tz, yy, b.month, d + 1), key };
+  }
+  return null;
+}
+const personOf = (id) => [S.me, S.partner].find((p) => p?.id === id) ?? null;
+const bdayDay = (b, w) => new Intl.DateTimeFormat("en-GB", { timeZone: b.tz, weekday: "short", day: "numeric", month: "short" }).format(w.start);
+const duringParty = (l, w) => { const t = Date.parse(l.openAt); return t >= w.start - 60e3 && t < w.end; }; // (la lettre de cet anniversaire-là)
+// La fête du moment (ou son aperçu) : { who (profil), b, start, end, key, preview } | null
+function partyNow() {
+  if (partyPreview && Date.now() < partyPreview.until) return partyPreview;
+  partyPreview = null;
+  const now = Date.now();
+  for (const b of S.bdays) {
+    const w = bdayWindow(b), who = personOf(b.profile);
+    if (who && w && w.start <= now && now < w.end) return { who, b, ...w };
+  }
+  return null;
+}
+async function loadBirthdays() {
+  if (!S.user) return;
+  try { S.bdays = await db.listBirthdays(); S.bdayOk = true; store.set("bdays." + S.user.id, S.bdays); }
+  catch (err) {
+    if (/does not exist|schema cache|birthday/i.test(err.message)) { S.bdayOk = false; S.bdays = []; }
+    else { const c = store.get("bdays." + S.user.id, null); if (c) { S.bdays = c; S.bdayOk = true; } } // hors ligne
+  }
+  applyParty();
+  loadLetters();
+}
+async function loadLetters() {
+  if (!S.user || !S.bdayOk) return;
+  try { S.letters = await db.listLetters(); } catch { return; }
+  fillLetters();
+  paintParty();
+  bringLetter();
+}
+// La fête commence / finit (ou son aperçu) : classes, chapeaux, ballons, bannière ; puis on attend le prochain changement
+function applyParty() {
+  clearTimeout(partyTimer);
+  const p = S.user ? partyNow() : null, key = p ? `${p.who.id}|${p.key}|${p.preview ? "preview" : ""}` : null;
+  if (key !== partyOn) {
+    const was = partyOn;
+    partyOn = key; partyBlown = false;
+    document.body.classList.toggle("mp-party", !!p);
+    mascots?.party(p ? { crown: kindOf(p.who.label) } : null);
+    balloons(!!p);
+    if (p && partySeen !== key) { partySeen = key; setTimeout(confetti, 700); }
+    if (S.me && (p || was)) render(); // (la bannière)
+    if (p && !p.preview) loadLetters(); // (la lettre s'ouvre maintenant)
+  }
+  let next = Date.now() + 6 * 3600e3; // (au plus dans 6 h : on revérifie)
+  if (p) next = Math.min(next, p.preview ? p.until : p.end);
+  for (const b of S.bdays) { const w = bdayWindow(b); if (w && w.start > Date.now()) next = Math.min(next, w.start); }
+  partyTimer = setTimeout(applyParty, Math.max(1000, next - Date.now() + 500));
+}
+// Ce que dit Tino pendant la fête (en plus de ses phrases)
+function partyLines() {
+  const p = partyNow();
+  if (!p) return null;
+  const n = p.who.label;
+  return [`Happy birthday, ${n}! 🎂`, "Chúc mừng sinh nhật! 🎉", "🎵 Happy birthday to you… 🎵", `Make a wish, ${n}! ✨`, "Cake time!! 🍰", `${n}'s birthday!! 🥳`];
+}
+const CAKE = `<svg viewBox="0 0 64 64" aria-hidden="true">
+  <ellipse cx="32" cy="57" rx="27" ry="4.5" fill="#e9ecef"/><ellipse cx="32" cy="56" rx="24" ry="3.6" fill="#fff"/>
+  <path d="M10 40h44v13a3 3 0 0 1-3 3H13a3 3 0 0 1-3-3z" fill="#f783ac"/>
+  <path d="M10 40h44v4c-3 0-3 4-6 4s-3-4-6-4-3 5-6 5-3-5-6-5-3 4-6 4-3-4-6-4-3 4-6 4-3-4-3-4z" fill="#fff0f6"/>
+  <path d="M15 28h34v12H15z" fill="#ffd8a8"/><path d="M15 28h34v3c-2.5 0-2.5 3-5 3s-2.5-3-5-3-2.5 3-5 3-2.5-3-5-3-2.5 3-5 3-2.5-3-5-3-2.5 3-4 3z" fill="#fff"/>
+  <circle cx="20" cy="48" r="1.4" fill="#fff"/><circle cx="32" cy="50" r="1.4" fill="#fff"/><circle cx="44" cy="48" r="1.4" fill="#fff"/>
+  <circle cx="24" cy="36" r="1.2" fill="#f06595"/><circle cx="40" cy="36" r="1.2" fill="#f06595"/>
+  <g class="mp-candles"><rect x="21" y="17" width="3" height="11" rx="1" fill="#74c0fc"/><rect x="30.5" y="15" width="3" height="13" rx="1" fill="#ffe066"/><rect x="40" y="17" width="3" height="11" rx="1" fill="#b197fc"/>
+    <g class="mp-flames"><path d="M22.5 10c2 3 2.5 4.5 0 6.5-2.5-2-2-3.5 0-6.5z" fill="#ffa94d"/><path d="M32 8c2 3 2.5 4.5 0 6.5-2.5-2-2-3.5 0-6.5z" fill="#ffa94d"/><path d="M41.5 10c2 3 2.5 4.5 0 6.5-2.5-2-2-3.5 0-6.5z" fill="#ffa94d"/>
+      <path d="M22.5 12.5c1 1.4 1 2.2 0 3-1-.8-1-1.6 0-3zM32 10.5c1 1.4 1 2.2 0 3-1-.8-1-1.6 0-3zM41.5 12.5c1 1.4 1 2.2 0 3-1-.8-1-1.6 0-3z" fill="#fff3bf"/></g>
+    <g class="mp-smoke" fill="none" stroke="#adb5bd" stroke-width="1.2" stroke-linecap="round"><path d="M22.5 15c-1.5-2 1.5-3 0-5"/><path d="M32 13c-1.5-2 1.5-3 0-5"/><path d="M41.5 15c-1.5-2 1.5-3 0-5"/></g></g>
+</svg>`;
+// La bannière (en haut du calendrier) : dans render() ; paintParty la refait seule (lettre arrivée, bougies)
+function partyHtml() {
+  const p = partyNow();
+  if (!p || !S.user) return "";
+  const mine = p.who.id === S.user.id, n = esc(p.who.label);
+  const letter = mine && !p.preview ? S.letters.find((l) => l.recipient === S.user.id && duringParty(l, p)) : null;
+  const draft = p.preview ? S.letters.find((l) => l.author === S.user.id && l.recipient === p.who.id && duringParty(l, p)) : null;
+  const from = letter ? personOf(letter.author) : null;
+  const sub = p.preview ? `👀 Preview — this is what you'll both see on ${esc(bdayDay(p.b, p))} (${n}'s day). Nothing is saved; it ends in a minute.`
+    : partyBlown ? "🎉 Yay! Your wish is on its way ✨ (tap the cake to light the candles again)"
+    : mine ? "Make a wish and tap the cake to blow out the candles 🕯️" : `Tap the cake to blow out the candles for ${n} 🕯️`;
+  return `<div class="mp-bday${partyBlown ? " mp-blown" : ""}"><button type="button" class="mp-cake" data-act="cake" aria-label="${partyBlown ? "Light the candles again" : "Blow out the candles"}">${CAKE}</button>
+    <div class="mp-bday-text"><b>${mine ? `🎂 Happy birthday, ${n}! 🎉` : `🎂 It's ${n}'s birthday today! 🎉`}</b><span>${sub}</span>
+    ${letter ? `<button type="button" class="mp-cta" data-letter="${letter.id}">💌 A letter from ${esc(from?.label ?? "")}${letter.readAt ? "" : " — open it!"}</button>` : ""}
+    ${draft ? `<button type="button" class="mp-cta" data-letter="${draft.id}" data-preview="1">💌 Your letter (as ${n} will see it)</button>` : ""}</div></div>`;
+}
+function bindParty(scope) {
+  const el = scope.querySelector(".mp-bday");
+  if (!el) return;
+  el.querySelector("[data-act=cake]").addEventListener("click", () => {
+    const p = partyNow();
+    if (!p) return;
+    partyBlown = !partyBlown;
+    paintParty();
+    if (!partyBlown) return; // (rallumées)
+    confetti();
+    const n = p.who.label, k = kindOf(n), thanks = "Yay!! Thank you!! 🥹" + (k === "meo" ? "💗" : "💜");
+    mascots?.cheer({ tino: `Happy birthday, ${n}! 🎂`, peo: k === "peo" ? thanks : "Chúc mừng sinh nhật! 🎉", meo: k === "meo" ? thanks : "Chúc mừng sinh nhật! 🎉" });
+  });
+  el.querySelectorAll("[data-letter]").forEach((b) => b.addEventListener("click", () => {
+    const l = S.letters.find((x) => x.id === b.dataset.letter);
+    if (l) openLetter(l, { preview: !!b.dataset.preview });
+  }));
+}
+function paintParty() {
+  const el = root?.querySelector(".mp-bday"), html = partyHtml();
+  if (!el || !html) return;
+  const box = document.createElement("div");
+  box.innerHTML = html;
+  el.replaceWith(box.firstElementChild);
+  bindParty(root);
+}
+// Ballons qui montent sur les côtés de l'écran ; confettis (au début de la fête, aux bougies, à la lettre)
+const partyColors = ["#ff6b9d", "#ffd43b", "#74c0fc", "#b197fc", "#8ce99a", "#ffa94d"];
+const stillScreen = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+function balloons(on) {
+  document.querySelector(".mp-balloons")?.remove();
+  if (!on || stillScreen()) return;
+  const el = document.createElement("div");
+  el.className = "mp-balloons";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = Array.from({ length: 6 }, (_, i) => `<i style="--x:${(i % 2 ? 89 + Math.random() * 7 : 1 + Math.random() * 7).toFixed(1)}%;--c:${partyColors[i]};--d:${(15 + Math.random() * 8).toFixed(1)}s;--w:${(-i * 3.4 - Math.random() * 2).toFixed(1)}s"></i>`).join("");
+  document.body.append(el);
+}
+function confetti() {
+  if (stillScreen() || !partyNow()) return;
+  const el = document.createElement("div");
+  el.className = "mp-confetti";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = Array.from({ length: 70 }, () => `<i style="--x:${(Math.random() * 100).toFixed(1)}vw;--c:${partyColors[Math.floor(Math.random() * partyColors.length)]};--r:${Math.round(Math.random() * 720 - 360)}deg;--d:${(1.8 + Math.random() * 1.6).toFixed(2)}s;--w:${(Math.random() * 0.6).toFixed(2)}s;--s:${(0.6 + Math.random() * 0.8).toFixed(2)}"></i>`).join("");
+  document.body.append(el);
+  setTimeout(() => el.remove(), 4300);
+}
+// La lettre, en grand ; chez la personne fêtée, la première fois : marquée lue (l'auteur voit « read ✓ »)
+function openLetter(l, { preview = false } = {}) {
+  const a = personOf(l.author) ?? { mark: "", label: "" };
+  overlay(`<div class="pl-editor-card mp-letter"><h4>💌 ${preview ? "Preview — " : ""}A letter from ${esc(a.mark)} ${esc(a.label)}</h4>
+    <div class="mp-letter-paper">${esc(l.body)}</div>
+    <div class="pl-editor-actions"><span class="mp-grow"></span><button type="button" data-act="cancel">Close</button></div></div>`);
+  confetti();
+  if (preview || l.recipient !== S.user.id || l.readAt) return;
+  db.markLetterRead(l.id).then((r) => {
+    for (const x of [l, S.letters.find((y) => y.id === l.id)]) if (x) x.readAt = r ?? new Date().toISOString(); // (la liste a pu être relue entre-temps)
+    paintParty(); fillLetters();
+  }).catch(() => {});
+}
+// Le jour J, chez la personne fêtée : l'avatar de l'auteur sort lui apporter la lettre (une fois ; sinon le bouton de la bannière)
+function bringLetter() {
+  const p = partyNow();
+  if (!p || p.preview || p.who.id !== S.user?.id || !mascots) return;
+  const l = S.letters.find((x) => x.recipient === S.user.id && duringParty(x, p) && !x.readAt), from = l && personOf(l.author);
+  if (!l || !from || letterBrought === l.id) return;
+  if (S.tino.some((m) => m.to === S.user.id && !m.seen && m.from === l.author)) return; // (un message de lui / d'elle à lire d'abord : même avatar ; la lettre vient après — syncTinoBubble)
+  letterBrought = l.id;
+  mascots.say("I brought you a birthday letter! Tap me 🎂", { sticky: true, who: "💌", color: from.color, onClose: () => openLetter(l) }, kindOf(from.label));
+}
+
+// Onglet Notes : la carte de la lettre (pour l'anniversaire de l'AUTRE, dans les LETTER_DAYS jours avant ; le jour J : « lue ✓ »)
+// et les lettres reçues (une fois ouvertes). Créée une fois par connexion : jamais réécrite pendant qu'on écrit.
+function letterCard(host) {
+  if (!letterUi || letterUi.user !== S.user.id) {
+    letterUi?.el.remove();
+    letterUi = { user: S.user.id, el: Object.assign(document.createElement("div"), { className: "mp-letters" }), timer: 0 };
+  }
+  if (letterUi.el.parentNode !== host) host.prepend(letterUi.el);
+  fillLetters();
+}
+const letterDraftKey = () => "letterDraft." + S.user?.id;
+function fillLetters() {
+  const U = letterUi;
+  if (!U || !S.user || U.user !== S.user.id) return;
+  if (U.el.contains(document.activeElement) && document.activeElement.matches("textarea")) return; // (on écrit : on ne touche à rien)
+  const P = S.partner, b = P && S.bdayOk ? S.bdays.find((x) => x.profile === P.id) : null, now = Date.now(), parts = [];
+  const w = b && bdayWindow(b);
+  if (w && w.start - now <= LETTER_DAYS * DAY_MS) {
+    const mine = S.letters.find((l) => l.author === S.user.id && l.recipient === P.id && duringParty(l, w)), n = esc(P.label);
+    const days = Math.ceil((w.start - now) / DAY_MS), local = new Date(w.start), atMidnight = !local.getHours() && !local.getMinutes();
+    const when = `${esc(bdayDay(b, w))}${atMidnight ? "" : ` — from ${esc(dayTitle(local))}, ${pad(local.getHours())}:${pad(local.getMinutes())} your time`}`;
+    if (w.start <= now) parts.push(`<div class="pl-editor-card mp-pane-card mp-letter-card"><h4>🎂 It's ${n}'s birthday today!</h4>
+      ${mine ? `<div class="pl-legend">💌 Your letter: ${mine.readAt ? `${n} read it ✓ (${tinoWhen(mine.readAt)})` : `waiting for ${n} to open it`}</div>` : `<div class="pl-legend">The party is on the calendar 🎉</div>`}</div>`);
+    else {
+      const draft = store.get(letterDraftKey(), null), text = draft?.to === P.id ? draft.body : mine?.body ?? "";
+      parts.push(`<div class="pl-editor-card mp-pane-card mp-letter-card"><h4>🎂 ${n}'s birthday — ${when} (in ${days} day${days > 1 ? "s" : ""})</h4>
+        <div class="pl-legend">💌 Write ${n} a letter. It stays hidden until ${n}'s birthday: it can only be opened that day, and your ${esc(S.me.label)} brings it. Nothing shows on ${n}'s side before — it's a surprise 🤫</div>
+        <textarea class="mp-letter-text" maxlength="5000" rows="7" placeholder="Dear ${n}…">${esc(text)}</textarea>
+        <div class="mp-row"><span class="pl-legend mp-letter-status">${draft?.to === P.id && draft.body !== (mine?.body ?? "") ? "Not saved yet" : mine ? "Saved ✓ — hidden until the day" : ""}</span><span class="mp-grow"></span>
+          <button type="button" data-act="preview">👀 Preview the party</button></div></div>`);
+    }
+  }
+  const got = S.letters.filter((l) => l.recipient === S.user.id && Date.parse(l.openAt) <= now).sort((a, c) => c.openAt.localeCompare(a.openAt));
+  if (got.length) parts.push(`<div class="pl-editor-card mp-pane-card mp-letter-card"><h4>💌 Birthday letters for you</h4>
+    ${got.map((l) => `<button type="button" class="mp-note" data-letter="${l.id}"><span class="mp-note-title">💌 From ${esc(personOf(l.author)?.label ?? "")} — ${esc(new Date(l.openAt).getFullYear() + "")}</span><span class="mp-note-preview">${esc(l.body.replace(/\s+/g, " ").slice(0, 120))}</span></button>`).join("")}</div>`);
+  U.el.innerHTML = parts.join("");
+  U.el.querySelectorAll("[data-letter]").forEach((x) => x.addEventListener("click", () => { const l = S.letters.find((y) => y.id === x.dataset.letter); if (l) openLetter(l); }));
+  const ta = U.el.querySelector(".mp-letter-text");
+  if (!ta) return;
+  const status = U.el.querySelector(".mp-letter-status");
+  ta.addEventListener("input", () => {
+    store.set(letterDraftKey(), { to: P.id, body: ta.value });
+    status.textContent = "Not saved yet";
+    clearTimeout(U.timer); U.timer = setTimeout(() => saveLetterNow(ta, status, P, w), 1500);
+  });
+  ta.addEventListener("blur", () => { if (store.get(letterDraftKey(), null)) { clearTimeout(U.timer); saveLetterNow(ta, status, P, w); } });
+  U.el.querySelector("[data-act=preview]").addEventListener("click", () => {
+    partyPreview = { who: P, b, ...w, preview: true, until: Date.now() + 60e3 };
+    if (currentTab() !== "calendar") location.hash = "";
+    applyParty();
+    scrollTo(0, 0);
+  });
+  if (store.get(letterDraftKey(), null)?.to === P.id && navigator.onLine) U.timer = setTimeout(() => saveLetterNow(ta, status, P, w), 800); // (brouillon d'avant : on l'enregistre)
+}
+async function saveLetterNow(ta, status, P, w) {
+  const draft = store.get(letterDraftKey(), null);
+  if (!draft || draft.to !== P.id) return;
+  const mine = S.letters.find((l) => l.author === S.user.id && l.recipient === P.id && duringParty(l, w)), body = draft.body;
+  status.textContent = "Saving…";
+  try {
+    if (!body.trim()) { if (mine) { await db.deleteLetter(mine.id); S.letters = S.letters.filter((l) => l !== mine); } }
+    else {
+      const r = await db.saveLetter(mine?.id ?? null, P.id, body);
+      if (r) S.letters = [...S.letters.filter((l) => l.id !== r.id), r];
+    }
+    if (store.get(letterDraftKey(), null)?.body === body) store.del(letterDraftKey());
+    status.textContent = body.trim() ? "Saved ✓ — hidden until the day" : "";
+  } catch (err) { status.textContent = `⚠️ Not saved yet — kept on this phone (${err.message})`; }
+}
+
 // ---------- La marmite et PeoPeo (présence en direct, sans SQL) ----------
 // À côté du mois, à la place de la case « MeoMeo » : une marmite dorée (casserole coréenne à ramyeon / tteokbokki) où PeoPeo
 // et MeoMeo vivent. Celui qui a MeoPeo ouvert à l'écran en ce moment y est : sa tête sort et guette (endormie la
@@ -2836,6 +3096,7 @@ function renderNotes(host) {
   let pane = host.querySelector(".mp-notes-list");
   if (!pane) { host.innerHTML = `<div class="mp-notes-list"></div>`; pane = host.firstChild; }
   doodleCard(host); // (sous les notes ; créée une fois, jamais réécrite ici : un dessin en cours reste)
+  letterCard(host); // (en haut : la lettre d'anniversaire pour l'autre, les lettres reçues — créée une fois)
   if (S.notesOk === false) {
     pane.innerHTML = `<div class="pl-editor-card mp-pane-card mp-notes-card"><h4>📝 Notes</h4><div class="pl-legend">Shared notes aren't available yet — Tony needs to run <code>supabase/14_notes.sql</code>.</div></div>`;
     return;

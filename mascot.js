@@ -247,6 +247,7 @@ function sealSvg() {
     </g>
     <g class="ms-wear-head"></g>
     <g class="ms-stuck-head"></g>
+    <g class="ms-party"></g>
   </g>
 </svg>`;
 }
@@ -276,6 +277,7 @@ function peoHead(gid) {
     </g>
     <g class="ms-flower"></g>
     <g class="ms-wear-head"></g>
+    <g class="ms-party"></g>
   </g>`;
 }
 // Ses flancs : quand on a séparé ses bras du dessin, le corps a été coupé tout droit sous les bras (x 42,3 et 56,1, de y 60 à 70) ;
@@ -288,6 +290,14 @@ const PEO_FLANKS = `<g class="ms-flanks">
     <path d="M60.7 58.4C60.6 62 58.9 66.8 57.3 69.8L55.8 69.8L55.8 58.4Z" fill="#3c3539"/>
     <path d="M40.5 58.2C40.2 61 40.5 64 40.8 66.6C40.9 67.8 41 68.8 41.15 69.8M60.7 58.4C60.6 62 58.9 66.8 57.3 69.8" fill="none" stroke="#1f0f13" stroke-width="0.45" stroke-linecap="round"/>
   </g>`;
+// Chapeau de fête (cône rayé, pompon) et couronne : base au point (0, 0), vers le haut
+const PARTY_HAT = `<path d="M-7.5 0L0-19L7.5 0Z" fill="#ff6fa8" stroke="#c2185b" stroke-width="0.7" stroke-linejoin="round"/>
+  <path d="M-5.4-5.4L4.9-1.8M-3.4-10.4L3.4-7.2M-1.5-15L1.6-13.4" stroke="#ffe066" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="0" cy="-19.5" r="2.6" fill="#ffe066" stroke="#e8a600" stroke-width="0.5"/><circle cx="-2.6" cy="-6.5" r="0.8" fill="#74c0fc"/><circle cx="2.4" cy="-11.6" r="0.8" fill="#74c0fc"/>
+  <path d="M-8 0.4Q0 2.6 8 0.4" fill="none" stroke="#c2185b" stroke-width="1.2" stroke-linecap="round"/>`;
+const CROWN = `<path d="M-9 0L-10-9L-5-4.5L0-11L5-4.5L10-9L9 0Z" fill="#ffd43b" stroke="#c98f00" stroke-width="0.8" stroke-linejoin="round"/>
+  <path d="M-9 0L9 0L8.6-2.4L-8.6-2.4Z" fill="#fab005"/><circle cx="0" cy="-5" r="1.5" fill="#f06595"/><circle cx="-5.5" cy="-2.6" r="1" fill="#4dabf7"/><circle cx="5.5" cy="-2.6" r="1" fill="#4dabf7"/>
+  <circle cx="-10" cy="-9.4" r="1.1" fill="#fff3bf"/><circle cx="0" cy="-11.4" r="1.2" fill="#fff3bf"/><circle cx="10" cy="-9.4" r="1.1" fill="#fff3bf"/>`;
 function peoSvg(gid = "ms-flush-peo") {
   return `<svg class="ms-peo" viewBox="0 0 100 100" aria-hidden="true">
   <g class="ms-foot-l">${peoImg("shoe-l", 36.6, 90.98, 10.83, 8)}</g>
@@ -323,6 +333,7 @@ function meoHead(gid) {
     </g>
     <g class="ms-flower"></g>
     <g class="ms-wear-head"></g>
+    <g class="ms-party"></g>
   </g>`;
 }
 // Ses bras sont dessinés DEVANT le corps et ses grands cheveux (sinon un bras qui passe devant elle disparaît derrière la robe,
@@ -510,7 +521,7 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo", "fight"];
 export const KINDS = {
   peo: {
-    name: "PeoPeo", cutout: true, svg: () => peoSvg(), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
+    name: "PeoPeo", cutout: true, hatAt: [57.5, 17.5, 20], svg: () => peoSvg(), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
     // size 60 : 1,5 fois la hauteur de Tino (mesurée sur les pixels : 92,8 unités de haut, Tino 92 → 55,7 px contre 36,8) ; wide : un peu élargi
     only: PEO_ACTIONS, calm: true, home: true, // home : il vit dans la marmite (voir mountMascots, homeTick)
     body: { cy: 56, support: Array(24).fill(42) },
@@ -518,12 +529,12 @@ export const KINDS = {
   // MeoMeo : les mêmes actions que PeoPeo ; size 56 : 1,4 × la hauteur de Tino (92 unités de haut, comme PeoPeo — réglable) ;
   // snatch : quand Tino boit une bière, elle la lui prend, s'énerve et la boit (duo « beer »)
   meo: {
-    name: "MeoMeo", cutout: true, armMax: 135, svg: () => meoSvg(), size: 56, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
+    name: "MeoMeo", cutout: true, hatAt: [50.5, 13.5, 3], armMax: 135, svg: () => meoSvg(), size: 56, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
     only: PEO_ACTIONS, calm: true, home: true,
     body: { cy: 56, support: Array(24).fill(42) },
   },
   tino: {
-    name: "Tino", svg: sealSvg, size: 40, head: [50, 36],
+    name: "Tino", svg: sealSvg, size: 40, head: [50, 36], hatAt: [61, 10.5, 16], // (hatAt : chapeau de fête — x, y, inclinaison)
     body: { cy: 52.75, support: [47.3, 49.5, 49, 46, 43.3, 43.8, 42, 38, 40.3, 43, 45.8, 45.8, 47, 49, 52, 52.5, 50.5, 45.3, 42, 43.8, 43.3, 46, 49, 49.5] },
   },
 };
@@ -2505,6 +2516,16 @@ class Mascot {
       if (el) this.wearAnims.push({ el, anim: it.anim, i: 0 });
     }
     this.flower.style.display = o.head && o.hideFlower ? "none" : ""; // un chapeau peut remplacer la fleur
+    if (this.partyKind) this.setParty(this.partyKind); // (fête : le chapeau de fête s'en va / revient avec la tenue)
+  }
+  // Fête (anniversaire) : un chapeau pointu, ou la couronne pour la personne fêtée ; sur sa tête (il suit sa tête). Tino ne le
+  // met pas s'il porte déjà quelque chose sur la tête (un chapeau sur un chapeau)
+  setParty(kind) {
+    this.partyKind = kind;
+    const g = this.el.querySelector(".ms-party"), [x, y, r] = this.def.hatAt ?? [50, 8, 0];
+    if (!g) return;
+    const show = kind && !(this.def.key === "tino" && this.eng.outfit?.head);
+    g.innerHTML = show ? `<g transform="translate(${x} ${y}) rotate(${r})">${kind === "crown" ? CROWN : PARTY_HAT}</g>` : "";
   }
   // Tenue animée : la case de la planche qui correspond au moment (en boucle, à anim.fps images par seconde)
   wearFrames() {
@@ -3271,6 +3292,17 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       if (reduce.matches) refresh();
     },
     wear(o) { eng.outfit = o; tino?.wear(o); }, // (les habits de Tino : seulement Tino pour l'instant)
+    // Fête : party = { crown: "meo" } (la personne fêtée a la couronne, les autres un chapeau pointu) ou null (plus de fête)
+    party(spec) { list.forEach((m) => m.setParty(spec ? (m.def.key === spec.crown ? "crown" : "hat") : null)); },
+    // Tout le monde (ceux qui sont dehors, à l'écran) dit quelque chose et fait coucou : lines = { tino: "…", peo: "…" }
+    cheer(lines) {
+      list.forEach((m) => {
+        const t = lines[m.def.key];
+        if (!t || m.away || m.inPot || m.el.hidden || m.bubble?.sticky) return;
+        m.say(t, { ms: 3200 }); m.love();
+        if (!m.act || FREE_MOVES.includes(m.act.type)) m.now([{ type: "wave", dur: 1.6 }]); // (pas au milieu d'une activité)
+      });
+    },
     // Un personnage arrive ou s'en va (PeoPeo : l'app ouverte chez lui ou non) : il tombe du haut de l'écran en arrivant
     setAway(kind, away) {
       const m = list.find((x) => x.def.key === kind);

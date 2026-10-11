@@ -652,3 +652,36 @@ a { color: var(--text-accent); }
 .mp-pot-bubbles circle { transform-box: fill-box; transform-origin: center; animation: mp-bubble 1.1s ease-in infinite; } .mp-pot-bubbles circle:nth-child(2) { animation-delay: 0.4s; } .mp-pot-bubbles circle:nth-child(3) { animation-delay: 0.75s; }
 @keyframes mp-bubble { 0% { transform: scale(0.2); opacity: 1; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.3); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .mp-flame, .mp-pot-steam path, .mp-pot-bubbles circle, .mp-pot-sparks circle { animation: none; } }
+
+/* ===== Fête d'anniversaire (app.js : partyHtml, balloons, confetti, openLetter ; 30_birthdays.sql) ===== */
+.mp-bday { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 10px 14px; border-radius: 18px; color: #fff;
+  background: linear-gradient(120deg, #f06595, #cc5de8 55%, #845ef7); box-shadow: 0 6px 22px rgba(204, 93, 232, 0.35); }
+.mp-bday-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mp-bday-text b { font-size: 1.08em; }
+.mp-bday-text span { font-size: 0.85em; opacity: 0.93; }
+.mp-bday .mp-cta { align-self: flex-start; margin-top: 4px; background: #fff; color: #c2255c; }
+.mp-bday .mp-cake { flex: none; width: 68px; height: 68px; padding: 0; border: none; border-radius: 14px; background: rgba(255, 255, 255, 0.16); cursor: pointer; }
+.mp-cake svg { width: 100%; height: 100%; display: block; }
+.mp-flames path { transform-box: fill-box; transform-origin: 50% 100%; animation: mp-flame 0.5s ease-in-out infinite alternate; }
+.mp-flames path:nth-child(2n) { animation-delay: 0.17s; }
+@keyframes mp-flame { from { transform: scale(0.9, 1) rotate(-4deg); } to { transform: scale(1.05, 1.12) rotate(4deg); } }
+.mp-smoke { opacity: 0; }
+.mp-blown .mp-flames { display: none; }
+.mp-blown .mp-smoke { opacity: 1; }
+.mp-blown .mp-smoke path { animation: mp-smoke 1.8s ease-out forwards; }
+@keyframes mp-smoke { from { opacity: 0.9; transform: translateY(0); } to { opacity: 0; transform: translateY(-8px); } }
+.mp-balloons { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.mp-balloons i { position: absolute; left: var(--x); bottom: -90px; width: 30px; height: 37px; border-radius: 50% 50% 47% 47%; opacity: 0.88;
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.7), transparent 34%), var(--c); animation: mp-balloon var(--d) linear var(--w) infinite; }
+.mp-balloons i::before { content: ""; position: absolute; left: calc(50% - 3px); top: calc(100% - 3px); border: 3px solid transparent; border-bottom-color: var(--c); }
+.mp-balloons i::after { content: ""; position: absolute; left: 50%; top: calc(100% + 2px); width: 1px; height: 46px; background: rgba(255, 255, 255, 0.6); }
+@keyframes mp-balloon { 0% { transform: translate(0, 0); } 25% { transform: translate(8px, -30vh); } 50% { transform: translate(-6px, -60vh); } 75% { transform: translate(7px, -90vh); } 100% { transform: translate(0, -125vh); } }
+.mp-confetti { position: fixed; inset: 0; z-index: 55; pointer-events: none; overflow: hidden; }
+.mp-confetti i { position: absolute; top: -20px; left: var(--x); width: calc(9px * var(--s)); height: calc(5px * var(--s)); border-radius: 2px; background: var(--c);
+  animation: mp-confetti var(--d) cubic-bezier(0.3, 0.6, 0.6, 1) var(--w) forwards; }
+@keyframes mp-confetti { to { transform: translate(calc((var(--s) - 1) * 80px), 108vh) rotate(var(--r)); } }
+.mp-letter { width: min(520px, 100%); }
+.mp-letter-paper { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 60vh; overflow: auto; padding: 16px 18px; border-radius: 12px;
+  background: #fffaf0; color: #3d2b1f; font: 1.02em/1.55 Georgia, "Times New Roman", serif; box-shadow: inset 0 0 0 1px #f1dfc4; }
+.mp-letter-text { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; margin: 8px 0 6px; }
+.mp-letters .mp-letter-card { margin-bottom: 12px; }

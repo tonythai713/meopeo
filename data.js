@@ -28,6 +28,9 @@
 //   presence(myId, onChange) → { set(here), stop() } : qui a MeoPeo ouvert à l'écran en ce moment (temps réel, sans table) ;
 //     onChange(Set des id présents) — PeoPeo / MeoMeo dans la marmite
 //   getBath() → { at, by } (dernier bain), washTino() → { at, by, washedColour }, subscribeBath(onChange) → laver Tino (23_bath.sql)
+//   listBirthdays() → [{ profile, month, day, tz }], listLetters(), saveLetter(id | null, recipient, body), deleteLetter(id),
+//     markLetterRead(id) → anniversaires et lettres (30_birthdays.sql) ; une lettre : { id, author, recipient, body, openAt, readAt, updated }
+//     — la personne fêtée ne la reçoit qu'à partir de openAt (la base la cache avant) ; pas de temps réel
 //   listDecor(), setDecor(blob, { season, layout, light }), deleteDecor({ season, layout, light }),
 //   subscribeDecor(onChange) → décor dessiné, fond d'écran par saison / jour-nuit / format (supabase/16_decor.sql)
 //   listGrumbles(), addGrumble(body), deleteGrumble(id), subscribeGrumbles(onChange) → phrases râleuses (13_tino_grumbles.sql)
@@ -82,6 +85,8 @@ const toRow = (t) => {
 export function createBackend() {
   const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
   const must = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
+  const letterOf = (r) => ({ id: r.id, author: r.author, recipient: r.recipient, body: r.body, openAt: r.open_at, readAt: r.read_at, updated: r.updated_at });
+  const LETTER_COLS = "id, author, recipient, body, open_at, read_at, updated_at";
   let channel = null;
 
   return {
@@ -342,6 +347,17 @@ export function createBackend() {
     // Laver Tino (supabase/23_bath.sql) : le dernier bain (la saleté se calcule avec le temps) ; le bain enlève la couleur
     async getBath() { const r = must(await sb.from("tino_bath").select("at, washed_by").maybeSingle()); return r ? { at: r.at, by: r.washed_by } : null; },
     async washTino() { const r = must(await sb.rpc("wash_tino")); return { at: r.at, by: r.by, washedColour: !!r.washed_colour }; },
+    // Anniversaires et lettres (supabase/30_birthdays.sql)
+    async listBirthdays() { return must(await sb.from("birthdays").select("profile, month, day, tz")); },
+    async listLetters() { return must(await sb.from("birthday_letters").select(LETTER_COLS).order("open_at")).map(letterOf); },
+    async saveLetter(id, recipient, body) {
+      const r = id ? await sb.from("birthday_letters").update({ body }).eq("id", id).select(LETTER_COLS).maybeSingle()
+        : await sb.from("birthday_letters").insert({ recipient, body }).select(LETTER_COLS).single();
+      const row = must(r);
+      return row ? letterOf(row) : null;
+    },
+    async deleteLetter(id) { must(await sb.from("birthday_letters").delete().eq("id", id)); },
+    async markLetterRead(id) { return must(await sb.rpc("mark_letter_read", { p_id: id })); },
     subscribeBath(onChange) {
       const ch = sb.channel("bath-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "*", schema: "public", table: "tino_bath" }, () => onChange())
