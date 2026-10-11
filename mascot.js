@@ -517,7 +517,7 @@ const TAKEOFF = 0.2;                                 // envol : il prend son él
 // (tirée de son numéro = l'heure commune). Depuis la 2026-10-10.5 : PeoPeo et MeoMeo restent dehors ; la marmite est pour
 // Tino : ils l'y jettent et le font mijoter (scène 0 du cycle), et il y va aussi tout seul (scènes SOAK : il saute dedans,
 // y reste, ressort au début de la scène suivante — comme PeoPeo quand il est seul)
-const SCENE_S = 24, SCENE_CYCLE = 6, SOAK = [2, 3];
+const SCENE_S = 24, SCENE_CYCLE = 6, SOAK = [2, 3], BOSS_SLOT = 5; // (BOSS_SLOT : la scène du cycle où ils combattent Tino — toutes les 2 min 24)
 // Tirage au sort reproductible (mulberry32) : même numéro → mêmes nombres sur les deux téléphones
 function seeded(n) {
   let a = (Math.imul(n, 2654435761) ^ 0x9e3779b9) >>> 0;
@@ -525,7 +525,7 @@ function seeded(n) {
 }
 const pickSeeded = (rnd, list) => { let r = rnd() * list.reduce((x, [w]) => x + w, 0); return list.find(([w]) => (r -= w) < 0)?.[1] ?? list[0][1]; };
 const SOLO = [[3, "game"], [2, "cook"], [2, "bbq"], [2, "rice"], [2, "pho"], [2, "matcha"], [1.5, "beer"], [3, "scooter"], [2, "shop"], [2, "roll"], [1, "swim"], [1, "wave"]];
-const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [2, "chase"], [2, "kiss"], [2, "boss"], [2, "solo"]];
+const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [2, "chase"], [2, "kiss"], [2, "solo"]];
 const SOAK_DUOS = [[1, "kiss"], [4, "solo"]]; // (Tino est dans la marmite : PeoPeo et MeoMeo font leur vie, ou un bisou)
 // La scène n° k : { k, peoOut, duo (ce que PeoPeo fait avec Tino, ou null), tino (ce que fait Tino), dur, win, crash, bounce }
 // cookTino : PeoPeo et MeoMeo jettent Tino dans la marmite ; stirBy touille (du côté side), l'autre attise le feu ; tino « soak » :
@@ -534,7 +534,7 @@ const SOAK_DUOS = [[1, "kiss"], [4, "solo"]]; // (Tino est dans la marmite : Peo
 // (le script vient du numéro k, gagné = win) — tout tiré du même numéro
 function sceneOf(k) {
   const rnd = seeded(k), slot = ((k % SCENE_CYCLE) + SCENE_CYCLE) % SCENE_CYCLE, cookTino = slot === 0, soak = SOAK.includes(slot);
-  let duo = cookTino ? "cookTino" : pickSeeded(rnd, soak ? SOAK_DUOS : DUOS), tino;
+  let duo = cookTino ? "cookTino" : slot === BOSS_SLOT ? "boss" : pickSeeded(rnd, soak ? SOAK_DUOS : DUOS), tino;
   if (soak) tino = "soak";
   else if (duo === "solo" || duo === "kiss") tino = pickSeeded(rnd, SOLO); // (pendant le bisou, Tino fait sa vie)
   else if (duo === "cook") tino = pickSeeded(rnd, [[1, "cook"], [1, "bbq"], [1, "rice"]]);
@@ -1792,6 +1792,12 @@ function bossBeat(a) {
   const b = a.script.beats[bi] ?? null;
   return { b, bi, u: b ? a.t - b.t : 0 };
 }
+// Seul : un combat environ toutes les FIGHT_EVERY s (« toutes les 2 min ») — dès que c'est possible après ce
+// temps (Tino libre, sur une ligne visible avec la place ; PeoPeo / MeoMeo sort même de la marmite pour ça). eng.lastFight :
+// début du dernier combat (heure réelle)
+const FIGHT_EVERY = 120;
+const fightDue = (m) => Date.now() - (m.eng.lastFight ?? 0) >= FIGHT_EVERY * 1000;
+const fightReady = (m, t) => canFlee(t) && (t.k === m.k || m.eng.visible(t.plat())) && !!fightRoom(m, t);
 const fightGap = (m, t) => t.size * 1.3 + m.size * 0.3;   // (centre à centre : de quoi lancer ses sorts sans être collé à lui)
 const rollDist = (m) => m.size * 0.6;
 // La place pour le combat sur la ligne de Tino (à l'écran) : lui au milieu, un combattant de chaque côté, avec la roulade
@@ -1833,10 +1839,7 @@ function fightState(m, a) {
   return { mode: a.here ? "stance" : "walk", u };
 }
 ACTIONS.fight = {
-  weight(m) {
-    const t = m.eng.buddy?.(m, "tino");
-    return canFlee(t) && (t.k === m.k || m.eng.visible(t.plat())) && fightRoom(m, t) ? 10 : 0; // (un peu plus que la poursuite : il faut que Tino soit libre, sur une ligne du calendrier, avec la place)
-  },
+  weight: (m) => (fightDue(m) && fightReady(m, m.eng.buddy?.(m, "tino")) ? 400 : 0), // (seul : à peu près toutes les 2 min — dès que c'est possible)
   make(m) {
     const t = m.eng.buddy?.(m, "tino"), go = { type: "fight" }, after = { type: "wave", dur: 1.6 };
     if (t.k === m.k) return [go, after];
@@ -1931,6 +1934,7 @@ ACTIONS.boss = {
     a.k = m.k; a.xs = m.x; a.foes = [...new Set([a.by, ...(a.foes ?? [])])].filter(Boolean); // (l'autre a pu se joindre avant son premier pas)
     a.casters = []; a.targets = []; a.from = [];
     a.script = bossScript(a.seed ?? Math.floor(Math.random() * 2 ** 31), a.win ?? Math.random() < BOSS.WIN);
+    m.eng.lastFight = Date.now();
     if (!m.fx) { m.fxEl.innerHTML = BOSS_FX; const q = (s) => m.fxEl.querySelector(s); m.fx = { hp: q(".ms-hp"), fill: q(".ms-hp-fill"), lag: q(".ms-hp-lag"), dmg: q(".ms-hp-dmg"), glint: q(".ms-glint"), burst: q(".ms-burst"), shock: q(".ms-shock") }; }
     m.fxEl.hidden = m.el.hidden;
     if (!m.bubble) m.say(pick(["RAAAWR!! 💢", "You dare challenge me?! 💢", "Come at me! 💢"]), { ms: 1300 });
@@ -2680,7 +2684,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
   layer.classList.add("ms-layer");
   // (la sieste fait tout comme la nuit : case d'aujourd'hui, lit, pas de nage…) ; ensemble (MeoMeo et PeoPeo là) : Tino reste éveillé
   const asleep = () => !together() && (night() || siesta());
-  const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night: asleep, meal: () => meal() && !asleep(), tapThrough, layer, tapping: null, lines, grumbles, belly, home, together, sceneK: null };
+  const eng = { plats: [], byKey: new Map(), today: null, section: undefined, v: view(), scrollT: 0, night: asleep, meal: () => meal() && !asleep(), tapThrough, layer, tapping: null, lines, grumbles, belly, home, together, sceneK: null, lastFight: Date.now() - 60000 }; // (premier combat possible 1 min après l'ouverture)
   const slotNow = () => Math.floor(Date.now() / 1000 / SCENE_S);
   let sceneCache = null;
   const scene = (k) => (sceneCache?.k === k ? sceneCache : (sceneCache = sceneOf(k)));
@@ -2765,7 +2769,8 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       return;
     }
     if (m.inPot) {
-      if ((m.potT -= dt) > 0 || !seen || eng.night() || reduce.matches || stirring()) return;
+      const tino = eng.buddy(m, "tino"), fight = fightDue(m) && !!tino && fightReady(m, tino); // (l'heure d'un combat : il / elle sort tout de suite)
+      if (((m.potT -= dt) > 0 && !fight) || !seen || eng.night() || reduce.matches || stirring()) return;
       leavePot(m, H);
       return;
     }
