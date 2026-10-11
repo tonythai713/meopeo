@@ -114,6 +114,24 @@ const STYLE = `
 .ms-banner[hidden] { display: none; }
 .ms-banner.ms-felled { color: #e9c96b; text-shadow: 0 0 10px rgba(233, 201, 107, 0.65); }
 .ms-banner.ms-died { color: #b8231f; font-size: 22px; letter-spacing: 0.09em; text-shadow: 0 0 10px rgba(184, 35, 31, 0.6); }
+/* Combat de boss (Tino) : barre de vie à la Elden Ring, sort (Glintstone Pebble), impact, onde de choc ; bâton des combattants */
+.ms-bossfx { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.ms-bossfx[hidden] { display: none; }
+.ms-hp, .ms-glint, .ms-burst, .ms-shock { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; will-change: transform, opacity; }
+.ms-hp { font: 400 12px/1.2 "Cinzel", "Trajan Pro", "Times New Roman", Georgia, serif; color: #ece6d6; letter-spacing: 0.04em; text-shadow: 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, 0.85); }
+.ms-hp-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; padding: 0 1px 3px; white-space: nowrap; }
+.ms-hp-dmg { font-size: 11px; }
+.ms-hp-bar { position: relative; height: 7px; background: rgba(18, 6, 6, 0.88); border: 1px solid #8c7b58; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.6); }
+.ms-hp-bar i { position: absolute; left: 0; top: 0; bottom: 0; }
+.ms-hp-lag { background: #e2b33a; }
+.ms-hp-fill { background: linear-gradient(#c22a20, #7c1510); }
+.ms-glint { width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: radial-gradient(circle, #fff 0 30%, #9be0ff 55%, rgba(110, 190, 255, 0) 72%); box-shadow: 0 0 10px 3px rgba(120, 200, 255, 0.85); }
+.ms-glint::after { content: ""; position: absolute; right: 50%; top: 50%; width: 30px; height: 4px; margin-top: -2px; border-radius: 2px; background: linear-gradient(90deg, rgba(120, 200, 255, 0), rgba(200, 238, 255, 0.95)); }
+.ms-burst { width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: radial-gradient(circle, #fff 0 18%, rgba(160, 225, 255, 0.95) 34%, rgba(90, 170, 255, 0.5) 52%, rgba(90, 170, 255, 0) 70%); }
+.ms-shock { border: 2px solid rgba(255, 238, 200, 0.9); border-radius: 50%; box-shadow: 0 0 8px rgba(255, 220, 160, 0.6); }
+.ms-hit .ms-in > svg { filter: brightness(1.9) drop-shadow(0 0 6px #9be0ff); }
+.ms-staff-glow { opacity: calc(0.15 + 0.85 * var(--glint, 0)); }
+.ms-tool-staff .ms-staff { display: inline; }
 `;
 
 // Petite étoile à 5 branches (le coussin de Tino en est couvert)
@@ -250,7 +268,7 @@ function peoSvg(gid = "ms-flush-peo") {
   ${peoImg("body", 37.3, 49.04, 30.83, 43.83)}
   <g class="ms-wear-body"></g>
   <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(49 71) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(49 70) scale(0.55) translate(-51 -76)">${BEER}</g></g>
-  <g class="ms-arm-l"><g class="ms-ladle" display="none"><path d="M37.5 71L35.0 97" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M39.1 71.2L37.7 97" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M38 73L35 80" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="32" cy="85.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M32 85.5L27 82M32 85.5L29 91M32 85.5L36 80M32 85.5L38 88" stroke="#e0956a" stroke-width="0.6"/><circle cx="32" cy="85.5" r="2.2" fill="#e8604c"/></g>${peoImg("arm-l", 34.63, 57.99, 7.33, 16.17)}<circle class="ms-hand" cx="38" cy="73.5" r="0.6" fill="none"/></g>
+  <g class="ms-arm-l">${staffSvg(39.2, 66.6, 35.1, 90.3, 34.9, 91.8)}<g class="ms-ladle" display="none"><path d="M37.5 71L35.0 97" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M39.1 71.2L37.7 97" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M38 73L35 80" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="32" cy="85.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M32 85.5L27 82M32 85.5L29 91M32 85.5L36 80M32 85.5L38 88" stroke="#e0956a" stroke-width="0.6"/><circle cx="32" cy="85.5" r="2.2" fill="#e8604c"/></g>${peoImg("arm-l", 34.63, 57.99, 7.33, 16.17)}<circle class="ms-hand" cx="38" cy="73.5" r="0.6" fill="none"/></g>
   <g class="ms-arm-r">${peoImg("arm-r", 56.33, 58.14, 7.33, 16.17)}</g>
   ${peoHead(gid)}
 </svg>`;
@@ -280,7 +298,7 @@ function meoHead(gid) {
 }
 function meoSvg(gid = "ms-flush-meo") {
   return `<svg class="ms-meo" viewBox="0 0 100 100" aria-hidden="true">
-  <g class="ms-arm-l"><g class="ms-ladle" display="none"><path d="M39.5 73.5L37.0 99.5" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M41.1 73.7L39.7 99.5" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M40 74L37 81" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="34" cy="86.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M34 86.5L29 83M34 86.5L31 92M34 86.5L38 81M34 86.5L40 89" stroke="#e0956a" stroke-width="0.6"/><circle cx="34" cy="86.5" r="2.2" fill="#e8604c"/></g>${meoImg("arm-l", 37.91, 58.55, 5.89, 16.74)}<circle class="ms-hand" cx="40" cy="74.5" r="0.6" fill="none"/></g>
+  <g class="ms-arm-l">${staffSvg(41, 67.6, 37.6, 91.3, 37.4, 92.8)}<g class="ms-ladle" display="none"><path d="M39.5 73.5L37.0 99.5" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M41.1 73.7L39.7 99.5" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M40 74L37 81" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="34" cy="86.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M34 86.5L29 83M34 86.5L31 92M34 86.5L38 81M34 86.5L40 89" stroke="#e0956a" stroke-width="0.6"/><circle cx="34" cy="86.5" r="2.2" fill="#e8604c"/></g>${meoImg("arm-l", 37.91, 58.55, 5.89, 16.74)}<circle class="ms-hand" cx="40" cy="74.5" r="0.6" fill="none"/></g>
   <g class="ms-arm-r">${meoImg("arm-r", 53.96, 58.07, 5.97, 16.59)}</g>
   ${meoImg("body", 39.48, 53.61, 19.6, 39.42)}
   <g class="ms-foot-l">${meoImg("shoe-l", 42.8, 90.34, 7.45, 7.39)}</g>
@@ -432,6 +450,10 @@ const flipK = (c, period) => clamp(((c % period) / period - 0.66) / 0.22, 0, 1);
 // Jeu vidéo perdu : après 0,7 s de stupeur, il s'énerve (sourcils froncés, « 💢 ») jusqu'à la fin de la partie
 const gameMad = (a) => a.type === "game" && a.win === false && a.t > a.dur - GAME_END + 0.7;
 // Bannière de fin de partie, « à la Elden Ring »
+// Bâton des sorts (combat de boss) dans la main de devant de PeoPeo / MeoMeo : il prolonge le bras (au repos il pointe vers
+// le bas, bras levé il vise Tino), pierre bleue au bout qui s'illumine (--glint, posé par render) ; .ms-staff-tip = d'où
+// part le sort. Caché sauf pendant un combat (.ms-tool-staff)
+const staffSvg = (x0, y0, x1, y1, gx, gy) => `<g class="ms-staff" display="none"><path d="M${x0} ${y0}L${x1} ${y1}" stroke="#5a3a22" stroke-width="1.7" stroke-linecap="round"/><path d="M${(x0 - 0.3).toFixed(1)} ${(y0 + 1).toFixed(1)}L${((x0 + x1) / 2 - 0.3).toFixed(1)} ${((y0 + y1) / 2).toFixed(1)}" stroke="#9a6b3e" stroke-width="0.5" stroke-linecap="round"/><circle class="ms-staff-glow" cx="${gx}" cy="${gy}" r="4.6" fill="#7fd0ff"/><path d="M${gx} ${(gy - 2.8).toFixed(1)}L${(gx + 1.7).toFixed(1)} ${gy}L${gx} ${(gy + 2.8).toFixed(1)}L${(gx - 1.7).toFixed(1)} ${gy}Z" fill="#d6f2ff" stroke="#3f9be0" stroke-width="0.5"/><circle class="ms-staff-tip" cx="${gx}" cy="${gy}" r="0.6" fill="none"/></g>`;
 const BANNERS = { win: ["Great enemy felled", "ms-felled"], lose: ["You died", "ms-died"] };
 
 // « z », cœur, « 💢 » et bulles d'eau : à part du corps, pour rester droits pendant une roulade, couché ou en nageant
@@ -449,7 +471,7 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 // head : centre de la tête (pour placer les « z », le cœur et la bulle)
 // only : les seules actions qu'il peut faire (les autres — objets, lit, nage, roulade, nourriture… — sont dessinées pour
 // Tino) ; calm : un appui le fait seulement sauter (les phrases râleuses sont celles de Tino)
-const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo"];
+const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo", "fight"];
 export const KINDS = {
   peo: {
     name: "PeoPeo", svg: () => peoSvg(), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
@@ -503,19 +525,20 @@ function seeded(n) {
 }
 const pickSeeded = (rnd, list) => { let r = rnd() * list.reduce((x, [w]) => x + w, 0); return list.find(([w]) => (r -= w) < 0)?.[1] ?? list[0][1]; };
 const SOLO = [[3, "game"], [2, "cook"], [2, "bbq"], [2, "rice"], [2, "pho"], [2, "matcha"], [1.5, "beer"], [3, "scooter"], [2, "shop"], [2, "roll"], [1, "swim"], [1, "wave"]];
-const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [2, "chase"], [2, "kiss"], [2, "solo"]];
+const DUOS = [[3, "game"], [3, "cook"], [3, "beer"], [3, "scooter"], [2, "chase"], [2, "kiss"], [2, "boss"], [2, "solo"]];
 const SOAK_DUOS = [[1, "kiss"], [4, "solo"]]; // (Tino est dans la marmite : PeoPeo et MeoMeo font leur vie, ou un bisou)
 // La scène n° k : { k, peoOut, duo (ce que PeoPeo fait avec Tino, ou null), tino (ce que fait Tino), dur, win, crash, bounce }
 // cookTino : PeoPeo et MeoMeo jettent Tino dans la marmite ; stirBy touille (du côté side), l'autre attise le feu ; tino « soak » :
 // il va dans la marmite tout seul et y reste ;
-// kiss : kissBy embrasse l'autre ; snatch : MeoMeo prend la bière de Tino (sinon « chin chin ») — tout tiré du même numéro
+// kiss : kissBy embrasse l'autre ; snatch : MeoMeo prend la bière de Tino (sinon « chin chin ») ; boss : ils combattent Tino
+// (le script vient du numéro k, gagné = win) — tout tiré du même numéro
 function sceneOf(k) {
   const rnd = seeded(k), slot = ((k % SCENE_CYCLE) + SCENE_CYCLE) % SCENE_CYCLE, cookTino = slot === 0, soak = SOAK.includes(slot);
   let duo = cookTino ? "cookTino" : pickSeeded(rnd, soak ? SOAK_DUOS : DUOS), tino;
   if (soak) tino = "soak";
   else if (duo === "solo" || duo === "kiss") tino = pickSeeded(rnd, SOLO); // (pendant le bisou, Tino fait sa vie)
   else if (duo === "cook") tino = pickSeeded(rnd, [[1, "cook"], [1, "bbq"], [1, "rice"]]);
-  else tino = duo === "chase" || duo === "cookTino" ? "wait" : duo;
+  else tino = duo === "chase" || duo === "cookTino" || duo === "boss" ? "wait" : duo;
   if (duo === "solo") duo = null;
   return { k, peoOut: true, duo, tino, dur: 11 + 5 * rnd(), win: rnd() < 0.6, crash: rnd() < 0.5, bounce: rnd() < 0.5,
     snatch: rnd() < SNATCH_P, kissBy: rnd() < 0.5 ? "peo" : "meo", stirBy: rnd() < 0.5 ? "peo" : "meo", side: rnd() < 0.5 ? 1 : -1 };
@@ -556,6 +579,7 @@ function buddyScene(m, sc) {
     if (m.def.key === sc.stirBy) return [...way, { type: "toss" }, { type: "goto", prefer: sc.side, next: { type: "stir", prefer: sc.side, only: true, stirDur: 13 } }, { type: "wave", dur: 1.6 }];
     return [{ type: "goto", prefer: -sc.side, next: { type: "fanpot", prefer: -sc.side, dur: 14 } }, { type: "wave", dur: 1.6 }];
   }
+  if (sc.duo === "boss") return [...way, { type: "fight", seed: sc.k, win: sc.win }, { type: "wave", dur: 1.6 }]; // (combat de boss : même script sur les deux téléphones)
   return [...way, sc.duo === "chase" ? { type: "chase" } : { type: "duo", kind: sc.duo === "game" || sc.duo === "beer" || sc.duo === "scooter" ? sc.duo : "cook", snatchRoll: sc.snatch ? 0 : 1 }, { type: "wave", dur: 1.6 }];
 }
 const CHEERS = 1.5; // bière avec PeoPeo : « chin chin » (s)
@@ -1733,6 +1757,275 @@ ACTIONS.pant = {
     p.sy = 1 - 0.06 * b; p.sx = 1 + 0.045 * b; p.head = 8 * k + 4 * Math.sin(c * 9) * k; p.armL = -26 * k; p.armR = 26 * k; p.rot = 2 * Math.sin(c * 4.5) * k;
   },
 };
+// ⚔️ Combat de boss « à la Elden Ring » : PeoPeo et / ou MeoMeo affrontent Tino. Tout le combat est écrit dans l'action de
+// Tino (boss) : le « script » — tiré d'un nombre, le même sur les deux téléphones quand ils sont ensemble (scène « boss »),
+// donc mêmes attaques, même vie, même fin —, la vie de Tino (qui suit le script, pas les sorts vraiment lancés), qui lance
+// quel sort (chacun son tour, parmi ceux qui sont là) et qui il attaque. Les combattants (fight) le lisent : ils lancent des
+// Glintstone Pebbles avec leur bâton, font une roulade pour esquiver ses attaques (il saute et retombe — onde de choc — ou
+// il charge), puis « GREAT ENEMY FELLED » (Tino tombe, vertige) ou « YOU DIED » (son attaque touche : le combattant vole et
+// reste à terre). Barre de vie et nom du boss en bas de l'écran (en haut si le combat est tout en bas), dégâts ; projectile,
+// impact et onde de choc dessinés à chaque image depuis l'état (pas de minuterie : rien ne reste si l'animation s'arrête).
+// BOSS : intro, un sort (préparation, vol), une attaque de Tino (préparation, coup), roulade, fin (s) ; HP = sa vie ; WIN =
+// chances de gagner quand on est seul (ensemble : celles de la scène)
+const BOSS = { INTRO: 1.4, CAST: 1.0, WIND: 0.45, FLY: 0.3, ATTACK: 1.9, AWIND: 0.65, STRIKE: 0.45, ROLL_AT: 0.47, ROLL: 0.55, END: 4.2, HP: 1200, WIN: 0.7 };
+const BOSS_NAME = "Tino, Seal of the Full Moon";
+const BOSS_FX = `<div class="ms-hp"><div class="ms-hp-top"><span>${BOSS_NAME}</span><span class="ms-hp-dmg"></span></div><div class="ms-hp-bar"><i class="ms-hp-lag"></i><i class="ms-hp-fill"></i></div></div><div class="ms-glint"></div><div class="ms-burst"></div><div class="ms-shock"></div>`;
+// Le script : gagné = 5 ou 6 sorts (le dernier l'achève), perdu = 3 ou 4 sorts puis son attaque touche ; une attaque de Tino
+// tous les deux sorts. Temps (s) depuis le début du combat ; dmg / hp0 / hp1 : dégâts et vie avant / après le sort
+function bossScript(seed, win) {
+  const rnd = seeded(seed), beats = [], n = win ? 5 + Math.floor(rnd() * 2) : 3 + Math.floor(rnd() * 2);
+  const w = Array.from({ length: n }, () => 0.8 + 0.4 * rnd()), sum = w.reduce((x, y) => x + y, 0);
+  let t = BOSS.INTRO, hp = BOSS.HP;
+  for (let i = 0; i < n; i++) {
+    if (i && i % 2 === 0) { beats.push({ kind: "attack", t, move: rnd() < 0.5 ? "slam" : "charge", pick: rnd() }); t += BOSS.ATTACK; }
+    const dmg = win ? (i === n - 1 ? hp : Math.round(BOSS.HP * w[i] / sum)) : Math.round(BOSS.HP * (0.11 + 0.06 * rnd()));
+    beats.push({ kind: "cast", t, n: i, dmg, hp0: hp, hp1: hp - dmg }); hp -= dmg; t += BOSS.CAST;
+  }
+  if (!win) beats.push({ kind: "attack", t, move: rnd() < 0.5 ? "slam" : "charge", pick: rnd(), lethal: true });
+  const last = beats[beats.length - 1];
+  return { beats, win, end: last.t + (win ? BOSS.WIND + BOSS.FLY : BOSS.AWIND + BOSS.STRIKE) }; // (fin : le sort qui l'achève touche / son coup touche)
+}
+// Le moment du combat : le dernier « temps » commencé (bi : son numéro), et depuis combien de temps (u)
+function bossBeat(a) {
+  let bi = -1;
+  for (let i = 0; i < a.script.beats.length; i++) if (a.script.beats[i].t <= a.t) bi = i;
+  const b = a.script.beats[bi] ?? null;
+  return { b, bi, u: b ? a.t - b.t : 0 };
+}
+const fightGap = (m, t) => t.size * 1.3 + m.size * 0.3;   // (centre à centre : de quoi lancer ses sorts sans être collé à lui)
+const rollDist = (m) => m.size * 0.6;
+// La place pour le combat sur la ligne de Tino (à l'écran) : lui au milieu, un combattant de chaque côté, avec la roulade
+function fightRoom(m, t) {
+  const P = t?.plat();
+  if (!P) return null;
+  const [lo, hi] = chaseLane(t, P), gap = fightGap(m, t), R = gap + rollDist(m) + m.size * 0.5;
+  return hi - lo < 2 * R ? null : { x0: clamp(t.x, lo + R, hi - R), gap, lo, hi };
+}
+// PeoPeo / MeoMeo tourné de spin degrés et écrasé (sx, sy) : de combien le descendre (px) pour que son point le plus bas
+// reste sur la ligne (sa silhouette ≈ une ellipse de 92 × 44 unités ; leur table « support » ne bouge pas, celle de Tino si)
+function groundFix(m, spin, sx, sy) {
+  const th = spin * Math.PI / 180, P = m.def.body.cy - 100, c = -48 * sy, ry = 46 * sy, rx = 22 * sx * (m.def.wide ?? 1);
+  const low = P + (c - P) * Math.cos(th) + Math.hypot(ry * Math.cos(th), rx * Math.sin(th));
+  return (-2 - low) * m.size / 100;
+}
+// Ce que fait un combattant à ce moment du combat (mode, u = depuis quand)
+function fightState(m, a) {
+  if (a.demo) { // (page des poses)
+    const c = m.clock, u = c % 1.6;
+    if (a.demo === "cast") return u < BOSS.WIND + 0.25 ? { mode: "cast", u } : { mode: "stance", u };
+    if (a.demo === "dodge") return u < BOSS.ROLL ? { mode: "roll", u } : { mode: "stance", u };
+    if (a.demo === "knocked") return { mode: "knock", u: 1.2 + (c % 1) * 0.01 };
+    return { mode: "cheer", u: c };
+  }
+  const T = a.boss, S = T?.script;
+  if (!S || T.t < BOSS.INTRO) return { mode: a.here ? "stance" : "walk", u: 0 };
+  if (T.t >= S.end) {
+    const e = T.t - S.end;
+    if (S.win) return { mode: e > 0.7 ? "cheer" : "stance", u: e };
+    return T.targets[S.beats.length - 1] === m ? { mode: "knock", u: e } : { mode: e > 0.3 ? "dismay" : "stance", u: e };
+  }
+  const { b, bi, u } = bossBeat(T);
+  if (b.kind === "cast" && T.casters[b.n] === m && u < BOSS.WIND + 0.25) return { mode: "cast", u };
+  if (b.kind === "attack" && T.targets[bi] === m) {
+    if (!b.lethal && u >= BOSS.ROLL_AT && u < BOSS.ROLL_AT + BOSS.ROLL) return { mode: "roll", u: u - BOSS.ROLL_AT };
+    if (b.lethal && u > BOSS.AWIND - 0.2) return { mode: "panic", u };
+  }
+  return { mode: a.here ? "stance" : "walk", u };
+}
+ACTIONS.fight = {
+  weight(m) {
+    const t = m.eng.buddy?.(m, "tino");
+    return canFlee(t) && (t.k === m.k || m.eng.visible(t.plat())) && fightRoom(m, t) ? 10 : 0; // (un peu plus que la poursuite : il faut que Tino soit libre, sur une ligne du calendrier, avec la place)
+  },
+  make(m) {
+    const t = m.eng.buddy?.(m, "tino"), go = { type: "fight" }, after = { type: "wave", dur: 1.6 };
+    if (t.k === m.k) return [go, after];
+    const P = t.plat(), side = t.x >= m.x ? 1 : -1;
+    return [...m.pathTo({ k: t.k, x: clamp(t.x - side * m.size * 1.5, P.x0, P.x1) }), go, after];
+  },
+  start(m, a) {
+    if (a.demo) { a.side = a.demo === "dodge" ? m.dir : -m.dir; return; }
+    const t = m.eng.buddy?.(m, "tino"), P = m.plat(), TP = t?.plat();
+    if (t && P && TP && t.k !== m.k && !a.again && !m.bubble?.sticky && (t.act?.type === "boss" || canFlee(t))) { // (pas sur la ligne de Tino — il / elle sautait ailleurs — : y va d'abord, une fois)
+      m.plan = [...m.pathTo({ k: t.k, x: clamp(t.x - (Math.sign(t.x - m.x) || 1) * m.size * 1.5, TP.x0, TP.x1) }), { ...a, t: undefined, again: true }, ...m.plan];
+      a.skip = true; return;
+    }
+    if (!t || !P || t.k !== m.k || m.bubble?.sticky) { a.skip = true; return; }
+    a.tino = t;
+    const T = t.act;
+    if (T?.type === "boss" && !T.demo && (T.t === undefined || T.t < T.script.end)) { // (l'autre a déjà commencé : il / elle se joint, de l'autre côté de Tino)
+      a.boss = T; a.side = -(T.by?.act?.side ?? (Math.sign(m.x - T.x0) || 1));
+      if (!T.foes?.includes(m)) (T.foes ??= []).push(m);
+      return;
+    }
+    const room = fightRoom(m, t);
+    if (!canFlee(t) || !room) { a.skip = true; return; }
+    const boss = { type: "boss", by: m, x0: room.x0, gap: room.gap, seed: a.seed, win: a.win };
+    t.now([boss]);
+    a.boss = boss; a.side = Math.sign(m.x - room.x0) || -1;
+  },
+  step(m, a, dt, me) {
+    if (a.demo) return false;
+    if (a.skip) return true;
+    const t = a.tino, T = a.boss;
+    if (!t || t.act !== T || t.k !== m.k || t.el.hidden || t.inPot) return true;
+    if (T.foes && !T.foes.includes(m)) T.foes.push(m);
+    const [lo, hi] = chaseLane(m, me), spot = clamp(T.x0 + a.side * fightGap(m, t), lo, hi), st = fightState(m, a);
+    if (st.mode !== "roll") a.rollX = null;
+    if (st.mode !== "knock") a.kx = null;
+    if (st.mode === "roll") { // roulade : en s'éloignant de Tino
+      a.rollX ??= m.x; a.here = false;
+      m.dir = a.side; m.x = clamp(a.rollX + a.side * rollDist(m) * smooth(clamp(st.u / BOSS.ROLL, 0, 1)), lo, hi);
+      return false;
+    }
+    if (st.mode === "knock") { // son coup l'envoie en l'air, en arrière : il / elle retombe sur le dos
+      a.kx ??= m.x; a.here = false;
+      const land = clamp(a.kx + a.side * m.size * 0.9, Math.max(lo, m.eng.v.left + m.size * 0.45), Math.min(hi, m.eng.v.right - m.size * 0.45)), e = clamp(st.u / 0.45, 0, 1);
+      m.dir = -a.side; m.x = lerp(a.kx, land, e); m.y = me.y - 4 * m.size * 0.45 * e * (1 - e);
+      return false;
+    }
+    if (st.mode === "cast" || st.mode === "panic") { m.dir = Math.sign(t.x - m.x) || m.dir; return false; } // (il / elle lance son sort là où il / elle est)
+    if (!a.here) { if (duoWalk(m, a, spot, dt * 1.5, me)) a.here = true; else return false; }
+    m.x = spot; m.dir = Math.sign(t.x - m.x) || m.dir;
+    return false;
+  },
+  look: facing,
+  busy: true,
+  staff: (m, a) => !a.skip,
+  glint: (m, a) => { const st = fightState(m, a); return st.mode === "cast" ? (st.u < BOSS.WIND ? st.u / BOSS.WIND : 1 - (st.u - BOSS.WIND) / 0.25) : st.mode === "stance" ? 0.15 : 0; },
+  pose(m, a, p) {
+    p.behind = true; // (derrière Tino à l'écran)
+    if (a.skip) return;
+    const st = fightState(m, a), c = m.clock, u = st.u;
+    if (st.mode === "walk") { if (a.moving) ACTIONS.walk.pose(m, a, p); p.armL = 30; return; }
+    if (st.mode === "stance") { p.sy = 0.97 + 0.01 * Math.sin(c * 3); p.armL = 38 + 4 * Math.sin(c * 3); p.armR = -8; p.rot = 2; return; } // en garde, le bâton pointé devant
+    if (st.mode === "cast") { // il / elle lève le bâton vers Tino (une lueur bleue s'y forme), puis le sort part : petit recul
+      if (u < BOSS.WIND) { const k = smooth(u / BOSS.WIND); p.armL = lerp(38, 100, k); p.armR = -8 - 20 * k; p.rot = 5 * k; p.sy = 1 - 0.03 * k; }
+      else { const e = clamp((u - BOSS.WIND) / 0.25, 0, 1); p.armL = 100 - 25 * e; p.armR = -28; p.rot = 5 - 9 * Math.sin(Math.PI * Math.min(1, e * 2)); p.head = -4 * (1 - e); }
+      return;
+    }
+    if (st.mode === "roll") { // en boule, une roulade complète (sans glisser : elle reste posée sur la ligne)
+      const e = clamp(u / BOSS.ROLL, 0, 1), sq = Math.sin(Math.PI * e);
+      p.spin = a.side * 360 * smooth(e); p.sy = 1 - 0.38 * sq; p.sx = 1 - 0.08 * sq; p.armL = 60 * sq; p.armR = 40 * sq; p.footL = p.footR = -3 * sq;
+      p.bob = groundFix(m, p.spin, p.sx, p.sy);
+      return;
+    }
+    if (st.mode === "knock") { // en l'air, puis à terre sur le dos ; se relève à la toute fin
+      const fly = clamp(u / 0.45, 0, 1), up = clamp((u - (BOSS.END - 0.7)) / 0.6, 0, 1);
+      p.spin = a.side * 90 * smooth(fly) * (1 - smooth(up)); p.sy = 1 - 0.08 * fly * (1 - up); p.armL = 70 * (1 - fly) + 10; p.armR = -70 * (1 - fly) - 10; p.footL = 2; p.footR = -1;
+      if (fly >= 1 && up <= 0) { p.armL = 15 + 3 * Math.sin(c * 2); p.armR = -15; p.head = 3; }
+      p.bob = (fly < 1 ? 0 : groundFix(m, p.spin, p.sx, p.sy)) - Math.sin(Math.PI * up) * m.size * 0.05;
+      return;
+    }
+    if (st.mode === "panic") { const k = clamp((u - (BOSS.AWIND - 0.2)) / 0.2, 0, 1); p.armL = lerp(38, 120, k); p.armR = -110 * k; p.sy = 1 - 0.05 * k; p.head = 5 * k; return; } // (trop tard !)
+    if (st.mode === "dismay") { p.armL = -40; p.armR = -150; p.head = 10; p.sy = 0.96; return; } // (l'autre est tombé·e : la main sur la tête)
+    p.armL = 150 + 15 * Math.sin(c * 10); p.armR = -p.armL; p.bob = -Math.abs(Math.sin(c * 9)) * m.size * 0.09; p.head = 6 * Math.sin(c * 12); // gagné !
+  },
+};
+// Tino le boss : il se met au milieu (l'arène), rugit, encaisse les sorts (il se cabre, flash blanc), attaque tous les deux
+// sorts (préparation : il s'accroupit, « 💢 » ; puis il saute et retombe de tout son poids, ou il charge) ; à la fin il tombe
+// (vertige) ou nargue celui / celle qu'il a mis·e à terre. busy : rien ne l'interrompt (une scène « ensemble » attend la fin)
+ACTIONS.boss = {
+  start(m, a) {
+    if (a.demo) return;
+    a.k = m.k; a.xs = m.x; a.foes = [...new Set([a.by, ...(a.foes ?? [])])].filter(Boolean); // (l'autre a pu se joindre avant son premier pas)
+    a.casters = []; a.targets = []; a.from = [];
+    a.script = bossScript(a.seed ?? Math.floor(Math.random() * 2 ** 31), a.win ?? Math.random() < BOSS.WIN);
+    if (!m.fx) { m.fxEl.innerHTML = BOSS_FX; const q = (s) => m.fxEl.querySelector(s); m.fx = { hp: q(".ms-hp"), fill: q(".ms-hp-fill"), lag: q(".ms-hp-lag"), dmg: q(".ms-hp-dmg"), glint: q(".ms-glint"), burst: q(".ms-burst"), shock: q(".ms-shock") }; }
+    m.fxEl.hidden = m.el.hidden;
+    if (!m.bubble) m.say(pick(["RAAAWR!! 💢", "You dare challenge me?! 💢", "Come at me! 💢"]), { ms: 1300 });
+  },
+  step(m, a) {
+    if (a.demo) return false;
+    const S = a.script;
+    if (m.k !== a.k) return true;
+    a.foes = a.foes.filter((f) => f.act?.type === "fight" && f.act.boss === a && !f.el.hidden && !f.inPot && f.k === m.k);
+    if (!a.foes.length && a.t < S.end) return true; // (plus personne en face : le combat s'arrête)
+    const { b, bi, u } = bossBeat(a), foes = [...a.foes].sort((x, y) => (x.def.key < y.def.key ? -1 : 1)); // (dans le même ordre sur les deux téléphones, pas dans l'ordre d'arrivée)
+    if (b?.kind === "cast" && !(b.n in a.casters)) a.casters[b.n] = foes[b.n % foes.length] ?? null; // chacun son tour
+    if (b?.kind === "attack" && !(bi in a.targets)) a.targets[bi] = foes[Math.floor(b.pick * foes.length)] ?? null;
+    if (b?.kind === "cast" && u >= BOSS.WIND && !(b.n in a.from)) a.from[b.n] = staffTip(m, a.casters[b.n]) ?? [m.x - m.dir * a.gap, m.y - m.size * 0.5]; // le sort part du bout du bâton
+    m.x = bossX(a);
+    const focus = b?.kind === "attack" ? a.targets[bi] : b?.kind === "cast" ? a.casters[b.n] : a.foes[0];
+    if (focus) m.dir = Math.sign(focus.x - m.x) || m.dir;
+    if (a.t >= S.end && !a.said) { a.said = true; if (!m.bubble) m.say(S.win ? "Ugh… 😵" : pick(["Too easy! 😤", "Hmph! 😤", "Git gud! 😤"]), { ms: 1600 }); }
+    return a.t >= S.end + BOSS.END;
+  },
+  busy: true,
+  mad: (m, a) => !a.demo && !!a.script && a.t < a.script.end && (a.t < BOSS.INTRO || (bossBeat(a).b?.kind === "attack" && bossBeat(a).u < BOSS.AWIND + BOSS.STRIKE)),
+  look: facing,
+  pose(m, a, p) {
+    const c = m.clock, S = a.script;
+    const roar = (k) => { p.sy = 1 + 0.12 * k; p.sx = 1 - 0.06 * k; p.armL = 140 * k; p.armR = -140 * k; p.rot = 3 * Math.sin(c * 31) * k; p.head = -6 * k; };
+    const windup = (k, move) => { p.sy = 1 - 0.2 * k; p.sx = 1 + 0.14 * k; p.rot = (move === "charge" ? -m.dir * 10 : 2 * Math.sin(c * 40)) * k; p.armL = (move === "charge" ? -40 : 120) * k; p.armR = (move === "charge" ? 40 : -120) * k; };
+    const slam = (s) => { p.bob = -Math.sin(Math.PI * s) * m.size * 0.9; p.armL = 160; p.armR = -160; p.sy = 1.1; p.sx = 0.92; };
+    const charge = (s) => { p.rot = m.dir * 22; p.armL = 90; p.armR = -90; p.sy = 0.95; p.sx = 1.06; p.run = true; };
+    const flinch = (e) => { const k = Math.sin(Math.PI * clamp(e, 0, 1)); p.rot = -m.dir * 14 * k; p.sx = 1 + 0.06 * k; p.sy = 1 - 0.06 * k; p.head = -8 * k; p.armL = 60 * k; p.armR = -60 * k; };
+    if (a.demo) { // (page des poses)
+      const u = c % 1.9;
+      if (a.demo === "roar") roar(0.6 + 0.4 * Math.abs(Math.sin(c * 2)));
+      else if (a.demo === "hit") flinch((c % 0.8) / 0.4);
+      else if (a.demo === "fall") { p.spin = m.dir * -85; p.dizzy = true; }
+      else if (u < BOSS.AWIND) windup(u / BOSS.AWIND, a.demo);
+      else if (u < BOSS.AWIND + BOSS.STRIKE) (a.demo === "slam" ? slam : charge)((u - BOSS.AWIND) / BOSS.STRIKE);
+      else { const k = 1 - clamp((u - BOSS.AWIND - BOSS.STRIKE) / 0.2, 0, 1); p.sy = 1 - 0.16 * k; p.sx = 1 + 0.12 * k; }
+      return;
+    }
+    if (!S) return;
+    if (a.t >= S.end) { // la fin
+      const e = a.t - S.end;
+      if (!S.win) { p.armL = 150 + 12 * Math.sin(c * 9); p.armR = -p.armL; p.bob = -Math.abs(Math.sin(c * 8)) * m.size * 0.08; p.head = 5 * Math.sin(c * 10); return; } // il nargue
+      const side = a.fallSide ??= -(Math.sign((a.casters[S.beats[S.beats.length - 1].n]?.x ?? m.x + m.dir) - m.x) || 1); // (il tombe à la renverse, loin du dernier sort)
+      if (e < 0.55) { p.rot = side * 12 * Math.sin(e * 22) * (1 - e / 0.55) + side * 10 * (e / 0.55); p.armL = 50; p.armR = -50; p.head = -8; return; } // il chancelle…
+      const f = smooth(clamp((e - 0.55) / 0.35, 0, 1)), up = smooth(clamp((e - (BOSS.END - 0.6)) / 0.5, 0, 1));
+      p.spin = side * 85 * f * (1 - up); p.armL = 30; p.armR = -30; p.dizzy = f > 0.9 && up < 0.5; // … et tombe (vertige), puis se relève
+      return;
+    }
+    if (a.t < BOSS.INTRO) { roar(clamp(a.t / 0.35, 0, 1) * (1 - clamp((a.t - BOSS.INTRO + 0.3) / 0.3, 0, 1))); return; }
+    const { b, u } = bossBeat(a);
+    if (b.kind === "cast") { // il attend, menaçant ; touché : il se cabre
+      const h = u - BOSS.WIND - BOSS.FLY;
+      if (h >= 0 && h < 0.4) flinch(h / 0.4);
+      else { p.armL = 25 + 6 * Math.sin(c * 4); p.armR = -25 - 6 * Math.sin(c * 4); p.rot = 2 * Math.sin(c * 2); }
+      return;
+    }
+    if (u < BOSS.AWIND) { windup(smooth(u / BOSS.AWIND), b.move); return; }
+    const s = (u - BOSS.AWIND) / BOSS.STRIKE;
+    if (s < 1) { (b.move === "slam" ? slam : charge)(s); return; }
+    const k = 1 - clamp((s - 1) * BOSS.STRIKE / 0.22, 0, 1); p.sy = 1 - 0.18 * k; p.sx = 1 + 0.14 * k; // réception
+  },
+};
+// Où est Tino : il va au milieu de l'arène pendant l'intro ; quand il charge, il fonce vers sa cible (jusqu'à elle si le coup
+// touche), puis revient
+function bossX(a) {
+  if (a.t < 0.6) return lerp(a.xs, a.x0, smooth(a.t / 0.6));
+  const { b, bi, u } = bossBeat(a);
+  if (b?.kind !== "attack" || b.move !== "charge") return a.x0;
+  const tg = a.targets[bi], dir = tg ? Math.sign(tg.x - a.x0) || 1 : 1, reach = (b.lethal ? 0.75 : 0.5) * a.gap;
+  if (u < BOSS.AWIND) return a.x0 - dir * 5 * smooth(u / BOSS.AWIND); // (il prend son élan)
+  const s = (u - BOSS.AWIND) / BOSS.STRIKE;
+  if (s < 1) return a.x0 + dir * (reach + 5) * smooth(s) - dir * 5;
+  return a.x0 + dir * reach * (1 - smooth(clamp((u - BOSS.AWIND - BOSS.STRIKE) / 0.5, 0, 1)));
+}
+// Le bout du bâton d'un combattant, dans le repère de la page (comme le calque) ; null s'il n'est pas dessiné
+function staffTip(t, f) {
+  const tip = f?.el.querySelector(".ms-staff-tip"), r = tip?.getBoundingClientRect(), L = t.eng.layer?.getBoundingClientRect();
+  return r?.width || r?.height ? [r.left + r.width / 2 - (L?.left ?? 0), r.top + r.height / 2 - (L?.top ?? 0)] : null;
+}
+// Vie de Tino maintenant : vie (après les sorts qui ont touché), partie jaune (ce qu'il vient de perdre, qui fond 0,6 s
+// après), dégâts du dernier enchaînement (et depuis quand le dernier coup a touché)
+function bossHp(a) {
+  let hp = BOSS.HP, lag = BOSS.HP, combo = 0, last = -Infinity;
+  for (const b of a.script.beats) {
+    if (b.kind !== "cast") continue;
+    const h = b.t + BOSS.WIND + BOSS.FLY;
+    if (h > a.t) break;
+    combo = h - last < 1.6 ? combo + b.dmg : b.dmg; last = h; hp = b.hp1;
+    const e = a.t - h;
+    lag = e < 0.6 ? b.hp0 : lerp(b.hp0, b.hp1, clamp((e - 0.6) / 0.4, 0, 1));
+  }
+  return { hp, lag: Math.max(lag, hp), combo, since: a.t - last };
+}
 const CALM =["idle", "sit", "wave"]; // quand il a un message à dire, il reste là pour qu'on puisse le lire
 
 class Mascot {
@@ -1767,6 +2060,8 @@ class Mascot {
     this.bannerEl = document.createElement("div");
     this.bannerEl.className = "ms-banner";
     this.bannerW = 0;
+    // Effets du combat de boss (Tino) : barre de vie, sort, impact, onde de choc — remplis au premier combat (ACTIONS.boss)
+    this.fxEl = document.createElement("div"); this.fxEl.className = "ms-bossfx"; this.fxEl.hidden = true; this.fx = null; this.fxOn = false;
     // k : la clé de la plateforme où il est (voir mountMascots)
     this.k = null; this.x = 0; this.y = 0; this.dir = 1; this.side = 1; this.clock = rand(0, 10);
     this.look = 0; this.gaze = 0; this.sink = 0; this.lie = 0; this.stay = false; this.bubble = null; this.bedK = 0; this.bedAt = null;
@@ -2167,6 +2462,9 @@ class Mascot {
     this.el.classList.toggle("ms-fish-burnt", a.type === "eat" && !!a.burnt);
     const inHands = a.t !== undefined ? (A.hold ? A.hold(this, a) : HOLD_OF[a.type]) ?? null : null; // manette, matcha, bière, bol de pho
     this.el.classList.toggle("ms-tool-ladle", a.t !== undefined && !!A.ladle?.(this, a)); // (PeoPeo : la grande louche)
+    this.el.classList.toggle("ms-tool-staff", a.t !== undefined && !!A.staff?.(this, a)); // (PeoPeo / MeoMeo : le bâton des sorts)
+    const gl = a.t !== undefined && A.glint ? Math.round(clamp(A.glint(this, a), 0, 1) * 20) / 20 : 0; // (la pierre du bâton s'illumine)
+    if (gl !== this.glintK) { this.glintK = gl; this.el.style.setProperty("--glint", String(gl)); }
     const z = p.behind ? "-1" : ""; if (this.el.style.zIndex !== z) this.el.style.zIndex = z; // (passager du scooter : derrière Tino)
     if (inHands !== this.inHands) { if (this.inHands) this.el.classList.remove("ms-hold-" + this.inHands); if (inHands) this.el.classList.add("ms-hold-" + inHands); this.inHands = inHands; }
     if (inHands) {
@@ -2205,6 +2503,7 @@ class Mascot {
     this.placeBubble((nx - 50) * u, (ny - 30) * u);
     this.placeBed(bw);
     this.placeProp();
+    this.placeBoss(a);
     this.wearFrames();
   }
 
@@ -2235,6 +2534,61 @@ class Mascot {
       const k = flipK(this.clock, D.period), up = Math.sin(Math.PI * k) * 13;
       this.propFood.style.transform = pr.kind === "bbq" ? `translateY(${(-up).toFixed(2)}px) rotate(${(360 * k).toFixed(1)}deg)` : `translateY(${(-up).toFixed(2)}px) scaleY(${Math.cos(2 * Math.PI * k).toFixed(3)})`; // (un tour complet : retombe pareil)
     }
+  }
+
+  // Combat de boss (Tino) : barre de vie, sort en vol, impact, onde de choc, bannière de fin — tout depuis l'état du combat
+  placeBoss(a) {
+    const on = a.type === "boss" && a.t !== undefined && !!a.script && !!this.fx;
+    if (!on) {
+      if (this.fxOn) { this.fxOn = false; this.el.classList.remove("ms-hit"); for (const e of this.fxEl.children) e.style.visibility = "hidden"; }
+      return;
+    }
+    this.fxOn = true;
+    const F = this.fx, S = a.script, v = this.eng.v, W = this.size, cx = this.x, cy = this.y - W * 0.45;
+    const show = (el, yes) => { el.style.visibility = yes ? "visible" : "hidden"; };
+    // barre de vie (en bas de l'écran, ou en haut si le combat est tout en bas) : nom, dégâts, vie, partie jaune qui fond
+    const H = bossHp(a), w = Math.min(460, (v.right - v.left) * 0.84);
+    const fade = clamp((a.t - 0.2) / 0.5, 0, 1) * (1 - clamp((a.t - S.end - (S.win ? 0.4 : BOSS.END - 0.6)) / 0.5, 0, 1));
+    const top = this.y > v.bottom - 120 ? v.top + 10 : v.bottom - 40;
+    show(F.hp, fade > 0.01);
+    F.hp.style.width = w.toFixed(0) + "px"; F.hp.style.opacity = fade.toFixed(3);
+    F.hp.style.transform = `translate3d(${((v.left + v.right - w) / 2).toFixed(1)}px, ${top.toFixed(1)}px, 0)`;
+    F.fill.style.width = (100 * H.hp / BOSS.HP).toFixed(2) + "%"; F.lag.style.width = (100 * H.lag / BOSS.HP).toFixed(2) + "%";
+    const dmg = H.combo ? String(H.combo) : "";
+    if (F.dmg.textContent !== dmg) F.dmg.textContent = dmg;
+    F.dmg.style.opacity = clamp(1 - (H.since - 1.2) / 0.4, 0, 1).toFixed(2);
+    // le sort en vol (du bout du bâton jusqu'à Tino), puis l'impact (et Tino blanchit un instant)
+    const { b } = bossBeat(a);
+    let fly = -1;
+    if (b?.kind === "cast" && a.from[b.n]) fly = (a.t - b.t - BOSS.WIND) / BOSS.FLY;
+    show(F.glint, fly >= 0 && fly < 1);
+    if (fly >= 0 && fly < 1) {
+      const [x0, y0] = a.from[b.n], x = lerp(x0, cx, fly), y = lerp(y0, cy, fly);
+      F.glint.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) rotate(${(Math.atan2(cy - y0, cx - x0) * 180 / Math.PI).toFixed(1)}deg)`;
+    }
+    const hit = H.since / 0.35;
+    show(F.burst, hit >= 0 && hit < 1);
+    if (hit >= 0 && hit < 1) { F.burst.style.transform = `translate3d(${cx.toFixed(1)}px, ${cy.toFixed(1)}px, 0) scale(${(0.4 + 1.3 * hit).toFixed(3)})`; F.burst.style.opacity = (1 - hit).toFixed(3); }
+    this.el.classList.toggle("ms-hit", H.since >= 0 && H.since < 0.12);
+    // onde de choc : il retombe de son saut, ou son coup touche
+    let sh = -1;
+    for (const q of S.beats) if (q.kind === "attack" && (q.move === "slam" || q.lethal)) { const e = (a.t - q.t - BOSS.AWIND - BOSS.STRIKE) / 0.45; if (e >= 0 && e < 1) sh = e; }
+    show(F.shock, sh >= 0);
+    if (sh >= 0) {
+      const sw = W * (0.6 + 2.6 * sh), shh = sw * 0.28;
+      F.shock.style.width = sw.toFixed(1) + "px"; F.shock.style.height = shh.toFixed(1) + "px"; F.shock.style.opacity = (1 - sh).toFixed(3);
+      F.shock.style.transform = `translate3d(${(cx - sw / 2).toFixed(1)}px, ${(this.y - shh / 2).toFixed(1)}px, 0)`;
+    }
+    // la bannière de fin, au milieu de l'écran (comme dans le jeu) : GREAT ENEMY FELLED / YOU DIED
+    const bs = a.t - S.end - (S.win ? 0.9 : 0.6), bl = 2.7, bn = this.bannerEl;
+    if (bs < 0 || bs >= bl) return;
+    if (this.bannerFor !== a) {
+      const [text, cls] = BANNERS[S.win ? "win" : "lose"];
+      this.bannerFor = a; bn.textContent = text; bn.className = "ms-banner " + cls; bn.style.transform = "none";
+      this.bannerW = bn.offsetWidth; this.bannerH = bn.offsetHeight;
+    }
+    bn.style.visibility = "visible"; bn.style.opacity = clamp(Math.min(bs / 0.5, (bl - bs) / 0.45), 0, 1).toFixed(3);
+    bn.style.transform = `translate3d(${((v.left + v.right - this.bannerW) / 2).toFixed(1)}px, ${(v.top + (v.bottom - v.top) * 0.36 - this.bannerH / 2).toFixed(1)}px, 0) scale(${(1 + 0.05 * bs / bl).toFixed(4)})`;
   }
 
   // Lit centré sur sa place de la nuit, tête de lit du côté de sa tête ; couverture de ses pieds jusqu'au cou
@@ -2357,7 +2711,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     const s = stirrer ?? cooks[0];
     potFx({ mode: stirrer ? "stir" : fan ? "fan" : s.act.mode, fan, side: s.act.side, phase: s.clock * STIR_W, paw: stirrer ? handOf(stirrer) : null });
   };
-  const hideAll = (m, h) => { m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = h; if (m.bubble) m.bubble.el.hidden = h; };
+  const hideAll = (m, h) => { m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = m.fxEl.hidden = h; if (m.bubble) m.bubble.el.hidden = h; };
   // Il plonge dans la marmite (fin de potIn) : caché, sa tête ressort de la marmite (onHome → l'app)
   eng.enterPot = (m) => {
     m.inPot = true; m.act = null; m.plan = []; m.potT = rand(...POT_IN); m.stay = false;
@@ -2468,7 +2822,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       if (st.length) m.now(st);
     });
   };
-  list.forEach((m) => layer.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl));
+  list.forEach((m) => layer.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl, m.fxEl));
   const reduce = matchMedia("(prefers-reduced-motion: reduce)");
   let raf = 0, last = 0;
   const inView = (m) => m.y <= eng.v.bottom + 2 && m.y - m.size * 1.05 >= eng.v.top - 2;
@@ -2485,7 +2839,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     eng.today = t && eng.byKey.has(t.key) ? { k: t.key, x: t.x } : null;
     list.forEach((m, i) => {
       const off = !eng.plats.length || m.away || m.inPot;
-      m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = off;
+      m.el.hidden = m.bedEl.hidden = m.blanketEl.hidden = m.propEl.hidden = m.bannerEl.hidden = m.fxEl.hidden = off;
       if (m.bubble) m.bubble.el.hidden = off;
       if (off) return;
       if (!m.placed || moved) { m.place(i); return; }
@@ -2630,7 +2984,7 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
     flyAway() { if (!reduce.matches) tino?.flyAway(); },
     // On l'a nourri (ici ou chez l'autre) : il mange son poisson (pas s'il dort, ni sans animations)
     eat(fish, opt = {}) { if (tino && !reduce.matches && !eng.night() && !tino.el.hidden) tino.now([{ type: "eat", fish, ...opt }]); },
-    destroy() { potLink(true); cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); m.propEl.remove(); m.bannerEl.remove(); }); },
+    destroy() { potLink(true); cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVisible); removeEventListener("scroll", onScroll); list.forEach((m) => { m.hush(true); m.el.remove(); m.bedEl.remove(); m.blanketEl.remove(); m.propEl.remove(); m.bannerEl.remove(); m.fxEl.remove(); }); },
   };
 }
 
@@ -2653,7 +3007,7 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
   if (type === "chaserun" || type === "flee") m.update = function (dt) { // (il court sur place : PeoPeo qui poursuit, Tino qui s’enfuit)
     this.clock += dt; this.act ??= this.think(); this.act.ph += dt * 9; this.act.t = 1; this.dir = dir; this.ease(dt);
   };
-  box.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl);
+  box.append(m.propEl, m.bedEl, m.el, m.blanketEl, m.bannerEl, m.fxEl);
   m.k = "demo"; m.x = size / 2; m.y = size; m.dir = dir;
   if (type === "walk") m.update = function (dt) { this.clock += dt; this.act ??= { type: "walk", t: 0, x: this.x }; this.dir = dir; this.ease(dt); }; // marche sur place
   if (type === "swim") m.update = function (dt) { // nage sur place, en ondulant
@@ -2694,6 +3048,8 @@ export function demoPose(box, kind, type, size, dir = 1, cell = Infinity, { loop
     full: { type: "belly", dur: 4.4 },
     stir: { type: "stir", t: 0, mode: "stir", mt: 0, side: -dir, x: m.x, fanX: m.x, lift: 0, seq: [], dur: 1e9 }, // (la marmite est du côté où il regarde)
     fan: { type: "stir", t: 0, mode: "fan", mt: 0, side: -dir, x: m.x, fanX: m.x, lift: 0, seq: [], dur: 1e9 },
+    cast: { type: "fight", demo: "cast" }, dodge: { type: "fight", demo: "dodge" }, knocked: { type: "fight", demo: "knocked" }, cheer: { type: "fight", demo: "cheer" }, // (combat de boss)
+    bossroar: { type: "boss", demo: "roar" }, bossslam: { type: "boss", demo: "slam" }, bosscharge: { type: "boss", demo: "charge" }, bosshit: { type: "boss", demo: "hit" }, bossfall: { type: "boss", demo: "fall" },
     flee: { type: "flee", t: 1, mode: "run", v: 1e3, ph: 0, x: m.x + dir * 1e9, glanceT: 1, glance: 0, turns: 0 },
     chaserun: { type: "chase", t: 1, mode: "run", v: 1e3, ph: 0 },
   }[type] ??{ type, dur: type === "wave" ? 2.2 : type === "nap" ? Infinity : 1 });
