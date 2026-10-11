@@ -579,7 +579,7 @@ function tinoScene(m, sc) {
     const H = m.eng.home?.("tino");
     return H && H.y >= m.eng.v.top && H.y <= m.eng.v.bottom && !m.bubble?.sticky ? [{ type: "potIn", soak: true }] : ACTIONS.walk.make(m, me, ctx);
   }
-  if (kind === "beer") return [{ type: "beer", dur: sc.dur, duo: !!sc.duo }];
+  if (kind === "beer") return [{ type: "beer", dur: sc.dur, duo: !!sc.duo, sing: !!sc.twist }];
   const ok = ["game", "cook", "bbq", "rice"].includes(kind) ? !!m.propSpot(kind) : ["shop", "scooter"].includes(kind) ? !!m.trip(kind) : kind === "swim" ? !!m.swimRow() : true;
   if (!ok) return ACTIONS.walk.make(m, me, ctx);
   const st = (ACTIONS[kind].make ?? (() => [{ type: kind }]))(m, me, ctx), last = st[st.length - 1];
@@ -609,6 +609,29 @@ function buddyScene(m, sc) {
   return [...way, sc.duo === "chase" ? { type: "chase" } : { type: "duo", kind: ["game", "beer", "scooter", "matcha", "pho", "shop"].includes(sc.duo) ? sc.duo : "cook", snatchRoll: sc.snatch ? 0 : 1, twistRoll: sc.twist ? 0 : 1, who: sc.who }, { type: "wave", dur: 1.6 }];
 }
 const CHEERS = 1.5; // bière avec PeoPeo : « chin chin » (s)
+// « Hò dô ta nào » : la chanson pour trinquer, de temps en temps (TWIST_P) quand on boit une bière : une ligne par temps
+// (DO_BEAT s), chacun son tour (Tino seul : il la chante tout seul), la chope levée et remontée à chaque temps ; à plusieurs,
+// on trinque à la fin
+const DO_LINES = ["Hò dô ta nào! 🍻", "Kéo cái ly này lên!", "Hai ba dô!", "Hai ba bốn! 🍻"];
+const DO_BEAT = 1.15, DO_LEN = DO_LINES.length * DO_BEAT;
+// À chaque image (Tino, pendant sa bière) : la ligne du moment, dite par Tino puis chacun de ceux qui boivent avec lui (par
+// nom : le même ordre sur les deux téléphones) ; à la fin, des cœurs
+function songTick(t, r) {
+  const S = r.song, i = Math.floor((r.t - S.t0) / DO_BEAT);
+  if (i < 0 || i === S.i) return;
+  S.i = i;
+  const cast = [t, ...(t.eng.all?.() ?? []).filter((q) => q !== t && q.act?.type === "duo" && q.act.ref === r && !q.act.snatch && !q.act.got).sort((x, y) => (x.def.key < y.def.key ? -1 : 1))];
+  if (i >= DO_LINES.length) { if (!S.done) { S.done = true; for (const m of cast) m.love(); } return; }
+  const who = cast[i % cast.length], last = i === DO_LINES.length - 1;
+  if (!who.bubble?.sticky) who.say(DO_LINES[i], { ms: last ? 1700 : DO_BEAT * 1000 - 60 });
+}
+// La pose pendant la chanson (e : depuis quand elle a commencé) : la chope levée, remontée à chaque temps ; rot : vers où elle
+// penche
+function songPose(m, e, p, rot) {
+  const k = smooth(clamp(e / 0.3, 0, 1)), pump = Math.sin(Math.PI * clamp(((e % DO_BEAT) / DO_BEAT) / 0.4, 0, 1)), T = m.def.key === "tino";
+  p.holdY = (-9 - 5 * pump) * k; p.holdRot = rot * 16 * k; p.sy = 0.97; p.bob = -pump * m.size * 0.04 * k;
+  p.armL = T ? -50 - 25 * k : -40 + 30 * k; p.armR = T ? 50 + 25 * k : 40 + 10 * k;
+}
 const SNATCH_GRAB = 0.5, SNATCH_MAD = 2.4, SNATCH_P = 0.35; // MeoMeo prend la bière de Tino (s), puis elle est fâchée (s) avant de la boire ; pas toujours : 35 % des fois (sinon « chin chin »)
 const POT_FIRST = [15, 40], POT_IN = [60, 180], POT_OUT = [60, 150], DIVE = 0.3;
 const LOOK = 8;   // décalage du visage quand il regarde de côté (repère 100)
@@ -1007,11 +1030,13 @@ const ACTIONS = {
     sit: true,
     hold: (m, a) => (a.snatched != null ? null : "beer"),
     look: (m, a) => (a.with ? a.with * LOOK * 0.7 : 0), // (avec PeoPeo / MeoMeo : il le regarde)
+    start(m, a) { if (!a.duo && (a.sing ?? Math.random() < TWIST_P)) a.song = { t0: 0.4, i: -1 }; }, // (seul : la chanson, parfois)
     step(m, a) {
       if (a.snatched != null) {
         if (!a.sulk && a.t - a.snatched > 0.8) { a.sulk = true; if (!m.bubble) m.say("Hey!! My beer… 😢", { ms: 2200 }); }
         return a.t >= a.dur || a.t - a.snatched > 4;
       }
+      if (a.song) songTick(m, a);
       if (a.t > 1.5) { // il a bu : rouge pendant 2 min (même s'il fait autre chose ensuite), d'autant plus qu'il a bu
         if (Date.now() > m.redUntil) m.redMax = 0;
         m.redUntil = Date.now() + RED_MS; m.redMax = Math.max(m.redMax, clamp(a.t / a.dur, 0, 1));
@@ -1026,6 +1051,8 @@ const ACTIONS = {
         else { p.armL = -8; p.armR = 8; p.head = 10; p.sy = 0.94; p.sx = 1.04; p.rot = 2 * Math.sin(m.clock * 1.2); }
         return;
       }
+      const e = a.song ? a.t - a.song.t0 : -1;
+      if (e >= 0 && e < DO_LEN) { songPose(m, e, p, a.with ?? 1); return; } // (la chanson)
       const u = a.cheers != null ? a.t - a.cheers : -1;
       if (u >= 0 && u < CHEERS) { // « chin chin » avec PeoPeo : la chope levée vers lui
         const k = smooth(clamp(Math.min(u, CHEERS - u) / 0.35, 0, 1));
@@ -1684,7 +1711,7 @@ ACTIONS.duo = {
       a.dir = -a.bs; x = t.x + a.bs * (gap + a.far * m.size * 0.6);
       if (a.kind === "beer" && !a.snatch) r.with = a.bs;
     }
-    if (!a.here) { if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; a.snatch = a.kind === "beer" && !!m.def.snatch && r.snatched == null && (a.snatchRoll ?? Math.random()) < SNATCH_P; if (a.kind === "beer" && !a.snatch) r.cheers = r.t; } return false; }
+    if (!a.here) { if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; a.snatch = a.kind === "beer" && !!m.def.snatch && r.snatched == null && (a.snatchRoll ?? Math.random()) < SNATCH_P; if (a.kind === "beer" && !a.snatch) beerHello(r, a); } return false; }
     m.x = clamp(x, me.x0, me.x1); m.dir = a.dir;
     const u = a.t - a.hereT;
     if (a.snatch) { // MeoMeo tend les mains… et lui prend sa chope
@@ -1757,8 +1784,9 @@ ACTIONS.duo = {
         p.holdY = -12; p.holdRot = -d * 18; p.armL = -30; p.armR = 60; p.rot = 4 * Math.sin(c * 22); p.bob = -Math.abs(Math.sin(c * 14)) * m.size * 0.03; p.head = 6 * Math.sin(c * 12);
       } else { const v = u - SNATCH_MAD, gulp = Math.max(0, Math.sin(c * 1.5 + 1)) ** 4; p.holdY = -6 * gulp; p.holdRot = -12 * gulp; p.head = -5 * gulp; p.armL = -40; p.armR = 40; p.sy = 0.97; p.blush = clamp(v / 6, 0, 1); } // puis elle la boit
     } else if (a.kind === "beer") {
-      const u = a.t - a.hereT;
-      if (u < CHEERS) { const k = smooth(clamp(Math.min(u, CHEERS - u) / 0.35, 0, 1)); p.holdY = -9 * k; p.holdRot = -18 * k; p.armL = -40 + 30 * k; p.armR = 40 + 10 * k; p.sy = 0.97; }
+      const e = r?.song ? r.t - r.song.t0 : -1, u = e >= DO_LEN && e < DO_LEN + CHEERS ? e - DO_LEN : a.t - a.hereT; // (après la chanson : on trinque)
+      if (e >= 0 && e < DO_LEN) songPose(m, e, p, -1);
+      else if (u < CHEERS) { const k = smooth(clamp(Math.min(u, CHEERS - u) / 0.35, 0, 1)); p.holdY = -9 * k; p.holdRot = -18 * k; p.armL = -40 + 30 * k; p.armR = 40 + 10 * k; p.sy = 0.97; }
       else { const gulp = Math.max(0, Math.sin(c * 1.5 + 1)) ** 4; p.holdY = -6 * gulp; p.holdRot = -12 * gulp; p.head = -5 * gulp; p.armL = -40; p.armR = 40; p.sy = 0.97; p.blush = clamp(u / 10, 0, 1); }
     } else if (a.kind === "squish" && a.drawing) { // il / elle lui dessine une moustache (la main gribouille sous son nez)
       p.armL = 88 + 8 * Math.sin(c * 14); p.armR = 10; p.rot = -3; p.head = 6 + 2 * Math.sin(c * 7);
@@ -1911,6 +1939,12 @@ function noodleState(r) {
   if (!n) return null;
   const e = r.t - n.t0;
   return { n, e, s: clamp(e / NOODLE.SLURP, 0, 1), meet: e >= NOODLE.SLURP && e < NOODLE.SLURP + NOODLE.MEET, back: clamp((e - NOODLE.SLURP - NOODLE.MEET) / NOODLE.BACK, 0, 1), done: e >= NOODLE.SLURP + NOODLE.MEET + NOODLE.BACK };
+}
+// Bière : un compagnon arrive à côté de Tino. Le premier lance parfois la chanson (ensemble : tirée par la scène) ; pendant
+// la chanson, il / elle s'y joint ; puis on trinque à la fin. Sinon « chin chin » comme avant
+function beerHello(r, a) {
+  if (!r.song && r.cheers == null && (a.twistRoll ?? Math.random()) < TWIST_P) r.song = { t0: r.t, i: -1 };
+  if (r.song && r.t - r.song.t0 < DO_LEN) { a.clink = true; r.cheers = r.song.t0 + DO_LEN; } else r.cheers = r.t;
 }
 // Pho à deux (ensemble) : PeoPeo et MeoMeo côte à côte, un bol posé par terre entre eux, du côté de Tino où il y a la place ;
 // sinon (pas la place) ils mangent dans le bol de Tino, de part et d'autre de lui (et pas de nouille partagée)
