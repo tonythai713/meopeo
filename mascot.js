@@ -296,16 +296,23 @@ function meoHead(gid) {
     <g class="ms-wear-head"></g>
   </g>`;
 }
+// Ses bras sont dessinés DEVANT le corps et ses grands cheveux (sinon un bras qui passe devant elle disparaît derrière la robe,
+// et un bras levé — coucou, bras en l'air — derrière ses cheveux) ; bras levés pas plus haut que 135° (armMax : sinon la main
+// passerait sur son visage) ; ses deux petites manches sont redessinées par-dessus le haut des bras : le même dessin du corps, vu seulement dans un petit rectangle autour
+// de chaque manche (un <svg> imbriqué coupe ce qui dépasse — pas de clipPath à identifiant)
+const meoSleeve = (x, y, w, h) => `<svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}" overflow="hidden">${meoImg("body", 39.48, 53.61, 19.6, 39.42)}</svg>`;
+const meoSleeves = () => meoSleeve(42.6, 56.5, 2.6, 4.3) + meoSleeve(54.2, 56.3, 3, 5);
 function meoSvg(gid = "ms-flush-meo") {
   return `<svg class="ms-meo" viewBox="0 0 100 100" aria-hidden="true">
-  <g class="ms-arm-l">${staffSvg(41, 67.6, 37.6, 91.3, 37.4, 92.8)}<g class="ms-ladle" display="none"><path d="M39.5 73.5L37.0 99.5" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M41.1 73.7L39.7 99.5" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M40 74L37 81" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="34" cy="86.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M34 86.5L29 83M34 86.5L31 92M34 86.5L38 81M34 86.5L40 89" stroke="#e0956a" stroke-width="0.6"/><circle cx="34" cy="86.5" r="2.2" fill="#e8604c"/></g>${meoImg("arm-l", 37.91, 58.55, 5.89, 16.74)}<circle class="ms-hand" cx="40" cy="74.5" r="0.6" fill="none"/></g>
-  <g class="ms-arm-r">${meoImg("arm-r", 53.96, 58.07, 5.97, 16.59)}</g>
   ${meoImg("body", 39.48, 53.61, 19.6, 39.42)}
   <g class="ms-foot-l">${meoImg("shoe-l", 42.8, 90.34, 7.45, 7.39)}</g>
   <g class="ms-foot-r">${meoImg("shoe-r", 49.08, 90.34, 7.66, 7.66)}</g>
   <g class="ms-wear-body"></g>
   <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(50 70) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(50 69) scale(0.55) translate(-51 -76)">${BEER}</g></g>
   ${meoHead(gid)}
+  <g class="ms-arm-l">${staffSvg(41, 67.6, 37.6, 91.3, 37.4, 92.8)}<g class="ms-ladle" display="none"><path d="M39.5 73.5L37.0 99.5" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M41.1 73.7L39.7 99.5" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M40 74L37 81" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="34" cy="86.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M34 86.5L29 83M34 86.5L31 92M34 86.5L38 81M34 86.5L40 89" stroke="#e0956a" stroke-width="0.6"/><circle cx="34" cy="86.5" r="2.2" fill="#e8604c"/></g>${meoImg("arm-l", 37.91, 58.55, 5.89, 16.74)}<circle class="ms-hand" cx="40" cy="74.5" r="0.6" fill="none"/></g>
+  <g class="ms-arm-r">${meoImg("arm-r", 53.96, 58.07, 5.97, 16.59)}</g>
+  ${meoSleeves()}
 </svg>`;
 }
 // La tête de MeoMeo seule (dans la marmite), cadrée sur le visage et les cheveux (ailes et bouts des rubans coupés)
@@ -482,7 +489,7 @@ export const KINDS = {
   // MeoMeo : les mêmes actions que PeoPeo ; size 56 : 1,4 × la hauteur de Tino (92 unités de haut, comme PeoPeo — réglable) ;
   // snatch : quand Tino boit une bière, elle la lui prend, s'énerve et la boit (duo « beer »)
   meo: {
-    name: "MeoMeo", svg: () => meoSvg(), size: 56, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
+    name: "MeoMeo", armMax: 135, svg: () => meoSvg(), size: 56, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
     only: PEO_ACTIONS, calm: true, home: true,
     body: { cy: 56, support: Array(24).fill(42) },
   },
@@ -2430,6 +2437,7 @@ class Mascot {
     // (holdY / holdRot : ce qu'il tient devant lui monte et penche — une gorgée ; sip : niveau du matcha ; blush : joues rouges)
     const p = { sx: 1 - 0.015 * breathe, sy: 1 + 0.025 * breathe, rot: 0, bob: 0, spin: 0, head: 2 * Math.sin(c * 0.9), armL: 0, armR: 0, footL: 0, footR: 0, holdY: 0, holdRot: 0, sip: 1, blush: 0, dizzy: false };
     if (a.t !== undefined) A.pose?.(this, a, p);
+    if (this.def.armMax) { p.armL = clamp(p.armL, -this.def.armMax, this.def.armMax); p.armR = clamp(p.armR, -this.def.armMax, this.def.armMax); } // (MeoMeo : bras levés pas trop haut)
     // Couché sur le côté : tout le corps pivote, il respire lentement, les pattes se relâchent
     if (this.lie > 0.01) {
       p.spin += this.side * LIE * this.lie;
