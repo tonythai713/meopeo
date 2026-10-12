@@ -28,8 +28,9 @@
 //   presence(myId, onChange) → { set(here), stop() } : qui a MeoPeo ouvert à l'écran en ce moment (temps réel, sans table) ;
 //     onChange(Set des id présents) — PeoPeo / MeoMeo dans la marmite
 //   getBath() → { at, by } (dernier bain), washTino() → { at, by, washedColour }, subscribeBath(onChange) → laver Tino (23_bath.sql)
-//   listBirthdays() → [{ profile, month, day, tz }], listLetters(), saveLetter(id | null, recipient, body), deleteLetter(id),
-//     markLetterRead(id) → anniversaires et lettres (30_birthdays.sql) ; une lettre : { id, author, recipient, body, openAt, readAt, updated }
+//   listBirthdays() → [{ profile, month, day, tz }], listLetters() → { letters, occasions }, saveLetter(id | null, recipient, body, occasion),
+//     deleteLetter(id), markLetterRead(id) → anniversaires et lettres (30_birthdays.sql), vœux de fêtes (31_holiday_wishes.sql : occasions)
+//     ; une lettre : { id, author, recipient, occasion, body, openAt, readAt, updated }
 //     — la personne fêtée ne la reçoit qu'à partir de openAt (la base la cache avant) ; pas de temps réel
 //   listDecor(), setDecor(blob, { season, layout, light }), deleteDecor({ season, layout, light }),
 //   subscribeDecor(onChange) → décor dessiné, fond d'écran par saison / jour-nuit / format (supabase/16_decor.sql)
@@ -85,7 +86,7 @@ const toRow = (t) => {
 export function createBackend() {
   const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
   const must = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
-  const letterOf = (r) => ({ id: r.id, author: r.author, recipient: r.recipient, body: r.body, openAt: r.open_at, readAt: r.read_at, updated: r.updated_at });
+  const letterOf = (r) => ({ id: r.id, author: r.author, recipient: r.recipient, occasion: r.occasion ?? "birthday", body: r.body, openAt: r.open_at, readAt: r.read_at, updated: r.updated_at });
   const LETTER_COLS = "id, author, recipient, body, open_at, read_at, updated_at";
   let channel = null;
 
@@ -349,10 +350,15 @@ export function createBackend() {
     async washTino() { const r = must(await sb.rpc("wash_tino")); return { at: r.at, by: r.by, washedColour: !!r.washed_colour }; },
     // Anniversaires et lettres (supabase/30_birthdays.sql)
     async listBirthdays() { return must(await sb.from("birthdays").select("profile, month, day, tz")); },
-    async listLetters() { return must(await sb.from("birthday_letters").select(LETTER_COLS).order("open_at")).map(letterOf); },
-    async saveLetter(id, recipient, body) {
-      const r = id ? await sb.from("birthday_letters").update({ body }).eq("id", id).select(LETTER_COLS).maybeSingle()
-        : await sb.from("birthday_letters").insert({ recipient, body }).select(LETTER_COLS).single();
+    // (occasions : 31 exécuté ; sinon la colonne n'existe pas et on relit sans elle — les lettres d'anniversaire marchent pareil)
+    async listLetters() {
+      const r = await sb.from("birthday_letters").select(LETTER_COLS + ", occasion").order("open_at");
+      if (r.error && ["42703", "PGRST204"].includes(r.error.code)) return { letters: must(await sb.from("birthday_letters").select(LETTER_COLS).order("open_at")).map(letterOf), occasions: false };
+      return { letters: must(r).map(letterOf), occasions: true };
+    },
+    async saveLetter(id, recipient, body, occasion = "birthday") {
+      const r = id ? await sb.from("birthday_letters").update({ body }).eq("id", id).select("*").maybeSingle()
+        : await sb.from("birthday_letters").insert(occasion === "birthday" ? { recipient, body } : { recipient, body, occasion }).select("*").single();
       const row = must(r);
       return row ? letterOf(row) : null;
     },

@@ -77,7 +77,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, bdays: [], bdayOk: null, letters: [], online: new Set() };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, bdays: [], bdayOk: null, letters: [], occOk: null, online: new Set() };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -152,6 +152,7 @@ function remindNotice(r) {
 }
 
 async function boot(user) {
+  if (S.user && S.user.id !== user.id) { mascots?.hush(); letterBrought = null; } // (un autre compte : pas de bulle du précédent)
   S.user = user;
   toastBox.innerHTML = ""; // pas de message du compte précédent
   root.innerHTML = `<div class="mp-loading">🌙 Loading…</div>`;
@@ -257,7 +258,7 @@ function showLogin() {
   unsubCatches?.(); unsubCatches = null; S.catches = []; S.color = null; S.fishingOk = null; lastCatch = null; applyColor(); clearTimeout(fishTimer);
   unsubFeeding?.(); unsubFeeding = null; S.feeding = null; S.hungerLines = []; S.feedingOk = null; feedSeen = null; clearTimeout(tummyTimer);
   unsubBath?.(); unsubBath = null; S.bath = null; S.bathOk = null; bathSeen = null; applyDirt();
-  S.bdays = []; S.bdayOk = null; S.letters = []; partyPreview = null; letterUi?.el.remove(); letterUi = null; letterBrought = null; applyParty(); // (plus de fête)
+  S.bdays = []; S.bdayOk = null; S.letters = []; S.occOk = null; partyPreview = null; partyCounting = null; letterUi?.el.remove(); letterUi = null; letterBrought = null; applyParty(); // (plus de fête)
   presenceCh?.stop(); presenceCh = null; S.online = new Set();
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
   unsubNotes?.(); unsubNotes = null; S.notes = []; S.notesOk = null;
@@ -2603,16 +2604,36 @@ function startBath(box) {
   bathing = { end };
 }
 
-// ---------- Anniversaires : la fête et la lettre (supabase/30_birthdays.sql) ----------
-// Le jour de l'anniversaire de l'un — dans SON fuseau (chez l'autre, la fête commence à l'heure qui correspond) —, fête chez les
-// deux : bannière avec un gâteau (le toucher souffle les bougies : confettis, et tout le monde lui souhaite), ballons, chapeaux de
-// fête (couronne pour la personne fêtée), Tino qui chante. Une lettre écrite à l'avance par l'autre (onglet Notes) s'ouvre ce
-// jour-là chez la personne fêtée : son avatar la lui apporte — la base la cache avant. Chez la personne fêtée, rien ne
-// parle de SON anniversaire avant le jour J (la carte de la lettre ne montre que l'anniversaire de l'AUTRE, LETTER_DAYS jours
-// avant ; l'aperçu de la fête est dans cette carte et n'écrit rien). Dates et fuseaux : seulement dans la base.
-const LETTER_DAYS = 45, DAY_MS = 86400e3;
-let partyTimer = 0, partyOn = null, partyPreview = null, partyBlown = false, partySeen = null, letterUi = null, letterBrought = null;
-// La date du jour dans un fuseau (« 2026-11-05 ») ; le décalage d'un fuseau à l'instant t ; minuit d'un jour dans un fuseau (ms)
+// ---------- Les fêtes : anniversaires, Noël, Nouvel An, Tết — et les lettres / vœux (supabase/30_birthdays.sql, 31_holiday_wishes.sql) ----------
+// Anniversaire de l'un — dans SON fuseau (chez l'autre, la fête commence à l'heure qui correspond) — : bannière avec un gâteau
+// (le toucher souffle les bougies : confettis, tout le monde lui souhaite), ballons, chapeaux de fête (couronne pour la personne
+// fêtée). Noël (du 24 décembre 18:00 au 26 à minuit) : sapin, neige, bonnets de Père Noël. Nouvel An (du 31 décembre 18:00 au
+// 2 janvier) : compte à rebours, feu d'artifice à minuit, chapeaux. Noël et Nouvel An : à l'heure de chaque téléphone. Tết (de
+// la veille à 18:00 à la fin du 3e jour, à l'heure du Vietnam pour les deux) : lanternes, fleurs de mai, compte à rebours jusqu'à
+// la giao thừa, pétards, enveloppe rouge (lì xì). Des lettres / vœux écrits à l'avance par l'autre (onglet Notes) s'ouvrent ce
+// jour-là ; son avatar les apporte — la base les cache avant. Chez la personne fêtée, rien ne parle de SON anniversaire avant le
+// jour J (la carte de la lettre ne montre que l'anniversaire de l'AUTRE, LETTER_DAYS jours avant). Aperçus : n'écrivent rien.
+// Dates d'anniversaire et fuseaux : seulement dans la base.
+const LETTER_DAYS = 45, WISH_DAYS = 30, DAY_MS = 86400e3, VN = "Asia/Ho_Chi_Minh";
+// Le 1er jour de Tết (1er jour de l'an lunaire du calendrier vietnamien, calculé à UTC+7 — algorithme de Hồ Ngọc Đức, vérifié sur
+// des années connues) : même liste que tet_days (31)
+const TET = ["2027-02-06", "2028-01-26", "2029-02-13", "2030-02-02", "2031-01-23", "2032-02-11", "2033-01-31", "2034-02-19", "2035-02-08", "2036-01-28",
+  "2037-02-15", "2038-02-04", "2039-01-24", "2040-02-12", "2041-02-01", "2042-01-22", "2043-02-10", "2044-01-30", "2045-02-17"];
+// Les animaux de l'année lunaire, au Vietnam (le Chat à la place du Lapin, le Buffle à la place du Bœuf) ; 2023 = Quý Mão = Chat
+const ZODIAC = [["Rat", "Tý", "🐀"], ["Buffalo", "Sửu", "🐃"], ["Tiger", "Dần", "🐅"], ["Cat", "Mão", "🐈"], ["Dragon", "Thìn", "🐉"], ["Snake", "Tỵ", "🐍"],
+  ["Horse", "Ngọ", "🐎"], ["Goat", "Mùi", "🐐"], ["Monkey", "Thân", "🐒"], ["Rooster", "Dậu", "🐓"], ["Dog", "Tuất", "🐕"], ["Pig", "Hợi", "🐖"]];
+const zodiacOf = (y) => ZODIAC[(((y - 4) % 12) + 12) % 12];
+// Ce que chaque fête met sur les personnages, et comment s'appellent ses lettres
+const OCC = {
+  birthday: { emoji: "🎂", letter: "birthday letter", days: LETTER_DAYS },
+  christmas: { emoji: "🎄", name: "Christmas", letter: "Christmas wishes", hats: "santa", days: WISH_DAYS },
+  newyear: { emoji: "🎆", name: "New Year", letter: "New Year wishes", hats: "hat", days: WISH_DAYS },
+  tet: { emoji: "🧧", name: "Tết", letter: "Tết wishes", days: WISH_DAYS },
+};
+const HOLIDAYS = ["tet", "newyear", "christmas"]; // (si deux se chevauchent : la première)
+let partyTimer = 0, partyTick = 0, partyBring = 0, partyOn = null, partyPreview = null, partyBlown = false, partySeen = null, partyCounting = null, luckyWish = null;
+let letterUi = null, letterBrought = null;
+// La date du jour dans un fuseau (« 2026-11-05 ») ; le décalage d'un fuseau à l'instant t ; une heure d'un jour dans un fuseau (ms)
 const ymdIn = (tz, t = Date.now()) => { // (construite morceau par morceau : le format d'une date toute faite change selon les navigateurs)
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(t).map((x) => [x.type, x.value]));
   return `${p.year}-${p.month}-${p.day}`;
@@ -2622,7 +2643,9 @@ function tzOffset(tz, t) {
     .formatToParts(t).map((x) => [x.type, x.value]));
   return Date.UTC(+p.year, p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(t / 1000) * 1000;
 }
-const midnightIn = (tz, y, m, d) => { const g = Date.UTC(y, m - 1, d); return g - tzOffset(tz, g - tzOffset(tz, g)); };
+const midnightIn = (tz, y, m, d, h = 0) => { const g = Date.UTC(y, m - 1, d, h); return g - tzOffset(tz, g - tzOffset(tz, g)); };
+const localTz = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+const tzOf = (id) => S.bdays.find((b) => b.profile === id)?.tz ?? (id === S.user?.id ? localTz() : null); // (le fuseau de quelqu'un, d'après la base)
 // L'anniversaire en cours ou le prochain de b ({ month, day, tz }) : { start, end, key } — comme birthday_start (30) ; né un
 // 29 février → le 28 les autres années
 function bdayWindow(b, at = Date.now()) {
@@ -2633,20 +2656,43 @@ function bdayWindow(b, at = Date.now()) {
   }
   return null;
 }
+// Une fête du calendrier, en cours ou prochaine : { start, end, open, key, year } — start / end : la fête à l'écran, open : quand
+// ses vœux s'ouvrent et que minuit sonne ; dans le fuseau tz (Tết : toujours l'heure du Vietnam) — comme occasion_start (31)
+function holidayWindow(kind, at = Date.now(), tz = localTz()) {
+  if (kind === "tet") {
+    for (const d of TET) {
+      const [y, m, dd] = d.split("-").map(Number), end = midnightIn(VN, y, m, dd + 3);
+      if (end > at) return { start: midnightIn(VN, y, m, dd - 1, 18), end, open: midnightIn(VN, y, m, dd), key: d, year: y };
+    }
+    return null;
+  }
+  const y = +ymdIn(tz, at).slice(0, 4);
+  for (const yy of [y, y + 1]) {
+    const w = kind === "christmas" ? { start: midnightIn(tz, yy, 12, 24, 18), end: midnightIn(tz, yy, 12, 26), open: midnightIn(tz, yy, 12, 24, 18), year: yy }
+      : { start: midnightIn(tz, yy - 1, 12, 31, 18), end: midnightIn(tz, yy, 1, 2), open: midnightIn(tz, yy, 1, 1), year: yy };
+    if (w.end > at) return { ...w, key: `${kind}-${yy}` };
+  }
+  return null;
+}
 const personOf = (id) => [S.me, S.partner].find((p) => p?.id === id) ?? null;
-const bdayDay = (b, w) => new Intl.DateTimeFormat("en-GB", { timeZone: b.tz, weekday: "short", day: "numeric", month: "short" }).format(w.start);
+const occOf = (l) => l.occasion ?? "birthday";
+const dayIn = (tz, t, opts = {}) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short", ...opts }).format(t);
 const duringParty = (l, w) => { const t = Date.parse(l.openAt); return t >= w.start - 60e3 && t < w.end; }; // (la lettre de cet anniversaire-là)
-// La fête du moment (ou son aperçu) : { who (profil), b, start, end, key, preview } | null
+// Les vœux reçus pour la fête du moment (de cette année-là : ouverts depuis le début de la fête, ou un peu avant)
+const wishOf = (l, p) => occOf(l) === p.kind && (p.kind === "birthday" ? duringParty(l, p) : Date.parse(l.openAt) > p.start - 2 * DAY_MS && Date.parse(l.openAt) < p.end);
+// La fête du moment (ou son aperçu) : { kind, who (anniversaire), b, start, end, open, key, year, preview } | null
 function partyNow() {
   if (partyPreview && Date.now() < partyPreview.until) return partyPreview;
   partyPreview = null;
   const now = Date.now();
   for (const b of S.bdays) {
     const w = bdayWindow(b), who = personOf(b.profile);
-    if (who && w && w.start <= now && now < w.end) return { who, b, ...w };
+    if (who && w && w.start <= now && now < w.end) return { kind: "birthday", who, b, ...w, open: w.start };
   }
+  for (const kind of HOLIDAYS) { const w = holidayWindow(kind); if (w && w.start <= now && now < w.end) return { kind, ...w }; }
   return null;
 }
+const opened = (p) => !!p && Date.now() >= p.open; // (minuit est passé : bonne année, les vœux s'ouvrent)
 async function loadBirthdays() {
   if (!S.user) return;
   try { S.bdays = await db.listBirthdays(); S.bdayOk = true; store.set("bdays." + S.user.id, S.bdays); }
@@ -2659,37 +2705,57 @@ async function loadBirthdays() {
 }
 async function loadLetters() {
   if (!S.user || !S.bdayOk) return;
-  try { S.letters = await db.listLetters(); } catch { return; }
+  try { const r = await db.listLetters(); S.letters = r.letters; S.occOk = r.occasions; } catch { return; }
   fillLetters();
   paintParty();
   bringLetter();
 }
-// La fête commence / finit (ou son aperçu) : classes, chapeaux, ballons, bannière ; puis on attend le prochain changement
+// La fête commence / finit / minuit sonne (ou son aperçu) : classes, chapeaux, effets, bannière ; puis on attend le prochain
+// changement (au plus 6 h) ; pendant le compte à rebours, seul son texte change, chaque seconde
 function applyParty() {
-  clearTimeout(partyTimer);
-  const p = S.user ? partyNow() : null, key = p ? `${p.who.id}|${p.key}|${p.preview ? "preview" : ""}` : null;
+  clearTimeout(partyTimer); clearInterval(partyTick); clearInterval(partyBring);
+  const p = S.user ? partyNow() : null, key = p ? `${p.kind}|${p.who?.id ?? ""}|${p.key}|${p.preview ? "preview" : ""}` : null;
   if (key !== partyOn) {
     const was = partyOn;
-    partyOn = key; partyBlown = false;
+    partyOn = key; partyBlown = false; luckyWish = null;
     document.body.classList.toggle("mp-party", !!p);
-    mascots?.party(p ? { crown: kindOf(p.who.label) } : null);
-    balloons(!!p);
-    if (p && partySeen !== key) { partySeen = key; setTimeout(confetti, 700); }
+    mascots?.party(partySpec(p));
+    partyEffects(p);
+    if (p && partySeen !== key) { partySeen = key; setTimeout(() => greet(p), 700); }
     if (S.me && (p || was)) render(); // (la bannière)
-    if (p && !p.preview) loadLetters(); // (la lettre s'ouvre maintenant)
+    if (p && !p.preview) loadLetters(); // (les vœux s'ouvrent peut-être maintenant)
   }
-  let next = Date.now() + 6 * 3600e3; // (au plus dans 6 h : on revérifie)
-  if (p) next = Math.min(next, p.preview ? p.until : p.end);
+  if (p && !opened(p)) partyCounting = key;
+  else if (p && partyCounting === key) { partyCounting = null; paintParty(); celebrate(p); if (!p.preview) loadLetters(); } // (minuit vient de sonner, l'app ouverte : la fête)
+  if (p && opened(p) && !p.preview) partyBring = setInterval(bringLetter, 4000); // (la lettre pas encore lue : son avatar la tient toujours — sinon il la rapporte)
+  if (p && !opened(p)) partyTick = setInterval(() => { if (document.hidden) return; if (opened(partyNow())) applyParty(); else { const c = root?.querySelector(".mp-count"); if (c) c.textContent = countdown(p); } }, 1000);
+  let next = Date.now() + 6 * 3600e3;
+  if (p) next = Math.min(next, p.preview ? p.until : p.end, opened(p) ? Infinity : p.open);
   for (const b of S.bdays) { const w = bdayWindow(b); if (w && w.start > Date.now()) next = Math.min(next, w.start); }
+  for (const k of HOLIDAYS) { const w = holidayWindow(k); if (w && w.start > Date.now()) next = Math.min(next, w.start); }
   partyTimer = setTimeout(applyParty, Math.max(1000, next - Date.now() + 500));
+}
+// À l'arrivée sur la fête : confettis, une averse de neige, ou (après minuit) un petit feu d'artifice
+const greet = (p) => (p.kind === "birthday" ? confetti() : p.kind === "christmas" ? snowBurst() : opened(p) ? fireworks(3, p.kind === "tet") : null);
+const partySpec = (p) => (!p ? null : p.kind === "birthday" ? { all: "hat", crown: kindOf(p.who.label) } : OCC[p.kind].hats ? { all: OCC[p.kind].hats } : null);
+// « ⏳ 5 h 12 min until 2027 » (la dernière minute : en secondes)
+function countdown(p) {
+  const s = Math.max(0, Math.ceil((p.open - Date.now()) / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  const left = s < 60 ? `${s} s` : h ? `${h} h ${pad(m)} min` : `${m} min ${pad(s % 60)} s`;
+  return p.kind === "tet" ? `⏳ ${left} until giao thừa — the Year of the ${zodiacOf(p.year)[0]} ${zodiacOf(p.year)[2]}` : `⏳ ${left} until ${p.year}`;
 }
 // Ce que dit Tino pendant la fête (en plus de ses phrases)
 function partyLines() {
   const p = partyNow();
   if (!p) return null;
-  const n = p.who.label;
-  return [`Happy birthday, ${n}! 🎂`, "Chúc mừng sinh nhật! 🎉", "🎵 Happy birthday to you… 🎵", `Make a wish, ${n}! ✨`, "Cake time!! 🍰", `${n}'s birthday!! 🥳`];
+  if (p.kind === "birthday") { const n = p.who.label; return [`Happy birthday, ${n}! 🎂`, "Chúc mừng sinh nhật! 🎉", "🎵 Happy birthday to you… 🎵", `Make a wish, ${n}! ✨`, "Cake time!! 🍰", `${n}'s birthday!! 🥳`]; }
+  if (p.kind === "christmas") return ["Merry Christmas! 🎄", "Giáng sinh vui vẻ! 🎅", "Ho ho ho! 🎅", "🎵 Jingle bells… 🎵", "Where are my presents? 🎁", "It's snowing!! ❄️"];
+  if (p.kind === "newyear") return opened(p) ? [`Happy New Year ${p.year}! 🎆`, "Chúc mừng năm mới! 🥳", "New year, new fish! 🐟", "Bonne année ! 🥂"] : ["Almost midnight… ⏳", `Bye bye ${p.year - 1}! 👋`, "Countdown time! 🎆", "Don't fall asleep! 😴"];
+  const z = zodiacOf(p.year);
+  return opened(p) ? ["Chúc mừng năm mới! 🧧", "An khang thịnh vượng! 🌼", "Vạn sự như ý! ✨", "Lì xì đâu? 🧧", `Year of the ${z[0]}! ${z[2]}`, "Năm mới phát tài! 💰"]
+    : ["Giao thừa tonight! 🏮", "Tất niên! 🍲", "Almost Tết… 🌼", `Bye bye, year of the ${zodiacOf(p.year - 1)[0]}! 👋`];
 }
+// Les dessins des bannières (le bouton de gauche) : gâteau, sapin, feu d'artifice, enveloppe rouge
 const CAKE = `<svg viewBox="0 0 64 64" aria-hidden="true">
   <ellipse cx="32" cy="57" rx="27" ry="4.5" fill="#e9ecef"/><ellipse cx="32" cy="56" rx="24" ry="3.6" fill="#fff"/>
   <path d="M10 40h44v13a3 3 0 0 1-3 3H13a3 3 0 0 1-3-3z" fill="#f783ac"/>
@@ -2702,21 +2768,55 @@ const CAKE = `<svg viewBox="0 0 64 64" aria-hidden="true">
       <path d="M22.5 12.5c1 1.4 1 2.2 0 3-1-.8-1-1.6 0-3zM32 10.5c1 1.4 1 2.2 0 3-1-.8-1-1.6 0-3zM41.5 12.5c1 1.4 1 2.2 0 3-1-.8-1-1.6 0-3z" fill="#fff3bf"/></g>
     <g class="mp-smoke" fill="none" stroke="#adb5bd" stroke-width="1.2" stroke-linecap="round"><path d="M22.5 15c-1.5-2 1.5-3 0-5"/><path d="M32 13c-1.5-2 1.5-3 0-5"/><path d="M41.5 15c-1.5-2 1.5-3 0-5"/></g></g>
 </svg>`;
-// La bannière (en haut du calendrier) : dans render() ; paintParty la refait seule (lettre arrivée, bougies)
+const TREE = `<svg viewBox="0 0 64 64" aria-hidden="true">
+  <rect x="28" y="50" width="8" height="8" rx="1" fill="#8d5524"/><rect x="18" y="56" width="11" height="6" rx="1" fill="#e03131"/><rect x="21.5" y="56" width="3" height="6" fill="#ffe066"/>
+  <rect x="36" y="55" width="10" height="7" rx="1" fill="#1c7ed6"/><rect x="39.5" y="55" width="3" height="7" fill="#fff"/>
+  <path d="M32 9L46 27H39L50 40H42L54 52H10L22 40H14L25 27H18Z" fill="#2f9e44" stroke="#2b8a3e" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M21 31Q32 37 43 30M17 44Q32 51 47 43" fill="none" stroke="#ffd43b" stroke-width="1.3"/>
+  <g class="mp-lights"><circle cx="26" cy="33" r="1.8" fill="#ff6b6b"/><circle cx="38" cy="32" r="1.8" fill="#74c0fc"/><circle cx="22" cy="46" r="1.8" fill="#ffd43b"/><circle cx="32" cy="48" r="1.8" fill="#ff6b6b"/><circle cx="43" cy="46" r="1.8" fill="#b197fc"/><circle cx="32" cy="24" r="1.6" fill="#8ce99a"/></g>
+  <path class="mp-star" d="M32 1.5l2.2 4.6 5 .6-3.7 3.4 1 5-4.5-2.5-4.5 2.5 1-5-3.7-3.4 5-.6z" fill="#ffd43b" stroke="#f59f00" stroke-width="0.6"/>
+</svg>`;
+const ROCKET = `<svg viewBox="0 0 64 64" aria-hidden="true">
+  <g fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M32 30V12M32 30L44 18M32 30L20 18M32 30H48M32 30H16M32 30L44 42M32 30L20 42" stroke="#ffd43b"/>
+  <path d="M32 12v-3M44 18l2-2M20 18l-2-2M48 30h3M16 30h-3M44 42l2 2M20 42l-2 2" stroke="#ff8787"/></g>
+  <circle cx="32" cy="30" r="3" fill="#fff"/><path d="M30 46h4l-1 14h-2z" fill="#adb5bd"/><path d="M32 40l3 6h-6z" fill="#e64980"/>
+</svg>`;
+const ENVELOPE = `<svg viewBox="0 0 64 64" aria-hidden="true">
+  <rect x="12" y="8" width="40" height="50" rx="4" fill="#e03131" stroke="#c92a2a" stroke-width="1.2"/>
+  <path class="mp-flap" d="M12 12a4 4 0 0 1 4-4h32a4 4 0 0 1 4 4v6L32 30 12 18z" fill="#f03e3e" stroke="#c92a2a" stroke-width="1.2"/>
+  <circle cx="32" cy="30" r="7" fill="#ffd43b" stroke="#f59f00" stroke-width="1"/><text x="32" y="34" font-size="10" text-anchor="middle" fill="#c92a2a" font-weight="700">福</text>
+  <path d="M18 46h28M22 51h20" stroke="#ffd43b" stroke-width="1.6" stroke-linecap="round"/>
+</svg>`;
+const LUCKY = ["An khang thịnh vượng 🌼", "Vạn sự như ý ✨", "Sức khỏe dồi dào 💪", "Tiền vô như nước 💰", "Năm mới phát tài 🧧", "Hạnh phúc tràn đầy 💗", "Học hành tấn tới 📚", "Cá vào lưới đầy 🐟"];
+// La bannière (en haut du calendrier) : dans render() ; paintParty la refait seule (lettre arrivée, bougies, minuit)
 function partyHtml() {
   const p = partyNow();
   if (!p || !S.user) return "";
-  const mine = p.who.id === S.user.id, n = esc(p.who.label);
-  const letter = mine && !p.preview ? S.letters.find((l) => l.recipient === S.user.id && duringParty(l, p)) : null;
-  const draft = p.preview ? S.letters.find((l) => l.author === S.user.id && l.recipient === p.who.id && duringParty(l, p)) : null;
-  const from = letter ? personOf(letter.author) : null;
-  const sub = p.preview ? `👀 Preview — this is what you'll both see on ${esc(bdayDay(p.b, p))} (${n}'s day). Nothing is saved; it ends in a minute.`
-    : partyBlown ? "🎉 Yay! Your wish is on its way ✨ (tap the cake to light the candles again)"
-    : mine ? "Make a wish and tap the cake to blow out the candles 🕯️" : `Tap the cake to blow out the candles for ${n} 🕯️`;
-  return `<div class="mp-bday${partyBlown ? " mp-blown" : ""}"><button type="button" class="mp-cake" data-act="cake" aria-label="${partyBlown ? "Light the candles again" : "Blow out the candles"}">${CAKE}</button>
-    <div class="mp-bday-text"><b>${mine ? `🎂 Happy birthday, ${n}! 🎉` : `🎂 It's ${n}'s birthday today! 🎉`}</b><span>${sub}</span>
-    ${letter ? `<button type="button" class="mp-cta" data-letter="${letter.id}">💌 A letter from ${esc(from?.label ?? "")}${letter.readAt ? "" : " — open it!"}</button>` : ""}
-    ${draft ? `<button type="button" class="mp-cta" data-letter="${draft.id}" data-preview="1">💌 Your letter (as ${n} will see it)</button>` : ""}</div></div>`;
+  const me = S.user.id, fromOf = (l) => personOf(l.author);
+  const mine = p.kind !== "birthday" || p.who.id === me;
+  const letter = mine && !p.preview ? S.letters.find((l) => l.recipient === me && opened(p) && Date.parse(l.openAt) <= Date.now() && wishOf(l, p)) : null;
+  const P = S.partner, draft = p.preview ? S.letters.find((l) => l.author === me && occOf(l) === p.kind && (p.kind === "birthday" ? l.recipient === p.who.id && duringParty(l, p) : true) && Date.parse(l.openAt) > Date.now() - DAY_MS) : null;
+  const preview = p.preview ? `👀 Preview — ${p.kind === "birthday" ? `this is what you'll both see on ${esc(dayIn(p.b.tz, p.start))} (${esc(p.who.label)}'s day)` : "this is what MeoPeo shows on the day"}. Nothing is saved; it ends in a minute.` : "";
+  let icon, title, sub, cls = p.kind;
+  if (p.kind === "birthday") {
+    const n = esc(p.who.label);
+    icon = CAKE; title = p.who.id === me ? `🎂 Happy birthday, ${n}! 🎉` : `🎂 It's ${n}'s birthday today! 🎉`;
+    sub = partyBlown ? "🎉 Yay! Your wish is on its way ✨ (tap the cake to light the candles again)" : p.who.id === me ? "Make a wish and tap the cake to blow out the candles 🕯️" : `Tap the cake to blow out the candles for ${n} 🕯️`;
+  } else if (p.kind === "christmas") {
+    icon = TREE; title = "🎄 Merry Christmas! 🎅"; sub = partyBlown ? "🎁 Ho ho ho! Giáng sinh an lành ✨" : "Giáng sinh vui vẻ ✨ — tap the tree 🎄";
+  } else if (p.kind === "newyear") {
+    icon = ROCKET; title = opened(p) ? `🎆 Happy New Year ${p.year}! 🥳` : "🎆 New Year's Eve!";
+    sub = opened(p) ? "Chúc mừng năm mới! — tap for fireworks 🎇" : `<span class="mp-count">${esc(countdown(p))}</span>`;
+  } else {
+    const z = zodiacOf(p.year);
+    icon = ENVELOPE; title = opened(p) ? `🧧 Chúc mừng năm mới! Happy Tết — Year of the ${z[0]} ${z[2]}` : "🏮 Tất niên — giao thừa tonight!";
+    sub = opened(p) ? (luckyWish ? `🧧 ${esc(luckyWish)}` : "Tap the red envelope for your lì xì 🧧") : `<span class="mp-count">${esc(countdown(p))}</span>`;
+  }
+  const what = (l) => (occOf(l) === "birthday" ? "A letter" : occOf(l) === "tet" ? "A lì xì letter" : OCC[occOf(l)].letter[0].toUpperCase() + OCC[occOf(l)].letter.slice(1));
+  return `<div class="mp-bday mp-fete-${cls}${partyBlown ? " mp-blown" : ""}"><button type="button" class="mp-cake" data-act="cake" aria-label="${p.kind === "birthday" ? (partyBlown ? "Light the candles again" : "Blow out the candles") : "Celebrate"}">${icon}</button>
+    <div class="mp-bday-text"><b>${title}</b><span>${preview || sub}</span>
+    ${letter ? `<button type="button" class="mp-cta" data-letter="${letter.id}">💌 ${what(letter)} from ${esc(fromOf(letter)?.label ?? "")}${letter.readAt ? "" : " — open it!"}</button>` : ""}
+    ${draft ? `<button type="button" class="mp-cta" data-letter="${draft.id}" data-preview="1">💌 Yours (as ${esc(P?.label ?? "")} will see it)</button>` : ""}</div></div>`;
 }
 function bindParty(scope) {
   const el = scope.querySelector(".mp-bday");
@@ -2724,12 +2824,26 @@ function bindParty(scope) {
   el.querySelector("[data-act=cake]").addEventListener("click", () => {
     const p = partyNow();
     if (!p) return;
-    partyBlown = !partyBlown;
-    paintParty();
-    if (!partyBlown) return; // (rallumées)
-    confetti();
-    const n = p.who.label, k = kindOf(n), thanks = "Yay!! Thank you!! 🥹" + (k === "meo" ? "💗" : "💜");
-    mascots?.cheer({ tino: `Happy birthday, ${n}! 🎂`, peo: k === "peo" ? thanks : "Chúc mừng sinh nhật! 🎉", meo: k === "meo" ? thanks : "Chúc mừng sinh nhật! 🎉" });
+    if (p.kind === "birthday") {
+      partyBlown = !partyBlown;
+      paintParty();
+      if (!partyBlown) return; // (rallumées)
+      confetti();
+      const n = p.who.label, k = kindOf(n), thanks = "Yay!! Thank you!! 🥹" + (k === "meo" ? "💗" : "💜");
+      mascots?.cheer({ tino: `Happy birthday, ${n}! 🎂`, peo: k === "peo" ? thanks : "Chúc mừng sinh nhật! 🎉", meo: k === "meo" ? thanks : "Chúc mừng sinh nhật! 🎉" });
+    } else if (p.kind === "christmas") {
+      partyBlown = true; paintParty(); snowBurst();
+      mascots?.cheer({ tino: "Merry Christmas! 🎄", peo: "Giáng sinh vui vẻ! 🎅", meo: "Merry Christmas!! 🎁" });
+    } else if (p.kind === "newyear") {
+      fireworks(opened(p) ? 4 : 1);
+      if (opened(p)) mascots?.cheer({ tino: `Happy New Year ${p.year}! 🎆`, peo: "Chúc mừng năm mới! 🥳", meo: "Bonne année! 🥂" });
+    } else {
+      fireworks(opened(p) ? 3 : 1, true);
+      if (!opened(p)) return;
+      luckyWish = LUCKY.filter((w) => w !== luckyWish)[Math.floor(Math.random() * (LUCKY.length - 1))];
+      paintParty();
+      mascots?.cheer({ tino: "Lì xì! 🧧", peo: "Chúc mừng năm mới! 🧧", meo: luckyWish });
+    }
   });
   el.querySelectorAll("[data-letter]").forEach((b) => b.addEventListener("click", () => {
     const l = S.letters.find((x) => x.id === b.dataset.letter);
@@ -2744,16 +2858,33 @@ function paintParty() {
   el.replaceWith(box.firstElementChild);
   bindParty(root);
 }
-// Ballons qui montent sur les côtés de l'écran ; confettis (au début de la fête, aux bougies, à la lettre)
+// Minuit (Nouvel An, giao thừa) : feu d'artifice / pétards pendant ~15 s, et tout le monde se le souhaite
+function celebrate(p) {
+  if (p.kind === "newyear") { fireworks(14); mascots?.cheer({ tino: `Happy New Year ${p.year}! 🎆`, peo: "Chúc mừng năm mới! 🥳", meo: "Happy New Year!! 🥂" }); }
+  else { fireworks(12, true); mascots?.cheer({ tino: "Chúc mừng năm mới! 🧧", peo: "An khang thịnh vượng! 🌼", meo: "Vạn sự như ý! ✨" }); }
+}
+// Les effets qui restent pendant toute la fête (peu d'éléments : ils tournent ~30 h) : ballons, neige, lanternes et fleurs de mai
 const partyColors = ["#ff6b9d", "#ffd43b", "#74c0fc", "#b197fc", "#8ce99a", "#ffa94d"];
 const stillScreen = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-function balloons(on) {
-  document.querySelector(".mp-balloons")?.remove();
-  if (!on || stillScreen()) return;
+function partyEffects(p) {
+  document.querySelectorAll(".mp-balloons, .mp-snow, .mp-lanterns").forEach((e) => e.remove());
+  if (!p || stillScreen()) return;
   const el = document.createElement("div");
-  el.className = "mp-balloons";
   el.setAttribute("aria-hidden", "true");
-  el.innerHTML = Array.from({ length: 6 }, (_, i) => `<i style="--x:${(i % 2 ? 89 + Math.random() * 7 : 1 + Math.random() * 7).toFixed(1)}%;--c:${partyColors[i]};--d:${(15 + Math.random() * 8).toFixed(1)}s;--w:${(-i * 3.4 - Math.random() * 2).toFixed(1)}s"></i>`).join("");
+  if (p.kind === "birthday") {
+    el.className = "mp-balloons";
+    el.innerHTML = Array.from({ length: 6 }, (_, i) => `<i style="--x:${(i % 2 ? 89 + Math.random() * 7 : 1 + Math.random() * 7).toFixed(1)}%;--c:${partyColors[i]};--d:${(15 + Math.random() * 8).toFixed(1)}s;--w:${(-i * 3.4 - Math.random() * 2).toFixed(1)}s"></i>`).join("");
+  } else if (p.kind === "christmas") {
+    el.className = "mp-snow";
+    el.innerHTML = Array.from({ length: 18 }, () => `<i style="--x:${(Math.random() * 100).toFixed(1)}%;--s:${(4 + Math.random() * 6).toFixed(1)}px;--d:${(9 + Math.random() * 9).toFixed(1)}s;--w:${(-Math.random() * 18).toFixed(1)}s;--o:${(0.5 + Math.random() * 0.4).toFixed(2)}"></i>`).join("");
+  } else if (p.kind === "tet") {
+    el.className = "mp-lanterns";
+    const lantern = `<svg viewBox="0 0 40 70" aria-hidden="true"><path d="M20 0v10" stroke="#c92a2a" stroke-width="1.5"/><rect x="13" y="9" width="14" height="4" rx="1" fill="#f59f00"/>
+      <ellipse cx="20" cy="30" rx="16" ry="18" fill="#e03131"/><path d="M8 30h24M20 12v36M12 18q8 12 0 24M28 18q-8 12 0 24" stroke="#ff8787" stroke-width="1" fill="none"/>
+      <rect x="13" y="47" width="14" height="4" rx="1" fill="#f59f00"/><path d="M16 51v14M20 51v17M24 51v14" stroke="#ffd43b" stroke-width="1.4"/></svg>`;
+    el.innerHTML = `<b class="mp-lantern mp-left">${lantern}</b><b class="mp-lantern mp-right">${lantern}</b>`
+      + Array.from({ length: 7 }, () => `<i style="--x:${(Math.random() * 100).toFixed(1)}%;--d:${(11 + Math.random() * 8).toFixed(1)}s;--w:${(-Math.random() * 18).toFixed(1)}s"></i>`).join("");
+  } else return;
   document.body.append(el);
 }
 function confetti() {
@@ -2765,98 +2896,167 @@ function confetti() {
   document.body.append(el);
   setTimeout(() => el.remove(), 4300);
 }
-// La lettre, en grand ; chez la personne fêtée, la première fois : marquée lue (l'auteur voit « read ✓ »)
+// Une averse de neige plus dense, quelques secondes (en touchant le sapin)
+function snowBurst() {
+  if (stillScreen() || !partyNow()) return;
+  const el = document.createElement("div");
+  el.className = "mp-snow mp-snow-burst";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = Array.from({ length: 40 }, () => `<i style="--x:${(Math.random() * 100).toFixed(1)}%;--s:${(4 + Math.random() * 7).toFixed(1)}px;--d:${(3 + Math.random() * 2.5).toFixed(1)}s;--w:${(Math.random() * 1.2).toFixed(2)}s;--o:0.9"></i>`).join("");
+  document.body.append(el);
+  setTimeout(() => el.remove(), 6500);
+}
+// Feu d'artifice : n gerbes (une toutes les ~0,7 s), chacune 18 étincelles ; red : pétards rouges et or (Tết)
+function fireworks(n = 4, red = false) {
+  if (stillScreen() || !partyNow()) return;
+  const colors = red ? ["#ff6b6b", "#ffd43b", "#f03e3e", "#ffe066"] : ["#ffd43b", "#74c0fc", "#ff8787", "#b197fc", "#8ce99a", "#fff"];
+  for (let k = 0; k < n; k++) setTimeout(() => {
+    const el = document.createElement("div"), c = colors[Math.floor(Math.random() * colors.length)];
+    el.className = "mp-fireworks";
+    el.setAttribute("aria-hidden", "true");
+    el.style.left = `${(12 + Math.random() * 76).toFixed(1)}%`; el.style.top = `${(14 + Math.random() * 32).toFixed(1)}%`;
+    el.innerHTML = Array.from({ length: 18 }, (_, i) => `<i style="--a:${i * 20}deg;--c:${i % 3 ? c : colors[(i + k) % colors.length]};--r:${(60 + Math.random() * 40).toFixed(0)}px"></i>`).join("");
+    document.body.append(el);
+    setTimeout(() => el.remove(), 1700);
+  }, k * 700 + Math.random() * 250);
+}
+// La lettre / les vœux, en grand ; chez celui ou celle qui reçoit, la première fois : marqués lus (l'auteur voit « read ✓ »)
 function openLetter(l, { preview = false } = {}) {
-  const a = personOf(l.author) ?? { mark: "", label: "" };
-  overlay(`<div class="pl-editor-card mp-letter"><h4>💌 ${preview ? "Preview — " : ""}A letter from ${esc(a.mark)} ${esc(a.label)}</h4>
+  const a = personOf(l.author) ?? { mark: "", label: "" }, occ = occOf(l);
+  const what = occ === "birthday" ? "A letter" : occ === "tet" ? "🧧 A lì xì letter" : OCC[occ].letter[0].toUpperCase() + OCC[occ].letter.slice(1);
+  overlay(`<div class="pl-editor-card mp-letter mp-letter-${occ}"><h4>💌 ${preview ? "Preview — " : ""}${what} from ${esc(a.mark)} ${esc(a.label)}</h4>
     <div class="mp-letter-paper">${esc(l.body)}</div>
     <div class="pl-editor-actions"><span class="mp-grow"></span><button type="button" data-act="cancel">Close</button></div></div>`);
-  confetti();
+  if (occ === "christmas") snowBurst(); else if (occ === "tet" || occ === "newyear") fireworks(3, occ === "tet"); else confetti();
   if (preview || l.recipient !== S.user.id || l.readAt) return;
   db.markLetterRead(l.id).then((r) => {
     for (const x of [l, S.letters.find((y) => y.id === l.id)]) if (x) x.readAt = r ?? new Date().toISOString(); // (la liste a pu être relue entre-temps)
     paintParty(); fillLetters();
   }).catch(() => {});
 }
-// Le jour J, chez la personne fêtée : l'avatar de l'auteur sort lui apporter la lettre (une fois ; sinon le bouton de la bannière)
+// Le jour de la fête (une fois minuit passé), chez celui ou celle qui reçoit : l'avatar de l'auteur sort lui apporter la lettre
+// ou les vœux (jusqu'à ce qu'ils soient lus ; il y a aussi le bouton de la bannière)
 function bringLetter() {
   const p = partyNow();
-  if (!p || p.preview || p.who.id !== S.user?.id || !mascots) return;
-  const l = S.letters.find((x) => x.recipient === S.user.id && duringParty(x, p) && !x.readAt), from = l && personOf(l.author);
-  if (!l || !from || letterBrought === l.id) return;
+  if (!p || p.preview || !opened(p) || !mascots || (p.kind === "birthday" && p.who.id !== S.user?.id)) return;
+  const l = S.letters.find((x) => x.recipient === S.user.id && !x.readAt && Date.parse(x.openAt) <= Date.now() && wishOf(x, p)), from = l && personOf(l.author);
+  if (!l || !from || (letterBrought === l.id && mascots.saying(kindOf(from.label)))) return; // (déjà en route ou dans sa bulle ; sa bulle a pu se perdre — il replonge dans la marmite au même moment… — : il la rapporte)
   if (S.tino.some((m) => m.to === S.user.id && !m.seen && m.from === l.author)) return; // (un message de lui / d'elle à lire d'abord : même avatar ; la lettre vient après — syncTinoBubble)
   letterBrought = l.id;
-  mascots.say("I brought you a birthday letter! Tap me 🎂", { sticky: true, who: "💌", color: from.color, onClose: () => openLetter(l) }, kindOf(from.label));
+  const say = { birthday: "I brought you a birthday letter! Tap me 🎂", christmas: "Merry Christmas! I have wishes for you — tap me 🎄", newyear: "Happy New Year! I have wishes for you — tap me 🎆", tet: "Chúc mừng năm mới! A lì xì for you — tap me 🧧" }[p.kind];
+  mascots.say(say, { sticky: true, who: "💌", color: from.color, onClose: () => openLetter(l) }, kindOf(from.label));
 }
 
-// Onglet Notes : la carte de la lettre (pour l'anniversaire de l'AUTRE, dans les LETTER_DAYS jours avant ; le jour J : « lue ✓ »)
-// et les lettres reçues (une fois ouvertes). Créée une fois par connexion : jamais réécrite pendant qu'on écrit.
+// Onglet Notes : les cartes pour écrire à l'autre (son anniversaire, LETTER_DAYS jours avant ; Noël, Nouvel An, Tết, WISH_DAYS jours
+// avant, si 31 est là ; le jour même : « lu ✓ ») et les lettres reçues (une fois ouvertes). Créée une fois par connexion : jamais
+// réécrite pendant qu'on écrit.
 function letterCard(host) {
   if (!letterUi || letterUi.user !== S.user.id) {
     letterUi?.el.remove();
-    letterUi = { user: S.user.id, el: Object.assign(document.createElement("div"), { className: "mp-letters" }), timer: 0 };
+    letterUi = { user: S.user.id, el: Object.assign(document.createElement("div"), { className: "mp-letters" }), timers: {} };
   }
   if (letterUi.el.parentNode !== host) host.prepend(letterUi.el);
   fillLetters();
 }
-const letterDraftKey = () => "letterDraft." + S.user?.id;
+const letterDraftKey = (occ = "birthday") => "letterDraft." + S.user?.id + (occ === "birthday" ? "" : "." + occ); // (l'anniversaire garde sa clé d'avant)
+// Les occasions pour lesquelles on peut écrire à l'autre en ce moment : { occ, w (start / end / open, dans SON fuseau), when }
+function writeSlots() {
+  const P = S.partner, now = Date.now(), out = [];
+  if (!P || !S.bdayOk) return out;
+  const b = S.bdays.find((x) => x.profile === P.id), ptz = tzOf(P.id);
+  if (b) { const w = bdayWindow(b); if (w && w.start - now <= LETTER_DAYS * DAY_MS) out.push({ occ: "birthday", b, w: { ...w, open: w.start } }); }
+  if (S.occOk && ptz) for (const occ of ["christmas", "newyear", "tet"]) {
+    const w = holidayWindow(occ, now, occ === "tet" ? VN : ptz);
+    if (w && w.open - now <= WISH_DAYS * DAY_MS && now < Math.max(w.end, w.open + DAY_MS)) out.push({ occ, w, tz: occ === "tet" ? VN : ptz });
+  }
+  return out.sort((x, y) => x.w.open - y.w.open);
+}
 function fillLetters() {
   const U = letterUi;
   if (!U || !S.user || U.user !== S.user.id) return;
   if (U.el.contains(document.activeElement) && document.activeElement.matches("textarea")) return; // (on écrit : on ne touche à rien)
-  const P = S.partner, b = P && S.bdayOk ? S.bdays.find((x) => x.profile === P.id) : null, now = Date.now(), parts = [];
-  const w = b && bdayWindow(b);
-  if (w && w.start - now <= LETTER_DAYS * DAY_MS) {
-    const mine = S.letters.find((l) => l.author === S.user.id && l.recipient === P.id && duringParty(l, w)), n = esc(P.label);
-    const days = Math.ceil((w.start - now) / DAY_MS), local = new Date(w.start), atMidnight = !local.getHours() && !local.getMinutes();
-    const when = `${esc(bdayDay(b, w))}${atMidnight ? "" : ` — from ${esc(dayTitle(local))}, ${pad(local.getHours())}:${pad(local.getMinutes())} your time`}`;
-    if (w.start <= now) parts.push(`<div class="pl-editor-card mp-pane-card mp-letter-card"><h4>🎂 It's ${n}'s birthday today!</h4>
-      ${mine ? `<div class="pl-legend">💌 Your letter: ${mine.readAt ? `${n} read it ✓ (${tinoWhen(mine.readAt)})` : `waiting for ${n} to open it`}</div>` : `<div class="pl-legend">The party is on the calendar 🎉</div>`}</div>`);
-    else {
-      const draft = store.get(letterDraftKey(), null), text = draft?.to === P.id ? draft.body : mine?.body ?? "";
-      parts.push(`<div class="pl-editor-card mp-pane-card mp-letter-card"><h4>🎂 ${n}'s birthday — ${when} (in ${days} day${days > 1 ? "s" : ""})</h4>
-        <div class="pl-legend">💌 Write ${n} a letter. It stays hidden until ${n}'s birthday: it can only be opened that day, and your ${esc(S.me.label)} brings it. Nothing shows on ${n}'s side before — it's a surprise 🤫</div>
-        <textarea class="mp-letter-text" maxlength="5000" rows="7" placeholder="Dear ${n}…">${esc(text)}</textarea>
-        <div class="mp-row"><span class="pl-legend mp-letter-status">${draft?.to === P.id && draft.body !== (mine?.body ?? "") ? "Not saved yet" : mine ? "Saved ✓ — hidden until the day" : ""}</span><span class="mp-grow"></span>
-          <button type="button" data-act="preview">👀 Preview the party</button></div></div>`);
+  const P = S.partner, now = Date.now(), parts = [], n = esc(P?.label ?? "");
+  const mineFor = (s) => S.letters.find((l) => l.author === S.user.id && l.recipient === P.id && occOf(l) === s.occ && (s.occ === "birthday" ? duringParty(l, s.w) : Math.abs(Date.parse(l.openAt) - s.w.open) < 2 * DAY_MS));
+  for (const s of writeSlots()) {
+    const mine = mineFor(s), O = OCC[s.occ], local = new Date(s.w.open), days = Math.ceil((s.w.open - now) / DAY_MS);
+    const myTime = `${esc(dayTitle(local))}, ${pad(local.getHours())}:${pad(local.getMinutes())} your time`;
+    const whenTxt = s.occ === "birthday" ? `${esc(dayIn(s.b.tz, s.w.start))}${!local.getHours() && !local.getMinutes() ? "" : ` — from ${myTime}`}`
+      : s.occ === "christmas" ? `opens on Christmas Eve, 18:00 ${n}'s time${tzOf(P.id) === localTz() ? "" : ` (${myTime})`}`
+      : s.occ === "newyear" ? `opens at midnight, ${n}'s time${tzOf(P.id) === localTz() ? "" : ` (${myTime})`}`
+      : `opens at giao thừa — midnight in Vietnam (${myTime})`;
+    const title = s.occ === "birthday" ? `🎂 ${n}'s birthday — ${whenTxt} (in ${days} day${days > 1 ? "s" : ""})` : `${O.emoji} ${O.name} wishes for ${n}${s.occ === "tet" ? ` — Year of the ${zodiacOf(s.w.year)[0]} ${zodiacOf(s.w.year)[2]}` : ""}`;
+    if (s.w.open <= now) {
+      parts.push(`<div class="pl-editor-card mp-pane-card mp-letter-card"><h4>${s.occ === "birthday" ? `🎂 It's ${n}'s birthday today!` : `${O.emoji} ${O.name}!`}</h4>
+        ${mine ? `<div class="pl-legend">💌 Yours: ${mine.readAt ? `${n} read it ✓ (${tinoWhen(mine.readAt)})` : `waiting for ${n} to open it`}</div>` : `<div class="pl-legend">The party is on the calendar 🎉</div>`}</div>`);
+      continue;
     }
+    const draft = store.get(letterDraftKey(s.occ), null), text = draft?.to === P.id ? draft.body : mine?.body ?? "";
+    const legend = s.occ === "birthday" ? `💌 Write ${n} a letter. It stays hidden until ${n}'s birthday: it can only be opened that day, and your ${esc(S.me.label)} brings it. Nothing shows on ${n}'s side before — it's a surprise 🤫`
+      : `💌 Write ${n} your ${O.letter} — ${whenTxt}${s.occ === "birthday" ? "" : ` (in ${days} day${days > 1 ? "s" : ""})`}. Hidden until then; your ${esc(S.me.label)} brings ${s.occ === "tet" ? "them in a red envelope 🧧" : "them"}.`;
+    parts.push(`<div class="pl-editor-card mp-pane-card mp-letter-card" data-occ="${s.occ}"><h4>${title}</h4>
+      <div class="pl-legend">${legend}</div>
+      <textarea class="mp-letter-text" maxlength="5000" rows="${s.occ === "birthday" ? 7 : 5}" placeholder="${s.occ === "tet" ? "Chúc mừng năm mới" : s.occ === "christmas" ? "Merry Christmas" : s.occ === "newyear" ? "Happy New Year" : "Dear"} ${n}…">${esc(text)}</textarea>
+      <div class="mp-row"><span class="pl-legend mp-letter-status">${draft?.to === P.id && draft.body !== (mine?.body ?? "") ? "Not saved yet" : mine ? "Saved ✓ — hidden until the day" : ""}</span><span class="mp-grow"></span>
+        <button type="button" data-act="preview">👀 Preview the party</button></div></div>`);
   }
   const got = S.letters.filter((l) => l.recipient === S.user.id && Date.parse(l.openAt) <= now).sort((a, c) => c.openAt.localeCompare(a.openAt));
-  if (got.length) parts.push(`<div class="pl-editor-card mp-pane-card mp-letter-card"><h4>💌 Birthday letters for you</h4>
-    ${got.map((l) => `<button type="button" class="mp-note" data-letter="${l.id}"><span class="mp-note-title">💌 From ${esc(personOf(l.author)?.label ?? "")} — ${esc(new Date(l.openAt).getFullYear() + "")}</span><span class="mp-note-preview">${esc(l.body.replace(/\s+/g, " ").slice(0, 120))}</span></button>`).join("")}</div>`);
+  const label = (l) => ({ birthday: "🎂 Birthday", christmas: "🎄 Christmas", newyear: "🎆 New Year", tet: "🧧 Tết" })[occOf(l)];
+  if (got.length) parts.push(`<div class="pl-editor-card mp-pane-card mp-letter-card"><h4>💌 Letters for you</h4>
+    ${got.map((l) => `<button type="button" class="mp-note" data-letter="${l.id}"><span class="mp-note-title">${label(l)} — from ${esc(personOf(l.author)?.label ?? "")}, ${esc(new Date(l.openAt).getFullYear() + "")}</span><span class="mp-note-preview">${esc(l.body.replace(/\s+/g, " ").slice(0, 120))}</span></button>`).join("")}</div>`);
   U.el.innerHTML = parts.join("");
   U.el.querySelectorAll("[data-letter]").forEach((x) => x.addEventListener("click", () => { const l = S.letters.find((y) => y.id === x.dataset.letter); if (l) openLetter(l); }));
-  const ta = U.el.querySelector(".mp-letter-text");
-  if (!ta) return;
-  const status = U.el.querySelector(".mp-letter-status");
-  ta.addEventListener("input", () => {
-    store.set(letterDraftKey(), { to: P.id, body: ta.value });
-    status.textContent = "Not saved yet";
-    clearTimeout(U.timer); U.timer = setTimeout(() => saveLetterNow(ta, status, P, w), 1500);
-  });
-  ta.addEventListener("blur", () => { if (store.get(letterDraftKey(), null)) { clearTimeout(U.timer); saveLetterNow(ta, status, P, w); } });
-  U.el.querySelector("[data-act=preview]").addEventListener("click", () => {
-    partyPreview = { who: P, b, ...w, preview: true, until: Date.now() + 60e3 };
-    if (currentTab() !== "calendar") location.hash = "";
-    applyParty();
-    scrollTo(0, 0);
-  });
-  if (store.get(letterDraftKey(), null)?.to === P.id && navigator.onLine) U.timer = setTimeout(() => saveLetterNow(ta, status, P, w), 800); // (brouillon d'avant : on l'enregistre)
+  for (const card of U.el.querySelectorAll("[data-occ]")) {
+    const occ = card.dataset.occ, s = writeSlots().find((x) => x.occ === occ), ta = card.querySelector(".mp-letter-text"), status = card.querySelector(".mp-letter-status");
+    if (!s) continue;
+    const save = () => saveLetterNow(occ, status, P, s.w);
+    ta.addEventListener("input", () => {
+      store.set(letterDraftKey(occ), { to: P.id, body: ta.value });
+      status.textContent = "Not saved yet";
+      clearTimeout(U.timers[occ]); U.timers[occ] = setTimeout(save, 1500);
+    });
+    ta.addEventListener("blur", () => { if (store.get(letterDraftKey(occ), null)) { clearTimeout(U.timers[occ]); save(); } });
+    card.querySelector("[data-act=preview]").addEventListener("click", () => {
+      const now = Date.now();
+      partyPreview = occ === "birthday" ? { kind: "birthday", who: P, b: s.b, ...s.w, preview: true, until: now + 60e3 }
+        : { kind: occ, ...s.w, start: now, open: now - 1, end: now + 60e3, preview: true, until: now + 60e3 };
+      if (currentTab() !== "calendar") location.hash = "";
+      applyParty();
+      scrollTo(0, 0);
+    });
+    if (store.get(letterDraftKey(occ), null)?.to === P.id && navigator.onLine) U.timers[occ] = setTimeout(save, 800); // (brouillon d'avant : on l'enregistre)
+  }
 }
-async function saveLetterNow(ta, status, P, w) {
-  const draft = store.get(letterDraftKey(), null);
+async function saveLetterNow(occ, status, P, w) {
+  const draft = store.get(letterDraftKey(occ), null);
   if (!draft || draft.to !== P.id) return;
-  const mine = S.letters.find((l) => l.author === S.user.id && l.recipient === P.id && duringParty(l, w)), body = draft.body;
+  const mine = S.letters.find((l) => l.author === S.user.id && l.recipient === P.id && occOf(l) === occ && (occ === "birthday" ? duringParty(l, w) : Math.abs(Date.parse(l.openAt) - w.open) < 2 * DAY_MS)), body = draft.body;
   status.textContent = "Saving…";
   try {
     if (!body.trim()) { if (mine) { await db.deleteLetter(mine.id); S.letters = S.letters.filter((l) => l !== mine); } }
     else {
-      const r = await db.saveLetter(mine?.id ?? null, P.id, body);
+      const r = await db.saveLetter(mine?.id ?? null, P.id, body, occ);
       if (r) S.letters = [...S.letters.filter((l) => l.id !== r.id), r];
     }
-    if (store.get(letterDraftKey(), null)?.body === body) store.del(letterDraftKey());
+    if (store.get(letterDraftKey(occ), null)?.body === body) store.del(letterDraftKey(occ));
     status.textContent = body.trim() ? "Saved ✓ — hidden until the day" : "";
   } catch (err) { status.textContent = `⚠️ Not saved yet — kept on this phone (${err.message})`; }
+}
+// Réglages : aperçu des fêtes du calendrier (pas des anniversaires : ceux-là, depuis la carte de la lettre) et leurs prochaines dates
+function partyPreviewsHtml() {
+  const next = (k) => holidayWindow(k), x = next("christmas"), ny = next("newyear"), t = next("tet");
+  const fmt = (w, tz = localTz()) => (w ? dayIn(tz, w.open, { year: "numeric" }) : "—");
+  return `<div class="pl-legend">🎄 Christmas Eve ${esc(fmt(x))} · 🎆 New Year ${esc(fmt(ny))} · 🧧 Tết ${esc(t ? dayIn(VN, t.open, { year: "numeric" }) : "—")}${t ? ` — Year of the ${zodiacOf(t.year)[0]} ${zodiacOf(t.year)[2]}` : ""}</div>
+    <div class="mp-row"><button type="button" data-party="christmas">👀 🎄 Christmas</button><button type="button" data-party="newyear">👀 🎆 New Year</button><button type="button" data-party="tet">👀 🧧 Tết</button></div>
+    <div class="pl-legend">A one-minute preview on this phone only — nothing is saved. You can write wishes for each of them in Notes, a month before.</div>`;
+}
+function bindPartyPreviews(scope) {
+  scope.querySelectorAll("[data-party]").forEach((b) => b.addEventListener("click", () => {
+    const now = Date.now(), w = holidayWindow(b.dataset.party);
+    partyPreview = { kind: b.dataset.party, ...w, start: now, open: now - 1, end: now + 60e3, preview: true, until: now + 60e3 };
+    location.hash = "";
+    applyParty();
+    scrollTo(0, 0);
+  }));
 }
 
 // ---------- La marmite et PeoPeo (présence en direct, sans SQL) ----------
@@ -3009,6 +3209,7 @@ async function appVersion() {
 function renderSettings(pane) {
   const P = S.partner;
   pane.innerHTML = fold("look", "🎨 Appearance", `<div class="mp-look"></div>`)
+    + fold("parties", "🎉 Parties", partyPreviewsHtml())
     + fold("account", `${esc(S.me.mark)} ${esc(S.me.label)}`, `<p class="mp-sub">Signed in as ${esc(S.user.email)}</p>
       <div class="pl-editor-actions"><button type="button" data-act="logout" class="mp-danger">⎋ Log out</button></div>`)
     + fold("notif", "🔔 Notifications", `<div class="mp-notif">Checking…</div>
@@ -3028,6 +3229,7 @@ function renderSettings(pane) {
   });
   pane.querySelector("[data-act=logout]").addEventListener("click", async () => { location.hash = ""; await logout(); });
   fillLook(pane.querySelector(".mp-look"));
+  bindPartyPreviews(pane);
   fillFishSet(pane.querySelector(".mp-fishset"));
   appVersion().then((v) => { pane.querySelector(".mp-version").textContent = `MeoPeo version ${v}`; });
   fillNotif(pane.querySelector(".mp-notif"));

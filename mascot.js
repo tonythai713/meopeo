@@ -298,6 +298,10 @@ const PARTY_HAT = `<path d="M-7.5 0L0-19L7.5 0Z" fill="#ff6fa8" stroke="#c2185b"
 const CROWN = `<path d="M-9 0L-10-9L-5-4.5L0-11L5-4.5L10-9L9 0Z" fill="#ffd43b" stroke="#c98f00" stroke-width="0.8" stroke-linejoin="round"/>
   <path d="M-9 0L9 0L8.6-2.4L-8.6-2.4Z" fill="#fab005"/><circle cx="0" cy="-5" r="1.5" fill="#f06595"/><circle cx="-5.5" cy="-2.6" r="1" fill="#4dabf7"/><circle cx="5.5" cy="-2.6" r="1" fill="#4dabf7"/>
   <circle cx="-10" cy="-9.4" r="1.1" fill="#fff3bf"/><circle cx="0" cy="-11.4" r="1.2" fill="#fff3bf"/><circle cx="10" cy="-9.4" r="1.1" fill="#fff3bf"/>`;
+// Bonnet de Père Noël (Noël) : même point de base que le chapeau de fête
+const SANTA = `<path d="M-8.5 -1.5C-8 -10 -3 -17.5 5 -17.5C9.5 -17.5 12.5 -14 12.5 -9.5L9.2 -9.6C9.2 -11.8 7.6 -13.2 5.6 -12.4C2.4 -11 2.6 -5.8 8.5 -1.5Z" fill="#e03131" stroke="#a61e1e" stroke-width="0.7" stroke-linejoin="round"/>
+  <rect x="-10" y="-3.4" width="20" height="5" rx="2.5" fill="#fff" stroke="#ced4da" stroke-width="0.5"/>
+  <circle cx="11.6" cy="-9.4" r="2.9" fill="#fff" stroke="#ced4da" stroke-width="0.5"/>`;
 function peoSvg(gid = "ms-flush-peo") {
   return `<svg class="ms-peo" viewBox="0 0 100 100" aria-hidden="true">
   <g class="ms-foot-l">${peoImg("shoe-l", 36.6, 90.98, 10.83, 8)}</g>
@@ -521,7 +525,7 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo", "fight"];
 export const KINDS = {
   peo: {
-    name: "PeoPeo", cutout: true, hatAt: [57.5, 17.5, 20], svg: () => peoSvg(), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
+    name: "PeoPeo", cutout: true, hatAt: [57.5, 17.5, 20], santaAt: [53, 25, 6], svg: () => peoSvg(), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
     // size 60 : 1,5 fois la hauteur de Tino (mesurée sur les pixels : 92,8 unités de haut, Tino 92 → 55,7 px contre 36,8) ; wide : un peu élargi
     only: PEO_ACTIONS, calm: true, home: true, // home : il vit dans la marmite (voir mountMascots, homeTick)
     body: { cy: 56, support: Array(24).fill(42) },
@@ -2522,10 +2526,10 @@ class Mascot {
   // met pas s'il porte déjà quelque chose sur la tête (un chapeau sur un chapeau)
   setParty(kind) {
     this.partyKind = kind;
-    const g = this.el.querySelector(".ms-party"), [x, y, r] = this.def.hatAt ?? [50, 8, 0];
+    const g = this.el.querySelector(".ms-party"), [x, y, r] = (kind === "santa" && this.def.santaAt) || this.def.hatAt || [50, 8, 0]; // (santaAt : le bonnet, plus large, descend sur ses cheveux)
     if (!g) return;
     const show = kind && !(this.def.key === "tino" && this.eng.outfit?.head);
-    g.innerHTML = show ? `<g transform="translate(${x} ${y}) rotate(${r})">${kind === "crown" ? CROWN : PARTY_HAT}</g>` : "";
+    g.innerHTML = show ? `<g transform="translate(${x} ${y}) rotate(${r})">${kind === "crown" ? CROWN : kind === "santa" ? SANTA : PARTY_HAT}</g>` : "";
   }
   // Tenue animée : la case de la planche qui correspond au moment (en boucle, à anim.fps images par seconde)
   wearFrames() {
@@ -3292,8 +3296,11 @@ export function mountMascots({ layer, kinds = ["tino"], platforms, today = () =>
       if (reduce.matches) refresh();
     },
     wear(o) { eng.outfit = o; tino?.wear(o); }, // (les habits de Tino : seulement Tino pour l'instant)
-    // Fête : party = { crown: "meo" } (la personne fêtée a la couronne, les autres un chapeau pointu) ou null (plus de fête)
-    party(spec) { list.forEach((m) => m.setParty(spec ? (m.def.key === spec.crown ? "crown" : "hat") : null)); },
+    // Ce personnage a-t-il quelque chose à dire qu'on n'a pas encore lu (bulle collante, ou message en route) ?
+    saying(kind) { const m = list.find((x) => x.def.key === kind); return !!m && (!!m.pendingSay || !!m.bubble?.sticky); },
+    // Fête : party = { all: « hat » | « santa », crown: "meo" } (anniversaire : la personne fêtée a la couronne ; Noël : bonnets
+    // de Père Noël ; Nouvel An : chapeaux pointus) ou null (plus de fête)
+    party(spec) { list.forEach((m) => m.setParty(spec ? (m.def.key === spec.crown ? "crown" : spec.all ?? "hat") : null)); },
     // Tout le monde (ceux qui sont dehors, à l'écran) dit quelque chose et fait coucou : lines = { tino: "…", peo: "…" }
     cheer(lines) {
       list.forEach((m) => {
