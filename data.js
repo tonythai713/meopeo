@@ -46,6 +46,8 @@
 //   removeFurniture(id) → "deleted" | "retired", subscribeHouse(onChange) → coquillages, boutique et maison de Tino
 //     (32_shells_house.sql) ; une ligne d'historique : { id, by, amount, reason, item, at } ; un meuble : { id, builtin, path,
 //     name, price, size, wall, retired, by, at } ; dans la maison : { id, furniture, x, y (null : dans le carton), flip, by, at }
+//   listSwims(myId) → { top: [{ by, score, at }] (les 5 meilleures parties), best (la mienne) }, swimDone(score) → { shells, best,
+//     record, recordBy }, subscribeSwims(onChange) → Tino nage, le mini-jeu (33_swim_halloween.sql)
 //
 // Format d'une tâche dans l'app : { id, owner, date: "AAAA-MM-JJ", end: "AAAA-MM-JJ" | null, time: "HH:MM" | null,
 //   course: nom de catégorie | null, label, done, moon: "full" | "crescent" | null, private, source }
@@ -414,6 +416,21 @@ export function createBackend() {
       }
       if (row?.path) await sb.storage.from("tino").remove([row.path]);
       return "deleted";
+    },
+    // Tino nage (supabase/33_swim_halloween.sql) : les meilleures parties (record commun) et la mienne ; fin d'une partie
+    async listSwims(myId) {
+      const [t, m] = await Promise.all([
+        sb.from("tino_swims").select("who, score, at").order("score", { ascending: false }).order("at").order("id").limit(5),
+        sb.from("tino_swims").select("score").eq("who", myId).order("score", { ascending: false }).limit(1),
+      ]);
+      return { top: must(t).map((r) => ({ by: r.who, score: r.score, at: r.at })), best: must(m)[0]?.score ?? null };
+    },
+    async swimDone(score) { const r = must(await sb.rpc("swim_done", { p_score: score })); return { shells: r.shells, best: r.best, record: r.record, recordBy: r.record_by }; },
+    subscribeSwims(onChange) {
+      const ch = sb.channel("swim-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "tino_swims" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
     },
     subscribeHouse(onChange) {
       const ch = sb.channel("house-" + Math.random().toString(36).slice(2));

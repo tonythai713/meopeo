@@ -75,7 +75,29 @@ export const FURNITURE = {
     <rect x="34" y="38" width="9" height="10" rx="2" fill="#ff6b6b"/><circle cx="37" cy="41.5" r="1" fill="#fff"/><circle cx="40" cy="41.5" r="1" fill="#fff"/>
     <rect x="62" y="40" width="8" height="8" fill="#e8590c"/><circle cx="82" cy="28" r="3.5" fill="#ffd43b" stroke="#e67700" stroke-width="1"/>
     <path d="M70 18Q75 14 80 18" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>` },
+  // Halloween (33 ; la boutique ne les montre que pendant la semaine d'Halloween — SEASON)
+  pumpkin: { vb: [64, 60], svg: `<ellipse cx="32" cy="57" rx="24" ry="3" fill="#000" opacity="0.15"/><circle cx="32" cy="34" r="30" fill="#ffd43b" opacity="0.18"/>
+    <path d="M30 12Q31 6 36 4" stroke="#2f9e44" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <ellipse cx="20" cy="35" rx="14" ry="19" fill="#f76707" ${L}/><ellipse cx="44" cy="35" rx="14" ry="19" fill="#f76707" ${L}/><ellipse cx="32" cy="35" rx="13" ry="21" fill="#ff922b" ${L}/>
+    <path d="M18 30L25 25L26 32ZM46 30L39 25L38 32Z" fill="#ffe066" stroke="#5a4766" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M17 40Q32 52 47 40L43 43L40 40L36 45L32 41L28 45L24 40L21 43Z" fill="#ffe066" stroke="#5a4766" stroke-width="1.2" stroke-linejoin="round"/>` },
+  ghost: { vb: [56, 76], svg: `<ellipse cx="28" cy="73" rx="16" ry="3" fill="#000" opacity="0.15"/>
+    <path d="M6 64V30A22 22 0 0 1 50 30V64L44 58L38 64L32 58L28 64L22 58L16 64L11 58Z" fill="#f8f0ff" ${L}/>
+    <ellipse cx="20" cy="31" rx="3.4" ry="4.4" fill="#2b2233"/><ellipse cx="36" cy="31" rx="3.4" ry="4.4" fill="#2b2233"/><circle cx="21" cy="29.6" r="1.1" fill="#fff"/><circle cx="37" cy="29.6" r="1.1" fill="#fff"/>
+    <ellipse cx="28" cy="42" rx="4" ry="5" fill="#2b2233"/><ellipse cx="14" cy="38" rx="3.5" ry="2" fill="#ffb3c8" opacity="0.8"/><ellipse cx="42" cy="38" rx="3.5" ry="2" fill="#ffb3c8" opacity="0.8"/>
+    <path d="M6 42Q-2 38 2 30M50 42Q58 38 54 30" stroke="#5a4766" stroke-width="2" fill="none" stroke-linecap="round"/>` },
+  cauldron: { vb: [96, 92], svg: `<path d="M30 88L36 74M66 88L60 74" stroke="#495057" stroke-width="4" stroke-linecap="round"/>
+    <path d="M38 88Q44 80 48 86Q52 78 58 88Z" fill="#ff922b"/><path d="M43 88Q48 82 53 88Z" fill="#ffe066"/>
+    <path d="M12 38Q10 80 48 80Q86 80 84 38Z" fill="#343a40" ${L}/><ellipse cx="48" cy="38" rx="38" ry="9" fill="#212529" ${L}/>
+    <ellipse cx="48" cy="38" rx="33" ry="6.5" fill="#69db7c"/><circle cx="36" cy="34" r="5" fill="#8ce99a" stroke="#2f9e44" stroke-width="1.2"/>
+    <circle cx="58" cy="30" r="6.5" fill="#8ce99a" stroke="#2f9e44" stroke-width="1.2"/><circle cx="50" cy="18" r="3.5" fill="#b2f2bb" stroke="#2f9e44" stroke-width="1"/>
+    <circle cx="44" cy="8" r="2.4" fill="#b2f2bb" stroke="#2f9e44" stroke-width="1"/><path d="M6 38H14M82 38H90" stroke="#5a4766" stroke-width="4" stroke-linecap="round"/>` },
+  bats: { vb: [240, 50], svg: `<path d="M2 6Q60 30 120 8Q180 30 238 6" stroke="#5a4766" stroke-width="2" fill="none"/>
+    ${[[30, 16], [62, 21], [94, 18], [146, 18], [178, 21], [210, 16]].map(([x, y], i) => `<path transform="translate(${x} ${y + 6}) scale(${i % 2 ? 0.9 : 1.05})" d="M0 -3C-3 -7 -7 -6 -10 -8C-11 -4 -14 -2 -17 -2C-14 0 -12 3 -11 6C-8 4 -4 4 -2 6C-1 4 1 4 2 6C4 4 8 4 11 6C12 3 14 0 17 -2C14 -2 11 -4 10 -8C7 -6 3 -7 0 -3Z" fill="#3b2a5a" stroke="#2b1650" stroke-width="1"/><circle cx="${x - 2}" cy="${y + 5}" r="0.9" fill="#ffd43b"/><circle cx="${x + 2}" cy="${y + 5}" r="0.9" fill="#ffd43b"/>`).join("")}
+    <circle cx="120" cy="18" r="8" fill="#ff922b" stroke="#5a4766" stroke-width="1.5"/><path d="M116 16l2-2 1 3zM124 16l-2-2-1 3zM115 20q5 4 10 0" stroke="#5a4766" stroke-width="1.2" fill="#ffe066"/>` },
 };
+// Les meubles d'une fête : la boutique ne les montre que pendant cette fête (ceux déjà achetés restent dans la maison)
+export const SEASON = { pumpkin: "halloween", ghost: "halloween", cauldron: "halloween", bats: "halloween" };
 const URLS = new Map();
 // Un meuble dessiné ici → adresse d'image (data:), ou null si cette version de l'app ne le connaît pas
 export function furnitureUrl(key) {
@@ -94,7 +116,7 @@ export function furnitureUrl(key) {
 export function mountRoom(stage, { onMove, onSelect }) {
   const room = document.createElement("div");
   room.className = "hs-room";
-  room.innerHTML = `<div class="hs-wall"></div><div class="hs-floor"></div><div class="hs-items"></div>`;
+  room.innerHTML = `<div class="hs-wall"></div><div class="hs-floor"></div><div class="hs-deco"></div><div class="hs-items"></div>`;
   stage.prepend(room);
   stage.classList.add("mp-house");
   const layer = room.querySelector(".hs-items"), els = new Map();
@@ -170,6 +192,16 @@ export function mountRoom(stage, { onMove, onSelect }) {
       if (!arranging) { drag = null; select(null); }
     },
     selected: () => sel,
+    // Le décor d'une fête dans la pièce (null : aucun) — Halloween : murs violets, toiles d'araignée dans les coins, une chauve-souris
+    theme(name) {
+      if (room.dataset.theme === (name ?? "")) return;
+      room.dataset.theme = name ?? "";
+      room.classList.toggle("hs-halloween", name === "halloween");
+      const web = (cls) => `<svg class="hs-web ${cls}" viewBox="0 0 60 60" aria-hidden="true"><g fill="none" stroke="#fff" stroke-opacity="0.7" stroke-width="0.9">
+        <path d="M0 0L60 22M0 0L44 44M0 0L22 60"/><path d="M14 5Q12 12 5 14M28 10Q24 24 10 28M42 15Q36 36 15 42M55 20Q48 48 20 55"/></g></svg>`;
+      room.querySelector(".hs-deco").innerHTML = name === "halloween" ? web("hs-web-l") + web("hs-web-r")
+        + `<svg class="hs-bat" viewBox="-18 -9 36 18" aria-hidden="true"><path d="M0 -3C-3 -7 -7 -6 -10 -8C-11 -4 -14 -2 -17 -2C-14 0 -12 3 -11 6C-8 4 -4 4 -2 6C-1 4 1 4 2 6C4 4 8 4 11 6C12 3 14 0 17 -2C14 -2 11 -4 10 -8C7 -6 3 -7 0 -3Z" fill="#2b1650"/><circle cx="-2" cy="-1" r="0.9" fill="#ffd43b"/><circle cx="2" cy="-1" r="0.9" fill="#ffd43b"/></svg>` : "";
+    },
     busy: () => !!drag,
     destroy() { room.remove(); stage.classList.remove("mp-house", "hs-arranging"); },
   };

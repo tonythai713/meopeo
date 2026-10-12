@@ -766,3 +766,58 @@ a { color: var(--text-accent); }
 .mp-light .mp-shell-pop { color: #9a6700; text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8); }
 .mp-light .mp-ware { background: rgba(255, 255, 255, 0.55); }
 @media (prefers-reduced-motion: reduce) { .mp-shell-pop { animation-duration: 0.01s; } }
+
+/* Onglet 🎮 Play : le choix du jeu ; Tino nage (swim.js : canevas + le vrai Tino par-dessus, qui ne reçoit aucun toucher) */
+.mp-play-pick { display: flex; justify-content: center; margin: 0 0 10px; }
+.mp-play-pick .mp-seg { background: var(--pl-card, rgba(20, 24, 60, 0.55)); backdrop-filter: blur(6px); }
+.mp-swim { display: flex; flex-direction: column; gap: 8px; }
+.sw-game { position: relative; width: 100%; overflow: hidden; border-radius: 14px; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; cursor: pointer; outline: none; box-shadow: inset 0 0 0 1px var(--pl-line); }
+.sw-game:focus-visible { box-shadow: 0 0 0 2px #ffe8a3; }
+.sw-canvas { position: absolute; inset: 0; display: block; }
+.sw-tino { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
+.sw-tino .ms, .sw-tino * { pointer-events: none !important; }
+.sw-score { position: absolute; left: 0; right: 0; top: 10px; text-align: center; font-size: 2.2em; font-weight: 800; color: #fff; pointer-events: none;
+  text-shadow: 0 2px 0 rgba(0, 0, 30, 0.35), 0 0 12px rgba(0, 0, 30, 0.35); font-variant-numeric: tabular-nums; }
+.sw-msg { position: absolute; left: 50%; top: 70%; transform: translate(-50%, -50%); width: min(86%, 320px); display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 14px 16px; border-radius: 16px; background: rgba(10, 18, 50, 0.62); color: #fff; text-align: center; pointer-events: none; backdrop-filter: blur(3px); }
+.sw-msg[hidden] { display: none; }
+.sw-msg b { font-size: 1.35em; }
+.sw-msg span { font-size: 0.92em; opacity: 0.95; }
+.sw-again { margin-top: 4px; font-weight: 700; color: #ffe8a3; }
+.mp-swim-board h4 { margin-top: 0; }
+
+/* Halloween (une semaine) : bannière, toiles d'araignée et citrouilles dans les coins, chauves-souris, bonbons ; la maison de Tino */
+.mp-fete-halloween { background: linear-gradient(120deg, #2b1650, #5f3dc4 50%, #e8590c); box-shadow: 0 6px 22px rgba(232, 89, 12, 0.35); }
+.mp-fete-halloween .mp-cta { color: #5f3dc4; }
+.mp-jack-eyes { animation: mp-jack 1.6s ease-in-out infinite alternate; }
+@keyframes mp-jack { from { opacity: 0.7; } to { opacity: 1; filter: drop-shadow(0 0 2px #ffe066); } }
+.mp-spooky { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.mp-spooky.mp-batburst { z-index: 55; }
+.mp-web { position: absolute; top: env(safe-area-inset-top); width: 64px; opacity: 0.45; }
+.mp-web svg { width: 100%; display: block; }
+.mp-web.mp-left { left: 0; }
+.mp-web.mp-right { right: 0; transform: scaleX(-1); }
+.mp-jack { position: absolute; bottom: calc(92px + env(safe-area-inset-bottom)); width: 34px; opacity: 0.9; }
+.mp-jack svg { width: 100%; display: block; }
+.mp-jack.mp-left { left: 4px; }
+.mp-jack.mp-right { right: 4px; }
+.mp-bat { position: absolute; left: -60px; top: var(--y); width: calc(34px * var(--s)); animation: mp-bat var(--d) linear var(--w) infinite; }
+.mp-batburst .mp-bat { animation-iteration-count: 1; animation-fill-mode: both; }
+.mp-bat svg { width: 100%; display: block; animation: mp-flap 0.22s ease-in-out infinite alternate; }
+@keyframes mp-bat { 0% { transform: translate(0, 0); } 25% { transform: translate(30vw, -24px); } 50% { transform: translate(60vw, 12px); } 75% { transform: translate(90vw, -18px); } 100% { transform: translate(calc(100vw + 120px), 0); } }
+@keyframes mp-flap { from { transform: scaleY(1); } to { transform: scaleY(0.45); } }
+.mp-candy { position: fixed; inset: 0; z-index: 55; pointer-events: none; overflow: hidden; }
+.mp-candy i { position: absolute; top: -30px; left: var(--x); font-size: 22px; font-style: normal; animation: mp-candy var(--d) cubic-bezier(0.3, 0.6, 0.6, 1) var(--w) forwards; }
+@keyframes mp-candy { to { transform: translateY(108vh) rotate(var(--r)); } }
+.hs-deco { position: absolute; inset: 0; pointer-events: none; }
+.hs-halloween .hs-wall { background: radial-gradient(circle, rgba(255, 169, 77, 0.35) 1.6px, transparent 2.3px) 0 0 / 18px 18px, linear-gradient(#3b2a5a, #5b3f7f); }
+.hs-halloween .hs-floor { background: repeating-linear-gradient(90deg, rgba(40, 20, 10, 0.25) 0 1.5px, transparent 1.5px 16.6%), linear-gradient(#a8784e, #7a5232); }
+.hs-web { position: absolute; top: 0; width: 22%; opacity: 0.8; }
+.hs-web-l { left: 0; }
+.hs-web-r { right: 0; transform: scaleX(-1); }
+.hs-bat { position: absolute; left: 62%; top: 9%; width: 9%; animation: mp-hang 2.6s ease-in-out infinite alternate; }
+@keyframes mp-hang { from { transform: translateY(0) rotate(-6deg); } to { transform: translateY(6px) rotate(6deg); } }
+.mp-ware-season { font-size: 0.78em; font-weight: 700; color: #ff922b; }
+.mp-light .mp-ware-season { color: #c2410c; }
+@media (prefers-reduced-motion: reduce) { .mp-bat, .mp-bat svg, .hs-bat, .mp-jack-eyes { animation: none; } }

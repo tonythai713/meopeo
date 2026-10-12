@@ -1,7 +1,8 @@
 // MeoPeo — l'interface (même mise en page que les planners Obsidian MeoMeo / PeoPeo).
 // Ne parle jamais directement à Supabase : tout passe par `db` (data.js ; data-mock.js dans test.html).
 import { mountMascots, outfitTemplate, scenePng, WIDGET_SCENES, SCENES_V, tinoHeadSvg, peoHeadSvg, meoHeadSvg, demoPose } from "./mascot.js";
-import { mountRoom, furnitureUrl, FURNITURE, TINO_Y } from "./house.js";
+import { mountRoom, furnitureUrl, FURNITURE, SEASON, TINO_Y } from "./house.js";
+import { startSwim } from "./swim.js";
 import { createBigTino, DEFAULT_ANIM, videoToSprite, videoFrames, gifFrames, apngFrames, keyBackground, outfitSheet, shrinkFrames, isAnimatedImage, releaseCanvas } from "./bigtino.js";
 
 // ---------- Dates ----------
@@ -78,7 +79,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, bdays: [], bdayOk: null, letters: [], occOk: null, shells: null, shellsOk: null, furniture: [], house: [], online: new Set() };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, bdays: [], bdayOk: null, letters: [], occOk: null, shells: null, shellsOk: null, furniture: [], house: [], swims: null, swimOk: null, online: new Set() };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -107,7 +108,7 @@ export async function start(backend) {
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
   document.addEventListener("visibilitychange", () => { if (document.hidden) presenceCh?.set(false); presenceChanged(); }); // (en arrière-plan : il n'est plus « là »)
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); loadHouse(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); loadHouse(); loadSwims(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyTheme(); runClocks(); } }); // (minuteries endormies en arrière-plan)
   runClocks();
@@ -171,6 +172,7 @@ async function boot(user) {
   loadDecor();
   loadBirthdays();
   loadHouse();
+  loadSwims();
   resubscribe();
   ensurePush();
 }
@@ -184,6 +186,7 @@ function resubscribe() {
   unsubFeeding?.(); unsubFeeding = S.user ? db.subscribeFeeding(() => loadFeeding()) : null; // nourrir Tino (21) : idem
   unsubBath?.(); unsubBath = S.user ? db.subscribeBath(() => loadBath()) : null; // laver Tino (23) : idem
   unsubHouse?.(); unsubHouse = S.user ? db.subscribeHouse(() => loadHouse()) : null; // coquillages et maison (32) : idem
+  unsubSwims?.(); unsubSwims = S.user ? db.subscribeSwims(() => loadSwims()) : null; // Tino nage (33) : idem
   unsubGrumbles?.(); unsubGrumbles = S.user ? db.subscribeGrumbles(() => loadGrumbles()) : null; // idem (13)
   unsubNotes?.(); unsubNotes = S.user ? db.subscribeNotes(() => loadNotes()) : null; // idem (14)
   unsubDoodles?.(); unsubDoodles = S.user ? db.subscribeDoodles(() => loadDoodles()) : null; // idem (19)
@@ -262,6 +265,7 @@ function showLogin() {
   unsubFeeding?.(); unsubFeeding = null; S.feeding = null; S.hungerLines = []; S.feedingOk = null; feedSeen = null; clearTimeout(tummyTimer);
   unsubBath?.(); unsubBath = null; S.bath = null; S.bathOk = null; bathSeen = null; applyDirt();
   unsubHouse?.(); unsubHouse = null; S.shells = null; S.shellsOk = null; S.furniture = []; S.house = []; shellSeen = null; arranging = false; shopEdit = null;
+  unsubSwims?.(); unsubSwims = null; S.swims = null; S.swimOk = null; swimRecordSeen = null; swimGame?.stop(); swimGame = null;
   S.bdays = []; S.bdayOk = null; S.letters = []; S.occOk = null; partyPreview = null; partyCounting = null; letterUi?.el.remove(); letterUi = null; letterBrought = null; applyParty(); // (plus de fête)
   presenceCh?.stop(); presenceCh = null; S.online = new Set();
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
@@ -336,7 +340,7 @@ function render() {
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
   bindParty(root);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); loadHouse(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); loadHouse(); loadSwims(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
@@ -626,7 +630,7 @@ function refreshMascots() {
   mascots = mountMascots({ layer, kinds: ["tino", "peo", "meo"], platforms: mascotPlatforms, today: mascotToday, view: mascotView, night: tinoNight, siesta: tinoNap, meal: tinoMeal, tapThrough: mascotTapThrough, lines: () => [...(partyLines() ?? []), ...S.lines.map((l) => l.body)], grumbles: grumbleLines, belly: bellyInfo,
     home: (kind) => potSpot(kind), onHome: () => presenceChanged(), together: bothHere, potFx, onPearl: keepPearl });
   mascots.pearls(tapiocaNow());
-  const party = partyNow(); mascots.party(party ? { crown: kindOf(party.who.label) } : null); // (fête d'anniversaire)
+  mascots.party(partySpec(partyNow())); // (une fête en cours : chapeaux, couronne — toutes les fêtes, pas seulement l’anniversaire)
   presenceChanged(); // (tout de suite : qui dort dans la marmite — avant qu'un message ne fasse sortir un avatar)
   syncTinoBubble();
   applyOutfit();
@@ -1954,7 +1958,7 @@ async function loadSeries() {
 // Calendar = la page de toujours (#app + carte des messages Tino) ; Notes, Tino, Fishing et Settings = sections à part,
 // remplies à chaque ouverture. L'onglet est dans l'adresse (#notes…) : le bouton « retour » et un rechargement y restent.
 // Le bouton Tino = sa tête (le dessin de mascot.js).
-const TABS = [["calendar", "📅", "Calendar"], ["notes", "📝", "Notes"], ["tino", tinoHeadSvg(), "Tino"], ["fishing", "🎣", "Fishing"], ["settings", "⚙", "Settings"]];
+const TABS = [["calendar", "📅", "Calendar"], ["notes", "📝", "Notes"], ["tino", tinoHeadSvg(), "Tino"], ["fishing", "🎮", "Play"], ["settings", "⚙", "Settings"]];
 let nav = null;
 const panes = {};
 const currentTab = () => { const t = location.hash.replace("#", ""); return TABS.some(([id]) => id === t) ? t : "calendar"; };
@@ -1983,13 +1987,13 @@ function showTab() {
   document.body.classList.toggle("mp-on-calendar", !logged || t === "calendar");
   nav?.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === t ? "page" : "false"));
   for (const [id, p] of Object.entries(panes)) p.hidden = !logged || id !== t;
-  if (t !== "fishing") { fishGame?.stop(); fishGame = null; } // (animations des onglets qu'on quitte : arrêtées)
+  if (t !== "fishing") { fishGame?.stop(); fishGame = null; swimGame?.stop(); swimGame = null; } // (animations des onglets qu'on quitte : arrêtées)
   if (t !== "tino" && showcase) { bathing?.end(); showcase.card.remove(); showcase = null; room = null; arranging = false; shopEdit = null; }
   if (!logged) return;
   if (t === "calendar") { placeBigTino(); align(); } // de retour : Tino, son lit, le grand Tino et les colonnes se remettent en place
   else if (t === "notes") renderNotes(panes.notes);
   else if (t === "tino") renderTinoPane(panes.tino);
-  else if (t === "fishing") renderFishing(panes.fishing);
+  else if (t === "fishing") renderPlay(panes.fishing);
   else renderSettings(panes.settings);
   scrollTo(0, 0);
   if (t !== "calendar") mascots?.refresh(); // Tino vient dans Notes, disparaît dans Tino, Fishing et Settings (au calendrier : align())
@@ -2087,8 +2091,8 @@ async function dressShowcase(look) {
 // les déplacer, les retourner, les ranger dans le carton. Sans 32 : rien de tout ça, l'onglet Tino est comme avant.
 let unsubHouse = null, shellSeen = null, room = null, arranging = false, buying = false, shopEdit = null;
 const furnUrls = new Map(); // chemin d'un de leurs dessins → adresse (objet)
-const SHELL_WHY = { start: "🐚 to start", fish: "🎣 fishing", feed: "🍳 feeding Tino", bath: "🧽 Tino's bath", gift: "🎁 daily gift", buy: "🛍" };
-const SHELL_CAP = { fish: 20, feed: 10, bath: 6 }; // ⚠️ mêmes nombres que 32 (par jour et par personne)
+const SHELL_WHY = { start: "🐚 to start", fish: "🎣 fishing", feed: "🍳 feeding Tino", bath: "🧽 Tino's bath", gift: "🎁 daily gift", buy: "🛍", swim: "🌊 Tino swims" };
+const SHELL_CAP = { fish: 20, feed: 10, bath: 6, swim: 15 }; // ⚠️ mêmes nombres que 32 et 33 (par jour et par personne)
 const SIZES = [[0.12, "Small"], [0.2, "Medium"], [0.3, "Large"], [0.45, "Huge"]];
 const sizeName = (v) => SIZES.reduce((a, b) => (Math.abs(b[0] - v) < Math.abs(a[0] - v) ? b : a))[1];
 const furnOfId = (id) => S.furniture.find((f) => f.id === id);
@@ -2162,6 +2166,7 @@ async function paintRoom() {
     if (url) list.push({ id: it.id, x: it.x, y: it.y, flip: it.flip, url, size: f.size, flat: !!FURNITURE[f.builtin]?.flat });
   }
   room?.set(list);
+  room?.theme(partyNow()?.kind === "halloween" ? "halloween" : null);
 }
 
 // La barre sous la pièce : les coquillages, le cadeau du jour, « Arrange », « Shop » — ou, en rangeant : retourner, ranger,
@@ -2240,15 +2245,15 @@ function ware(f) {
       <label class="mp-check"><input type="checkbox" name="ewall"${f.wall ? " checked" : ""}> On the wall</label>
       <span class="mp-row"><button type="submit" class="mp-cta">✓</button><button type="button" data-ecancel>✕</button>${f.builtin ? "" : `<button type="button" data-eremove class="mp-danger">🗑</button>`}</span></form></div>`;
   return `<div class="mp-ware" data-id="${f.id}">${img}
-    <span class="mp-ware-name">${esc(f.name)}${f.by ? ` <span class="pl-legend">${whoMark(f.by)}</span>` : ""}</span>
+    <span class="mp-ware-name">${esc(f.name)}${f.by ? ` <span class="pl-legend">${whoMark(f.by)}</span>` : ""}</span>${SEASON[f.builtin] === "halloween" ? `<span class="mp-ware-season">🎃 Halloween week only</span>` : ""}
     <span class="mp-ware-price">🐚 ${f.price}${n ? ` <span class="pl-legend">· 🏠 ×${n}</span>` : ""}</span>
     <span class="mp-row"><button type="button" data-buy ${bal < f.price ? "disabled" : ""}>${bal < f.price ? `${f.price - bal} 🐚 to go` : "Buy"}</button><button type="button" data-fedit title="Name, price, size">✏️</button></span></div>`;
 }
 function fillShop(box) {
   if (S.shellsOk === false) { box.innerHTML = `<div class="pl-legend">The shop isn't open yet — Tony needs to run <code>supabase/32_shells_house.sql</code>.</div>`; return; }
   if (S.shellsOk !== true || !S.shells) { box.innerHTML = ""; return; }
-  const P = S.partner, wares = S.furniture.filter((f) => !f.retired && (f.builtin ? FURNITURE[f.builtin] : true)).sort((a, b) => a.price - b.price || a.name.localeCompare(b.name));
-  box.innerHTML = `<div class="pl-legend">🐚 <b>${S.shells.balance}</b> shells${P ? `, shared with ${esc(P.mark)} ${esc(P.label)}` : ""}. Earn more: 🎣 +1 a catch (a 🐚 shell: +3) · 🍳 +2 for feeding Tino · 🧽 +3 for a bath (when he needs one) · 🎁 +5 daily gift. Today you got 🎣 ${myToday("fish")}/${SHELL_CAP.fish} · 🍳 ${myToday("feed")}/${SHELL_CAP.feed} · 🧽 ${myToday("bath")}/${SHELL_CAP.bath}.</div>
+  const P = S.partner, wares = S.furniture.filter((f) => !f.retired && (f.builtin ? FURNITURE[f.builtin] && (!SEASON[f.builtin] || SEASON[f.builtin] === partyNow()?.kind) : true)).sort((a, b) => a.price - b.price || a.name.localeCompare(b.name));
+  box.innerHTML = `<div class="pl-legend">🐚 <b>${S.shells.balance}</b> shells${P ? `, shared with ${esc(P.mark)} ${esc(P.label)}` : ""}. Earn more: 🎣 +1 a catch (a 🐚 shell: +3) · 🍳 +2 for feeding Tino · 🧽 +3 for a bath (when he needs one) · 🌊 +1 per 5 points in Tino swims · 🎁 +5 daily gift. Today you got 🎣 ${myToday("fish")}/${SHELL_CAP.fish} · 🍳 ${myToday("feed")}/${SHELL_CAP.feed} · 🧽 ${myToday("bath")}/${SHELL_CAP.bath} · 🌊 ${myToday("swim")}/${SHELL_CAP.swim}.</div>
     <div class="mp-wares">${wares.map(ware).join("")}</div>
     <div class="pl-sub">🎨 Your own furniture</div>
     <form class="mp-furn-add">
@@ -2347,6 +2352,73 @@ function fillFishShells(el) {
   el.innerHTML = S.shellsOk === true && S.shells ? `<span class="mp-shells">🐚 <b>${S.shells.balance}</b></span> shells — +1 a catch (a 🐚 shell: +3), today ${myToday("fish")}/${SHELL_CAP.fish}. Spend them in the Tino tab → 🛍 Shop.` : "";
 }
 
+// ---------- Onglet 🎮 Play : la pêche ou Tino nage (le choix est gardé sur l'appareil) ----------
+// L'onglet garde son nom interne « fishing » (adresse #fishing) ; la pêche ne se refait que si elle est à l'écran (sinon une
+// prise de l'autre effacerait une partie de nage en cours).
+let swimGame = null, unsubSwims = null, swimRecordSeen = null;
+const playGame = () => (store.get("playGame", "fish") === "swim" ? "swim" : "fish");
+const playBody = () => panes.fishing?.querySelector(".mp-play-body");
+function renderPlay(pane) {
+  fishGame?.stop(); fishGame = null;
+  swimGame?.stop(); swimGame = null;
+  const g = playGame();
+  pane.innerHTML = `<div class="mp-play-pick"><span class="mp-seg" role="group" aria-label="Game">
+      <button type="button" data-game="fish" aria-pressed="${g === "fish"}">🎣 Fishing</button><button type="button" data-game="swim" aria-pressed="${g === "swim"}">🌊 Tino swims</button></span></div>
+    <div class="mp-play-body"></div>`;
+  pane.querySelectorAll("[data-game]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.game !== playGame()) { store.set("playGame", b.dataset.game); renderPlay(pane); } }));
+  const body = pane.querySelector(".mp-play-body");
+  if (g === "swim") renderSwim(body); else renderFishing(body);
+}
+
+// Tino nage (swim.js ; scores et record : supabase/33_swim_halloween.sql). Sans 33 : on joue, mais rien n'est gardé.
+async function loadSwims() {
+  if (!S.user) return;
+  try { S.swims = await db.listSwims(S.user.id); S.swimOk = true; store.set("swims." + S.user.id, S.swims); }
+  catch (err) {
+    if (/does not exist|schema cache|tino_swims|swim_done/i.test(err.message)) { S.swimOk = false; S.swims = null; }
+    else { const r = store.get("swims." + S.user.id, null); if (r) { S.swims = r; S.swimOk = true; } } // hors ligne
+  }
+  // l'autre vient de battre le record : on le dit (pas au démarrage ; seulement quand le record change)
+  const top = S.swims?.top?.[0], key = top ? `${top.score}|${top.by}` : "";
+  if (swimRecordSeen !== null && key && key !== swimRecordSeen && top.by !== S.user.id && S.partner) toast(`🏆 ${S.partner.mark} ${S.partner.label} set a new Tino swims record: ${top.score}!`);
+  if (S.swimOk !== null) swimRecordSeen = key;
+  document.querySelectorAll(".mp-swim-board").forEach(fillSwimBoard);
+}
+function renderSwim(body) {
+  body.innerHTML = `<div class="pl-editor-card mp-pane-card mp-swim"><div class="sw-game" tabindex="0" role="application" aria-label="Tino swims — tap or press Space to swim up"></div>
+      <div class="pl-legend">Tap (or press Space) to make Tino swim up. Slip between the rocks (+1) and catch fish 🐟 (+1). Every 5 points: 1 🐚 (up to ${SHELL_CAP.swim} a day).</div></div>
+    <div class="pl-editor-card mp-pane-card mp-swim-board"></div>`;
+  const spooky = partyNow()?.kind === "halloween";
+  swimGame = startSwim(body.querySelector(".sw-game"), {
+    spooky, night: !daylight().day,
+    mountTino: (box, size) => { const m = demoPose(box, "tino", "swim", size); wornLook().then((l) => m.wear(l)).catch(() => {}); return m; },
+    onEnd: swimEnd,
+  });
+  fillSwimBoard(body.querySelector(".mp-swim-board"));
+}
+// Fin d'une partie : enregistrée (record, coquillages) ; renvoie la ligne affichée sous le score
+async function swimEnd(score) {
+  if (S.swimOk === false) return "Scores aren't saved yet — Tony needs to run <code>supabase/33_swim_halloween.sql</code>";
+  if (!navigator.onLine) return "📴 You're offline — this score wasn't saved";
+  const before = S.swims?.top?.[0]?.score ?? 0;
+  let r;
+  try { r = await db.swimDone(score); }
+  catch (err) { return /swim_done|schema cache|does not exist/i.test(err.message) ? "Scores aren't saved yet — Tony needs to run <code>supabase/33_swim_halloween.sql</code>" : `⚠️ Not saved (${esc(err.message)})`; }
+  loadHouse(); // (« +N 🐚 », voir shellNews)
+  loadSwims();
+  const who = personOf(r.recordBy), mine = r.recordBy === S.user.id && score === r.record && score > before;
+  return (mine ? "🏆 <b>New record!</b>" : `🏆 Record: ${r.record}${who ? ` ${esc(who.mark)}` : ""}`) + ` · your best: ${r.best}` + (r.shells ? ` · +${r.shells} 🐚` : "");
+}
+function fillSwimBoard(el) {
+  if (!el) return;
+  if (S.swimOk === false) { el.innerHTML = `<h4>🏆 Records</h4><div class="pl-legend">Records aren't set up yet — Tony needs to run <code>supabase/33_swim_halloween.sql</code>. You can still play!</div>`; return; }
+  const sw = S.swims;
+  if (!sw) { el.innerHTML = ""; return; }
+  el.innerHTML = `<h4>🏆 Records</h4>
+    ${sw.top.length ? `<div class="mp-catches">${sw.top.map((x, i) => `<div class="mp-catch">${["🥇", "🥈", "🥉", "4.", "5."][i]} <b>${x.score}</b> ${whoMark(x.by)} <span class="pl-legend">· ${tinoWhen(x.at)}</span></div>`).join("")}</div>` : `<div class="pl-empty">No score yet — be the first!</div>`}
+    <div class="pl-legend">Your best: ${sw.best ?? "—"}${S.shellsOk === true ? ` · 🐚 today from swimming: ${myToday("swim")}/${SHELL_CAP.swim}` : ""}</div>`;
+}
+
 // ---------- Onglet 🎣 Fishing : la pêche (supabase/20_fishing.sql) ----------
 // Tino pêche au bout d'un ponton : on lance, on attend que le bouchon plonge, on ferre vite. Ce qu'on attrape est tiré au
 // sort par la base (fish_tino) au moment où on ferre : on ne le sait qu'en le sortant de l'eau. Une tenue : portable par
@@ -2402,10 +2474,12 @@ function scheduleFishTimer() {
   if (ends.length) fishTimer = setTimeout(fishingChanged, Math.min(2 ** 31 - 1, Math.max(1000, Math.min(...ends) - Date.now() + 1000)));
 }
 function refreshFishing() {
-  if (currentTab() !== "fishing" || !document.body.classList.contains("mp-logged")) return;
-  if (!fishGame || (S.fishingOk === false) !== !!panes.fishing.querySelector(".mp-fish-missing")) { if (!fishGame?.busy()) renderFishing(panes.fishing); return; }
+  if (currentTab() !== "fishing" || !document.body.classList.contains("mp-logged") || playGame() !== "fish") return; // (Tino nage à l'écran : on n'y touche pas)
+  const body = playBody();
+  if (!body) return;
+  if (!fishGame || (S.fishingOk === false) !== !!body.querySelector(".mp-fish-missing")) { if (!fishGame?.busy()) renderFishing(body); return; }
   fishGame.dress();
-  fillFishInfo(panes.fishing);
+  fillFishInfo(body);
 }
 function renderFishing(pane) {
   fishGame?.stop();
@@ -2894,7 +2968,9 @@ function startBath(box) {
 // ---------- Les fêtes : anniversaires, Noël, Nouvel An, Tết — et les lettres / vœux (supabase/30_birthdays.sql, 31_holiday_wishes.sql) ----------
 // Anniversaire de l'un — dans SON fuseau (chez l'autre, la fête commence à l'heure qui correspond) — : bannière avec un gâteau
 // (le toucher souffle les bougies : confettis, tout le monde lui souhaite), ballons, chapeaux de fête (couronne pour la personne
-// fêtée). Noël (du 24 décembre 18:00 au 26 à minuit) : sapin, neige, bonnets de Père Noël. Nouvel An (du 31 décembre 18:00 au
+// fêtée). Halloween (une semaine : du 25 octobre au 31 au soir, à l'heure de chaque téléphone ; le 31 : « trick or treat ») :
+// citrouilles, chauves-souris, toiles d'araignée, chapeaux de sorcière, la maison de Tino décorée, des meubles d'Halloween à la
+// boutique. Noël (du 24 décembre 18:00 au 26 à minuit) : sapin, neige, bonnets de Père Noël. Nouvel An (du 31 décembre 18:00 au
 // 2 janvier) : compte à rebours, feu d'artifice à minuit, chapeaux. Noël et Nouvel An : à l'heure de chaque téléphone. Tết (de
 // la veille à 18:00 à la fin du 3e jour, à l'heure du Vietnam pour les deux) : lanternes, fleurs de mai, compte à rebours jusqu'à
 // la giao thừa, pétards, enveloppe rouge (lì xì). Des lettres / vœux écrits à l'avance par l'autre (onglet Notes) s'ouvrent ce
@@ -2916,8 +2992,9 @@ const OCC = {
   christmas: { emoji: "🎄", name: "Christmas", letter: "Christmas wishes", hats: "santa", days: WISH_DAYS },
   newyear: { emoji: "🎆", name: "New Year", letter: "New Year wishes", hats: "hat", days: WISH_DAYS },
   tet: { emoji: "🧧", name: "Tết", letter: "Tết wishes", days: WISH_DAYS },
+  halloween: { emoji: "🎃", name: "Halloween", hats: "witch" }, // (pas de lettre)
 };
-const HOLIDAYS = ["tet", "newyear", "christmas"]; // (si deux se chevauchent : la première)
+const HOLIDAYS = ["tet", "newyear", "christmas", "halloween"]; // (si deux se chevauchent : la première)
 let partyTimer = 0, partyTick = 0, partyBring = 0, partyOn = null, partyPreview = null, partyBlown = false, partySeen = null, partyCounting = null, luckyWish = null;
 let letterUi = null, letterBrought = null;
 // La date du jour dans un fuseau (« 2026-11-05 ») ; le décalage d'un fuseau à l'instant t ; une heure d'un jour dans un fuseau (ms)
@@ -2955,7 +3032,8 @@ function holidayWindow(kind, at = Date.now(), tz = localTz()) {
   }
   const y = +ymdIn(tz, at).slice(0, 4);
   for (const yy of [y, y + 1]) {
-    const w = kind === "christmas" ? { start: midnightIn(tz, yy, 12, 24, 18), end: midnightIn(tz, yy, 12, 26), open: midnightIn(tz, yy, 12, 24, 18), year: yy }
+    const w = kind === "halloween" ? { start: midnightIn(tz, yy, 10, 25), end: midnightIn(tz, yy, 11, 1), open: midnightIn(tz, yy, 10, 31), year: yy } // (toute la semaine ; le 31 : la fête)
+      : kind === "christmas" ? { start: midnightIn(tz, yy, 12, 24, 18), end: midnightIn(tz, yy, 12, 26), open: midnightIn(tz, yy, 12, 24, 18), year: yy }
       : { start: midnightIn(tz, yy - 1, 12, 31, 18), end: midnightIn(tz, yy, 1, 2), open: midnightIn(tz, yy, 1, 1), year: yy };
     if (w.end > at) return { ...w, key: `${kind}-${yy}` };
   }
@@ -3023,12 +3101,13 @@ function applyParty() {
   partyTimer = setTimeout(applyParty, Math.max(1000, next - Date.now() + 500));
 }
 // À l'arrivée sur la fête : confettis, une averse de neige, ou (après minuit) un petit feu d'artifice
-const greet = (p) => (p.kind === "birthday" ? confetti() : p.kind === "christmas" ? snowBurst() : opened(p) ? fireworks(3, p.kind === "tet") : null);
+const greet = (p) => (p.kind === "birthday" ? confetti() : p.kind === "christmas" ? snowBurst() : p.kind === "halloween" ? batBurst() : opened(p) ? fireworks(3, p.kind === "tet") : null);
 const partySpec = (p) => (!p ? null : p.kind === "birthday" ? { all: "hat", crown: kindOf(p.who.label) } : OCC[p.kind].hats ? { all: OCC[p.kind].hats } : null);
 // « ⏳ 5 h 12 min until 2027 » (la dernière minute : en secondes)
 function countdown(p) {
   const s = Math.max(0, Math.ceil((p.open - Date.now()) / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
   const left = s < 60 ? `${s} s` : h ? `${h} h ${pad(m)} min` : `${m} min ${pad(s % 60)} s`;
+  if (p.kind === "halloween") { const d = Math.ceil(s / 86400); return d > 1 ? `⏳ ${d} days until Halloween` : `⏳ ${left} until Halloween`; }
   return p.kind === "tet" ? `⏳ ${left} until giao thừa — the Year of the ${zodiacOf(p.year)[0]} ${zodiacOf(p.year)[2]}` : `⏳ ${left} until ${p.year}`;
 }
 // Ce que dit Tino pendant la fête (en plus de ses phrases)
@@ -3037,6 +3116,8 @@ function partyLines() {
   if (!p) return null;
   if (p.kind === "birthday") { const n = p.who.label; return [`Happy birthday, ${n}! 🎂`, "Chúc mừng sinh nhật! 🎉", "🎵 Happy birthday to you… 🎵", `Make a wish, ${n}! ✨`, "Cake time!! 🍰", `${n}'s birthday!! 🥳`]; }
   if (p.kind === "christmas") return ["Merry Christmas! 🎄", "Giáng sinh vui vẻ! 🎅", "Ho ho ho! 🎅", "🎵 Jingle bells… 🎵", "Where are my presents? 🎁", "It's snowing!! ❄️"];
+  if (p.kind === "halloween") return opened(p) ? ["Happy Halloween! 🎃", "Trick or treat! 🍬", "Boo! 👻", "I'm a scary seal… rawr 🦭", "Candy please! 🍭", "🦇🦇🦇"]
+    : ["Halloween is coming… 🎃", "Boo! 👻", "Spooky week! 🦇", "Where's my costume? 🧙", "I hear bats… 🦇"];
   if (p.kind === "newyear") return opened(p) ? [`Happy New Year ${p.year}! 🎆`, "Chúc mừng năm mới! 🥳", "New year, new fish! 🐟", "Bonne année ! 🥂"] : ["Almost midnight… ⏳", `Bye bye ${p.year - 1}! 👋`, "Countdown time! 🎆", "Don't fall asleep! 😴"];
   const z = zodiacOf(p.year);
   return opened(p) ? ["Chúc mừng năm mới! 🧧", "An khang thịnh vượng! 🌼", "Vạn sự như ý! ✨", "Lì xì đâu? 🧧", `Year of the ${z[0]}! ${z[2]}`, "Năm mới phát tài! 💰"]
@@ -3074,6 +3155,18 @@ const ENVELOPE = `<svg viewBox="0 0 64 64" aria-hidden="true">
   <circle cx="32" cy="30" r="7" fill="#ffd43b" stroke="#f59f00" stroke-width="1"/><text x="32" y="34" font-size="10" text-anchor="middle" fill="#c92a2a" font-weight="700">福</text>
   <path d="M18 46h28M22 51h20" stroke="#ffd43b" stroke-width="1.6" stroke-linecap="round"/>
 </svg>`;
+const PUMPKIN = `<svg viewBox="0 0 64 64" aria-hidden="true">
+  <circle cx="32" cy="36" r="27" fill="#ffd43b" opacity="0.2"/><path d="M30 14Q31 8 37 6" stroke="#2f9e44" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <ellipse cx="20" cy="38" rx="14" ry="19" fill="#f76707" stroke="#a33b0b" stroke-width="1.2"/><ellipse cx="44" cy="38" rx="14" ry="19" fill="#f76707" stroke="#a33b0b" stroke-width="1.2"/>
+  <ellipse cx="32" cy="38" rx="13" ry="21" fill="#ff922b" stroke="#a33b0b" stroke-width="1.2"/>
+  <g class="mp-jack-eyes"><path d="M18 33L25 28L26 35ZM46 33L39 28L38 35Z" fill="#ffe066"/>
+  <path d="M17 43Q32 55 47 43L43 46L40 43L36 48L32 44L28 48L24 43L21 46Z" fill="#ffe066"/></g>
+</svg>`;
+const BAT = `<svg viewBox="-18 -9 36 18" aria-hidden="true"><path d="M0 -3C-3 -7 -7 -6 -10 -8C-11 -4 -14 -2 -17 -2C-14 0 -12 3 -11 6C-8 4 -4 4 -2 6C-1 4 1 4 2 6C4 4 8 4 11 6C12 3 14 0 17 -2C14 -2 11 -4 10 -8C7 -6 3 -7 0 -3Z" fill="#2b1650"/><circle cx="-2" cy="-1" r="0.9" fill="#ffd43b"/><circle cx="2" cy="-1" r="0.9" fill="#ffd43b"/></svg>`;
+const WEB = `<svg viewBox="0 0 60 60" aria-hidden="true"><g fill="none" stroke="#fff" stroke-width="0.9"><path d="M0 0L60 22M0 0L44 44M0 0L22 60"/><path d="M14 5Q12 12 5 14M28 10Q24 24 10 28M42 15Q36 36 15 42M55 20Q48 48 20 55"/></g>
+  <path d="M34 34V48" stroke="#fff" stroke-width="0.8"/><circle cx="34" cy="50" r="3" fill="#2b2233"/></svg>`;
+const TREATS = ["🍬 Treat! A candy for you", "🍭 Treat! A giant lollipop", "🍫 Treat! Chocolate!", "🧁 Treat! A spooky cupcake", "🍡 Treat! Chè for everyone"];
+const TRICKS = ["👻 Trick! BOO!", "🦇 Trick! Bats everywhere!", "🕷️ Trick! A spider on your nose!"];
 const LUCKY = ["An khang thịnh vượng 🌼", "Vạn sự như ý ✨", "Sức khỏe dồi dào 💪", "Tiền vô như nước 💰", "Năm mới phát tài 🧧", "Hạnh phúc tràn đầy 💗", "Học hành tấn tới 📚", "Cá vào lưới đầy 🐟"];
 // La bannière (en haut du calendrier) : dans render() ; paintParty la refait seule (lettre arrivée, bougies, minuit)
 function partyHtml() {
@@ -3094,6 +3187,9 @@ function partyHtml() {
   } else if (p.kind === "newyear") {
     icon = ROCKET; title = opened(p) ? `🎆 Happy New Year ${p.year}! 🥳` : "🎆 New Year's Eve!";
     sub = opened(p) ? "Chúc mừng năm mới! — tap for fireworks 🎇" : `<span class="mp-count">${esc(countdown(p))}</span>`;
+  } else if (p.kind === "halloween") {
+    icon = PUMPKIN; title = opened(p) ? "🎃 Happy Halloween! 👻" : "🎃 Halloween week! 🦇";
+    sub = opened(p) ? (luckyWish ? esc(luckyWish) : "Trick or treat? Tap the pumpkin 🍬") : `<span class="mp-count">${esc(countdown(p))}</span> — tap the pumpkin 👻`;
   } else {
     const z = zodiacOf(p.year);
     icon = ENVELOPE; title = opened(p) ? `🧧 Chúc mừng năm mới! Happy Tết — Year of the ${z[0]} ${z[2]}` : "🏮 Tất niên — giao thừa tonight!";
@@ -3124,6 +3220,14 @@ function bindParty(scope) {
     } else if (p.kind === "newyear") {
       fireworks(opened(p) ? 4 : 1);
       if (opened(p)) mascots?.cheer({ tino: `Happy New Year ${p.year}! 🎆`, peo: "Chúc mừng năm mới! 🥳", meo: "Bonne année! 🥂" });
+    } else if (p.kind === "halloween") {
+      batBurst();
+      if (!opened(p)) { mascots?.cheer({ tino: "Boo! 👻", peo: "Spooky! 🦇", meo: "Eek! 🙀" }); return; }
+      const trick = Math.random() < 0.34, list = trick ? TRICKS : TREATS;
+      luckyWish = list.filter((w) => w !== luckyWish)[Math.floor(Math.random() * (list.length - 1))];
+      paintParty();
+      if (trick) mascots?.cheer({ tino: "BOO!! 👻", peo: "Aaah! 😱", meo: "Eek!! 🙀" });
+      else { candyBurst(); mascots?.cheer({ tino: "Trick or treat! 🍬", peo: "Candy!! 🍭", meo: "Yum! 🍫" }); }
     } else {
       fireworks(opened(p) ? 3 : 1, true);
       if (!opened(p)) return;
@@ -3147,14 +3251,18 @@ function paintParty() {
 }
 // Minuit (Nouvel An, giao thừa) : feu d'artifice / pétards pendant ~15 s, et tout le monde se le souhaite
 function celebrate(p) {
-  if (p.kind === "newyear") { fireworks(14); mascots?.cheer({ tino: `Happy New Year ${p.year}! 🎆`, peo: "Chúc mừng năm mới! 🥳", meo: "Happy New Year!! 🥂" }); }
+  if (p.kind === "halloween") { batBurst(); candyBurst(); mascots?.cheer({ tino: "Happy Halloween! 🎃", peo: "Trick or treat! 🍬", meo: "Boo! 👻" }); }
+  else if (p.kind === "newyear") { fireworks(14); mascots?.cheer({ tino: `Happy New Year ${p.year}! 🎆`, peo: "Chúc mừng năm mới! 🥳", meo: "Happy New Year!! 🥂" }); }
   else { fireworks(12, true); mascots?.cheer({ tino: "Chúc mừng năm mới! 🧧", peo: "An khang thịnh vượng! 🌼", meo: "Vạn sự như ý! ✨" }); }
 }
 // Les effets qui restent pendant toute la fête (peu d'éléments : ils tournent ~30 h) : ballons, neige, lanternes et fleurs de mai
 const partyColors = ["#ff6b9d", "#ffd43b", "#74c0fc", "#b197fc", "#8ce99a", "#ffa94d"];
 const stillScreen = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 function partyEffects(p) {
-  document.querySelectorAll(".mp-balloons, .mp-snow, .mp-lanterns").forEach((e) => e.remove());
+  document.querySelectorAll(".mp-balloons, .mp-snow, .mp-lanterns, .mp-spooky").forEach((e) => e.remove());
+  if (room) paintRoom(); // (la maison de Tino se décore aussi)
+  const shop = document.querySelector(".mp-shop");
+  if (shop && !shopBusy(shop)) fillShop(shop); // (les meubles de la fête)
   if (!p || stillScreen()) return;
   const el = document.createElement("div");
   el.setAttribute("aria-hidden", "true");
@@ -3171,8 +3279,31 @@ function partyEffects(p) {
       <rect x="13" y="47" width="14" height="4" rx="1" fill="#f59f00"/><path d="M16 51v14M20 51v17M24 51v14" stroke="#ffd43b" stroke-width="1.4"/></svg>`;
     el.innerHTML = `<b class="mp-lantern mp-left">${lantern}</b><b class="mp-lantern mp-right">${lantern}</b>`
       + Array.from({ length: 7 }, () => `<i style="--x:${(Math.random() * 100).toFixed(1)}%;--d:${(11 + Math.random() * 8).toFixed(1)}s;--w:${(-Math.random() * 18).toFixed(1)}s"></i>`).join("");
+  } else if (p.kind === "halloween") {
+    el.className = "mp-spooky";
+    el.innerHTML = `<b class="mp-web mp-left">${WEB}</b><b class="mp-web mp-right">${WEB}</b><b class="mp-jack mp-left">${PUMPKIN}</b><b class="mp-jack mp-right">${PUMPKIN}</b>`
+      + Array.from({ length: 4 }, () => `<i class="mp-bat" style="--y:${(10 + Math.random() * 45).toFixed(1)}%;--d:${(16 + Math.random() * 10).toFixed(1)}s;--w:${(-Math.random() * 24).toFixed(1)}s;--s:${(0.7 + Math.random() * 0.6).toFixed(2)}">${BAT}</i>`).join("");
   } else return;
   document.body.append(el);
+}
+// Halloween : une volée de chauves-souris qui traverse l'écran ; une pluie de bonbons
+function batBurst() {
+  if (stillScreen() || !partyNow()) return;
+  const el = document.createElement("div");
+  el.className = "mp-spooky mp-batburst";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = Array.from({ length: 9 }, () => `<i class="mp-bat" style="--y:${(15 + Math.random() * 50).toFixed(1)}%;--d:${(2.2 + Math.random() * 1.6).toFixed(2)}s;--w:${(Math.random() * 0.9).toFixed(2)}s;--s:${(0.8 + Math.random() * 0.8).toFixed(2)}">${BAT}</i>`).join("");
+  document.body.append(el);
+  setTimeout(() => el.remove(), 5000);
+}
+function candyBurst() {
+  if (stillScreen() || !partyNow()) return;
+  const el = document.createElement("div");
+  el.className = "mp-candy";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = Array.from({ length: 26 }, () => `<i style="--x:${(Math.random() * 100).toFixed(1)}vw;--r:${Math.round(Math.random() * 540 - 270)}deg;--d:${(1.8 + Math.random() * 1.4).toFixed(2)}s;--w:${(Math.random() * 0.7).toFixed(2)}s">${["🍬", "🍭", "🍫", "🍬", "🧁"][Math.floor(Math.random() * 5)]}</i>`).join("");
+  document.body.append(el);
+  setTimeout(() => el.remove(), 4200);
 }
 function confetti() {
   if (stillScreen() || !partyNow()) return;
@@ -3330,11 +3461,11 @@ async function saveLetterNow(occ, status, P, w) {
 }
 // Réglages : aperçu des fêtes du calendrier (pas des anniversaires : ceux-là, depuis la carte de la lettre) et leurs prochaines dates
 function partyPreviewsHtml() {
-  const next = (k) => holidayWindow(k), x = next("christmas"), ny = next("newyear"), t = next("tet");
+  const next = (k) => holidayWindow(k), x = next("christmas"), ny = next("newyear"), t = next("tet"), h = next("halloween");
   const fmt = (w, tz = localTz()) => (w ? dayIn(tz, w.open, { year: "numeric" }) : "—");
-  return `<div class="pl-legend">🎄 Christmas Eve ${esc(fmt(x))} · 🎆 New Year ${esc(fmt(ny))} · 🧧 Tết ${esc(t ? dayIn(VN, t.open, { year: "numeric" }) : "—")}${t ? ` — Year of the ${zodiacOf(t.year)[0]} ${zodiacOf(t.year)[2]}` : ""}</div>
-    <div class="mp-row"><button type="button" data-party="christmas">👀 🎄 Christmas</button><button type="button" data-party="newyear">👀 🎆 New Year</button><button type="button" data-party="tet">👀 🧧 Tết</button></div>
-    <div class="pl-legend">A one-minute preview on this phone only — nothing is saved. You can write wishes for each of them in Notes, a month before.</div>`;
+  return `<div class="pl-legend">🎃 Halloween ${esc(fmt(h))} (the whole week before) · 🎄 Christmas Eve ${esc(fmt(x))} · 🎆 New Year ${esc(fmt(ny))} · 🧧 Tết ${esc(t ? dayIn(VN, t.open, { year: "numeric" }) : "—")}${t ? ` — Year of the ${zodiacOf(t.year)[0]} ${zodiacOf(t.year)[2]}` : ""}</div>
+    <div class="mp-row"><button type="button" data-party="christmas">👀 🎄 Christmas</button><button type="button" data-party="newyear">👀 🎆 New Year</button><button type="button" data-party="tet">👀 🧧 Tết</button><button type="button" data-party="halloween">👀 🎃 Halloween</button></div>
+    <div class="pl-legend">A one-minute preview on this phone only — nothing is saved. You can write wishes for Christmas, New Year and Tết in Notes, a month before.</div>`;
 }
 function bindPartyPreviews(scope) {
   scope.querySelectorAll("[data-party]").forEach((b) => b.addEventListener("click", () => {
