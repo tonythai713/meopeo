@@ -719,3 +719,50 @@ a { color: var(--text-accent); }
 .mp-letter-tet .mp-letter-paper { background: linear-gradient(160deg, #e03131, #c92a2a); color: #fff3bf; box-shadow: inset 0 0 0 2px #ffd43b; font-weight: 600; }
 .mp-letter-christmas .mp-letter-paper { box-shadow: inset 0 0 0 3px #2f9e44, inset 0 0 0 5px #e03131; }
 .mp-letter-newyear .mp-letter-paper { background: #10173a; color: #ffe8a3; box-shadow: inset 0 0 0 2px #ffd43b; }
+
+/* Maison de Tino (32) : la pièce derrière le grand Tino (4 × 3, pour que les meubles soient au même endroit sur tous les écrans),
+   les meubles (bas-milieu en x / y), le mode « ranger » ; la barre des coquillages ; la boutique */
+.mp-show-stage.mp-house { display: block; padding: 0; width: 100%; max-width: 520px; aspect-ratio: 4 / 3; margin: 4px auto 0; background: none; isolation: isolate; touch-action: manipulation; }
+.hs-room { position: absolute; inset: 0; border-radius: 16px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(90, 71, 102, 0.35), 0 4px 14px rgba(0, 0, 20, 0.25); }
+.hs-wall { position: absolute; left: 0; right: 0; top: 0; height: 62%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55) 1.6px, transparent 2.3px) 0 0 / 18px 18px, linear-gradient(#e2d4fb, #f3ebff); }
+.hs-floor { position: absolute; left: 0; right: 0; top: 62%; bottom: 0; box-shadow: 0 -3px 0 #fffaf2, 0 -5px 0 rgba(90, 71, 102, 0.25);
+  background: repeating-linear-gradient(90deg, rgba(110, 60, 25, 0.16) 0 1.5px, transparent 1.5px 16.6%), linear-gradient(#e9c194, #c89062); }
+.hs-items { position: absolute; inset: 0; }
+.hs-item { position: absolute; height: auto; transform: translate(-50%, -100%); pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none;
+  filter: drop-shadow(0 2px 2px rgba(40, 20, 50, 0.22)); }
+.hs-item.hs-flip { transform: translate(-50%, -100%) scaleX(-1); }
+.hs-tino { position: absolute; left: 50%; top: 93%; transform: translate(-50%, -100%); }
+.hs-tino::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: -5px; height: 10px; border-radius: 50%; background: rgba(40, 20, 50, 0.22); z-index: -1; }
+.hs-arranging .hs-item { pointer-events: auto; cursor: grab; touch-action: none; }
+.hs-arranging .hs-item.hs-sel { outline: 2px dashed #fff; outline-offset: 2px; filter: drop-shadow(0 0 6px rgba(255, 232, 163, 0.95)); }
+.hs-arranging .hs-tino { opacity: 0.3; pointer-events: none; }
+.mp-house .mp-foam, .mp-house .mp-soap, .mp-house .mp-drop, .mp-house .mp-tapi-fall { z-index: 3000; }
+.mp-shellbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; width: 100%; margin-top: 6px; }
+.mp-shellbar:empty { display: none; }
+.mp-shellbar > button { padding: 6px 8px; font-size: 0.92em; }
+.mp-shells { position: relative; display: inline-block; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(255, 232, 163, 0.14); border: 1px solid rgba(255, 232, 163, 0.55); white-space: nowrap; }
+.mp-shell-pop { position: fixed; z-index: 60; transform: translateX(-50%); font-weight: 800; color: #ffe28a; white-space: nowrap; pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 20, 0.6); animation: mp-shell-pop 1.5s ease-out forwards; }
+@keyframes mp-shell-pop { from { opacity: 0; transform: translate(-50%, 6px) scale(0.8); } 15% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -28px) scale(1.1); } }
+.mp-arrange { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.mp-arrange .mp-row { margin-top: 0; }
+.mp-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mp-box button { width: 50px; height: 50px; padding: 4px; display: flex; align-items: center; justify-content: center; }
+.mp-box img { max-width: 100%; max-height: 100%; }
+.mp-wares { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 8px; margin: 8px 0 4px; }
+.mp-ware { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border-radius: 12px; border: 1px solid var(--pl-line); background: rgba(255, 255, 255, 0.05); text-align: center; min-width: 0; }
+.mp-ware-img { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 66px; }
+.mp-ware-img img { max-width: 100%; max-height: 66px; }
+.mp-ware-name { font-weight: 600; font-size: 0.92em; overflow-wrap: anywhere; }
+.mp-ware-price { font-weight: 700; }
+.mp-ware .mp-row { justify-content: center; margin-top: 2px; }
+.mp-ware-edit { display: flex; flex-direction: column; gap: 5px; width: 100%; }
+.mp-ware-edit input:not([type=checkbox]), .mp-ware-edit select { width: 100%; min-width: 0; box-sizing: border-box; }
+.mp-ware-edit label:not(.mp-check) { display: flex; align-items: center; gap: 4px; }
+.mp-furn-add { display: flex; flex-direction: column; gap: 6px; }
+.mp-furn-add input[name=fprice] { width: 5em; }
+.mp-light .mp-shells { background: rgba(217, 165, 32, 0.14); border-color: var(--mp-gold); }
+.mp-light .mp-shell-pop { color: #9a6700; text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8); }
+.mp-light .mp-ware { background: rgba(255, 255, 255, 0.55); }
+@media (prefers-reduced-motion: reduce) { .mp-shell-pop { animation-duration: 0.01s; } }

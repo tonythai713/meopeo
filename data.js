@@ -41,6 +41,11 @@
 //   deleteNote(id), subscribeNotes(onChange) → notes partagées (14_notes.sql) ; une note : { id, by, title, body, private, at, updated, updatedBy }
 //   listDoodles(), doodlePngs(ids), sendDoodle(png), deleteDoodle(id), subscribeDoodles(onChange) → dessins envoyés à l'autre,
 //     pour son widget (19_doodles.sql) ; un dessin : { id, by, at } (l'image, PNG en base64, se lit à part : doodlePngs → Map id → png)
+//   listHouse(myId) → { balance, log, mine, furniture, items }, claimShellGift() → 5 | 0, buyFurniture(id) → { item, balance },
+//   moveHouseItem(id, { x, y, flip }), addFurniture(blob, { name, price, size, wall }), updateFurniture(id, patch),
+//   removeFurniture(id) → "deleted" | "retired", subscribeHouse(onChange) → coquillages, boutique et maison de Tino
+//     (32_shells_house.sql) ; une ligne d'historique : { id, by, amount, reason, item, at } ; un meuble : { id, builtin, path,
+//     name, price, size, wall, retired, by, at } ; dans la maison : { id, furniture, x, y (null : dans le carton), flip, by, at }
 //
 // Format d'une tâche dans l'app : { id, owner, date: "AAAA-MM-JJ", end: "AAAA-MM-JJ" | null, time: "HH:MM" | null,
 //   course: nom de catégorie | null, label, done, moon: "full" | "crescent" | null, private, source }
@@ -52,6 +57,9 @@ const TASK_COLS = "*";
 const NOTE_COLS = "id, author, title, body, private, created_at, updated_at, updated_by";
 const toCatch = (r) => ({ id: r.id, by: r.by, at: r.at, kind: r.kind, outfit: r.outfit ?? null, outfitName: r.outfit_name ?? null, color: r.color ?? null, junk: r.junk ?? null, until: r.until ?? null, eatenAt: r.eaten_at ?? null });
 const FISH_KINDS = ["fish", "big_fish", "golden_fish"]; // (poissons mangeables : 21_feeding.sql)
+const SHELL_COLS = "id, who, amount, reason, item, at";
+const shellOf = (r) => ({ id: r.id, by: r.who, amount: r.amount, reason: r.reason, item: r.item, at: r.at });
+const furnOf = (r) => ({ id: r.id, builtin: r.builtin, path: r.path, name: r.name, price: r.price, size: r.size, wall: !!r.wall, retired: !!r.retired, by: r.author, at: r.created_at });
 const toNote = (r) => ({ id: r.id, by: r.author, title: r.title, body: r.body, private: !!r.private, at: r.created_at, updated: r.updated_at, updatedBy: r.updated_by });
 
 // Rappel : « AAAA-MM-JJ HH:MM » en heure locale dans l'app, instant absolu (UTC) dans la base
@@ -364,6 +372,55 @@ export function createBackend() {
     },
     async deleteLetter(id) { must(await sb.from("birthday_letters").delete().eq("id", id)); },
     async markLetterRead(id) { return must(await sb.rpc("mark_letter_read", { p_id: id })); },
+    // Coquillages, boutique et maison de Tino (supabase/32_shells_house.sql) : le porte-monnaie commun (écrit seulement par la
+    // base : gains de la pêche, du repas, du bain, cadeau du jour, achats), son historique (les 60 dernières lignes, et les miennes
+    // des deux derniers jours : ce que j'ai gagné aujourd'hui), les meubles de la boutique et ceux de la maison
+    async listHouse(myId) {
+      const since = new Date(Date.now() - 2 * 86400e3).toISOString();
+      const [w, l, m, f, h] = await Promise.all([
+        sb.from("shell_wallet").select("balance").maybeSingle(),
+        sb.from("shell_log").select(SHELL_COLS).order("id", { ascending: false }).limit(60),
+        sb.from("shell_log").select(SHELL_COLS).eq("who", myId).gte("at", since).order("id", { ascending: false }),
+        sb.from("tino_furniture").select("*").order("created_at").order("price"),
+        sb.from("tino_house_items").select("*").order("bought_at"),
+      ]);
+      return {
+        balance: must(w)?.balance ?? 0,
+        log: must(l).map(shellOf),
+        mine: must(m).map(shellOf),
+        furniture: must(f).map(furnOf),
+        items: must(h).map((r) => ({ id: r.id, furniture: r.furniture, x: r.x, y: r.y, flip: !!r.flip, by: r.bought_by, at: r.bought_at })),
+      };
+    },
+    async claimShellGift() { return must(await sb.rpc("claim_shell_gift")); }, // → 5, ou 0 (déjà pris aujourd'hui)
+    async buyFurniture(id) { const r = must(await sb.rpc("buy_furniture", { p_furniture: id })); return { item: r.item, balance: r.balance }; },
+    async moveHouseItem(id, patch) { must(await sb.from("tino_house_items").update(patch).eq("id", id)); }, // { x, y, flip } (x, y null : dans le carton)
+    // Un de leurs meubles (PNG transparent déjà réduit sur l'appareil) : fichier, puis la ligne (sinon le fichier est retiré)
+    async addFurniture(blob, { name, price, size, wall }) {
+      const path = `furniture/${crypto.randomUUID()}.png`;
+      must(await sb.storage.from("tino").upload(path, blob, { contentType: "image/png", upsert: false }));
+      try { return furnOf(must(await sb.from("tino_furniture").insert({ name, price, size, wall: !!wall, path }).select("*").single())); }
+      catch (err) { await sb.storage.from("tino").remove([path]).catch(() => {}); throw err; }
+    },
+    async updateFurniture(id, patch) { must(await sb.from("tino_furniture").update(patch).eq("id", id)); }, // { name, price, size, wall, retired }
+    // Retirer un de leurs dessins : supprimé s'il n'a jamais été acheté, sinon seulement retiré de la boutique → "deleted" | "retired"
+    async removeFurniture(id) {
+      const row = must(await sb.from("tino_furniture").select("path").eq("id", id).maybeSingle());
+      const r = await sb.from("tino_furniture").delete().eq("id", id);
+      if (r.error) {
+        if (r.error.code !== "23503") throw new Error(r.error.message);
+        must(await sb.from("tino_furniture").update({ retired: true }).eq("id", id));
+        return "retired";
+      }
+      if (row?.path) await sb.storage.from("tino").remove([row.path]);
+      return "deleted";
+    },
+    subscribeHouse(onChange) {
+      const ch = sb.channel("house-" + Math.random().toString(36).slice(2));
+      for (const table of ["shell_wallet", "shell_log", "tino_furniture", "tino_house_items"]) ch.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange());
+      ch.subscribe();
+      return () => sb.removeChannel(ch);
+    },
     subscribeBath(onChange) {
       const ch = sb.channel("bath-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "*", schema: "public", table: "tino_bath" }, () => onChange())

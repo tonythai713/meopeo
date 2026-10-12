@@ -1,6 +1,7 @@
 // MeoPeo — l'interface (même mise en page que les planners Obsidian MeoMeo / PeoPeo).
 // Ne parle jamais directement à Supabase : tout passe par `db` (data.js ; data-mock.js dans test.html).
 import { mountMascots, outfitTemplate, scenePng, WIDGET_SCENES, SCENES_V, tinoHeadSvg, peoHeadSvg, meoHeadSvg, demoPose } from "./mascot.js";
+import { mountRoom, furnitureUrl, FURNITURE, TINO_Y } from "./house.js";
 import { createBigTino, DEFAULT_ANIM, videoToSprite, videoFrames, gifFrames, apngFrames, keyBackground, outfitSheet, shrinkFrames, isAnimatedImage, releaseCanvas } from "./bigtino.js";
 
 // ---------- Dates ----------
@@ -77,7 +78,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, bdays: [], bdayOk: null, letters: [], occOk: null, online: new Set() };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, bdays: [], bdayOk: null, letters: [], occOk: null, shells: null, shellsOk: null, furniture: [], house: [], online: new Set() };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -106,7 +107,7 @@ export async function start(backend) {
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
   document.addEventListener("visibilitychange", () => { if (document.hidden) presenceCh?.set(false); presenceChanged(); }); // (en arrière-plan : il n'est plus « là »)
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); loadHouse(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyTheme(); runClocks(); } }); // (minuteries endormies en arrière-plan)
   runClocks();
@@ -169,6 +170,7 @@ async function boot(user) {
   loadSeries();
   loadDecor();
   loadBirthdays();
+  loadHouse();
   resubscribe();
   ensurePush();
 }
@@ -181,6 +183,7 @@ function resubscribe() {
   unsubCatches?.(); unsubCatches = S.user ? db.subscribeCatches(() => loadCatches()) : null; // pêche (20) : canal à part
   unsubFeeding?.(); unsubFeeding = S.user ? db.subscribeFeeding(() => loadFeeding()) : null; // nourrir Tino (21) : idem
   unsubBath?.(); unsubBath = S.user ? db.subscribeBath(() => loadBath()) : null; // laver Tino (23) : idem
+  unsubHouse?.(); unsubHouse = S.user ? db.subscribeHouse(() => loadHouse()) : null; // coquillages et maison (32) : idem
   unsubGrumbles?.(); unsubGrumbles = S.user ? db.subscribeGrumbles(() => loadGrumbles()) : null; // idem (13)
   unsubNotes?.(); unsubNotes = S.user ? db.subscribeNotes(() => loadNotes()) : null; // idem (14)
   unsubDoodles?.(); unsubDoodles = S.user ? db.subscribeDoodles(() => loadDoodles()) : null; // idem (19)
@@ -258,6 +261,7 @@ function showLogin() {
   unsubCatches?.(); unsubCatches = null; S.catches = []; S.color = null; S.fishingOk = null; lastCatch = null; applyColor(); clearTimeout(fishTimer);
   unsubFeeding?.(); unsubFeeding = null; S.feeding = null; S.hungerLines = []; S.feedingOk = null; feedSeen = null; clearTimeout(tummyTimer);
   unsubBath?.(); unsubBath = null; S.bath = null; S.bathOk = null; bathSeen = null; applyDirt();
+  unsubHouse?.(); unsubHouse = null; S.shells = null; S.shellsOk = null; S.furniture = []; S.house = []; shellSeen = null; arranging = false; shopEdit = null;
   S.bdays = []; S.bdayOk = null; S.letters = []; S.occOk = null; partyPreview = null; partyCounting = null; letterUi?.el.remove(); letterUi = null; letterBrought = null; applyParty(); // (plus de fête)
   presenceCh?.stop(); presenceCh = null; S.online = new Set();
   unsubGrumbles?.(); unsubGrumbles = null; S.grumbles = []; S.grumblesOk = null;
@@ -332,7 +336,7 @@ function render() {
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
   bindParty(root);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); loadHouse(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
@@ -1980,7 +1984,7 @@ function showTab() {
   nav?.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === t ? "page" : "false"));
   for (const [id, p] of Object.entries(panes)) p.hidden = !logged || id !== t;
   if (t !== "fishing") { fishGame?.stop(); fishGame = null; } // (animations des onglets qu'on quitte : arrêtées)
-  if (t !== "tino" && showcase) { bathing?.end(); showcase.card.remove(); showcase = null; }
+  if (t !== "tino" && showcase) { bathing?.end(); showcase.card.remove(); showcase = null; room = null; arranging = false; shopEdit = null; }
   if (!logged) return;
   if (t === "calendar") { placeBigTino(); align(); } // de retour : Tino, son lit, le grand Tino et les colonnes se remettent en place
   else if (t === "notes") renderNotes(panes.notes);
@@ -2017,13 +2021,18 @@ function setupFolds(pane, tab) {
 
 // ---------- Onglet Tino : Tino en grand (avec ses habits), puis tout ce qui le personnalise ----------
 function renderTinoPane(pane) {
-  pane.innerHTML = `<div class="pl-editor-card mp-pane-card mp-showcase"><div class="mp-show-stage"></div><div class="pl-legend mp-show-cap"></div><div class="mp-tummy"></div><div class="mp-bath"></div></div>`
+  arranging = false; room = null;
+  pane.innerHTML = `<div class="pl-editor-card mp-pane-card mp-showcase"><div class="mp-show-stage"></div><div class="pl-legend mp-show-cap"></div><div class="mp-shellbar"></div><div class="mp-tummy"></div><div class="mp-bath"></div></div>`
+    + (S.shellsOk === false ? "" : fold("shop", "🛍 Shop", `<div class="mp-shop"></div>`))
     + fold("tino", "🦭 Tino", `<div class="mp-tinoset"></div>`)
     + fold("hunger", "🍽 Hunger lines", `<div class="mp-hunger"></div>`)
     + fold("grumbles", "💢 Grumpy lines", `<div class="mp-grumbles"></div>`)
     + fold("wardrobe", "👒 Tino's wardrobe", `<div class="mp-wardrobe"></div>`)
     + fold("decor", "🏖 Decor", `<div class="mp-decor"></div>`);
   fillShowcase(pane.querySelector(".mp-showcase"));
+  fillShellBar(pane.querySelector(".mp-shellbar"));
+  const shop = pane.querySelector(".mp-shop");
+  if (shop) fillShop(shop);
   const tummy = pane.querySelector(".mp-tummy");
   tummy._eater = () => showcase?.m; // (c'est le grand Tino qui mange)
   fillTummy(tummy);
@@ -2041,9 +2050,16 @@ function renderTinoPane(pane) {
 // s'arrête tout seul quand il quitte la page).
 let showcase = null;
 function fillShowcase(card) {
-  const stage = card.querySelector(".mp-show-stage"), box = document.createElement("div");
-  stage.append(box);
-  const m = demoPose(box, "tino", "idle", matchMedia("(min-width: 700px)").matches ? 180 : 150);
+  const stage = card.querySelector(".mp-show-stage"), box = document.createElement("div"), house = S.shellsOk === true, wide = matchMedia("(min-width: 700px)").matches;
+  if (house) { // (sa maison, 32 : la pièce derrière lui ; ses pieds sur le plancher, devant les meubles plus hauts que lui)
+    const w = document.createElement("div");
+    w.className = "hs-tino";
+    w.style.zIndex = 2 + Math.round(TINO_Y * 1000);
+    w.append(box);
+    stage.append(w);
+    room = mountRoom(stage, { onMove: moveItem, onSelect: () => document.querySelectorAll(".mp-shellbar").forEach(fillShellBar) });
+  } else stage.append(box);
+  const m = demoPose(box, "tino", "idle", house ? (wide ? 170 : 128) : wide ? 180 : 150);
   m.think = () => {
     const b = bellyInfo(); // (de temps en temps il dit sa faim : plus souvent quand il a très faim)
     if (b && !m.bubble && Math.random() < ({ hungry: 0.35, peckish: 0.15, full: 0.1 }[b.level] ?? 0)) return { type: "belly", dur: 4.2 };
@@ -2054,6 +2070,7 @@ function fillShowcase(card) {
   m.setPearls(tapiocaNow()); // (le tapioca collé sur lui : on le voit en le lavant)
   showcase = { m, card };
   dressShowcase();
+  if (house) paintRoom();
 }
 async function dressShowcase(look) {
   const sc = showcase;
@@ -2062,6 +2079,272 @@ async function dressShowcase(look) {
   const items = ["head", "body"].map(wornOutfit).filter(Boolean), c = colorNow();
   sc.card.querySelector(".mp-show-cap").textContent = (items.length ? `Wearing: ${items.map((o) => o.name + (S.fishingOk === true ? ` (until ${untilText(caughtUntil(o))})` : "")).join(" · ")}` : "No outfit right now")
     + (c ? ` · 🎨 colour for ${timeLeft(c.until)}` : "");
+}
+
+// ---------- Coquillages 🐚, maison de Tino et boutique (supabase/32_shells_house.sql) ----------
+// Un seul porte-monnaie, commun aux deux ; la base compte tout (gains de la pêche, du repas, du bain, cadeau du jour) et fixe
+// les prix. La maison : la pièce derrière le grand Tino (house.js), avec les meubles achetés (communs) ; « ✏️ Arrange » pour
+// les déplacer, les retourner, les ranger dans le carton. Sans 32 : rien de tout ça, l'onglet Tino est comme avant.
+let unsubHouse = null, shellSeen = null, room = null, arranging = false, buying = false, shopEdit = null;
+const furnUrls = new Map(); // chemin d'un de leurs dessins → adresse (objet)
+const SHELL_WHY = { start: "🐚 to start", fish: "🎣 fishing", feed: "🍳 feeding Tino", bath: "🧽 Tino's bath", gift: "🎁 daily gift", buy: "🛍" };
+const SHELL_CAP = { fish: 20, feed: 10, bath: 6 }; // ⚠️ mêmes nombres que 32 (par jour et par personne)
+const SIZES = [[0.12, "Small"], [0.2, "Medium"], [0.3, "Large"], [0.45, "Huge"]];
+const sizeName = (v) => SIZES.reduce((a, b) => (Math.abs(b[0] - v) < Math.abs(a[0] - v) ? b : a))[1];
+const furnOfId = (id) => S.furniture.find((f) => f.id === id);
+const sinceMidnight = () => { const d = new Date(Date.now()); d.setHours(0, 0, 0, 0); return +d; };
+// Ce que j'ai gagné aujourd'hui pour une raison (jour de l'appareil ; la base compte avec le fuseau de chacun)
+const myToday = (reason) => (S.shells?.mine ?? []).filter((l) => l.reason === reason && Date.parse(l.at) >= sinceMidnight()).reduce((n, l) => n + l.amount, 0);
+const setHouse = (r) => { S.shells = { balance: r.balance, log: r.log, mine: r.mine }; S.furniture = r.furniture; S.house = r.items; };
+async function loadHouse() {
+  if (!S.user) return;
+  const was = S.shellsOk;
+  let fresh = false;
+  try { const r = await db.listHouse(S.user.id); setHouse(r); S.shellsOk = true; fresh = true; store.set("house." + S.user.id, r); }
+  catch (err) {
+    if (/does not exist|schema cache|shell_wallet|shell_log|tino_furniture|tino_house/i.test(err.message)) { S.shellsOk = false; S.shells = null; S.furniture = []; S.house = []; }
+    else { const r = store.get("house." + S.user.id, null); if (r) { setHouse(r); S.shellsOk = true; } } // hors ligne
+  }
+  const log = S.shells?.log ?? [], news = shellSeen === null ? [] : log.filter((x) => x.id > shellSeen).reverse(); // (jamais au démarrage)
+  if (S.shellsOk === true) shellSeen = Math.max(shellSeen ?? 0, log[0]?.id ?? 0);
+  if (fresh) pruneFurniture();
+  houseChanged(was !== S.shellsOk);
+  news.forEach(shellNews); // (après : sinon le compteur, redessiné, perdrait son « +1 🐚 »)
+}
+// Ce qui vient d'arriver : mes gains (« +1 🐚 » qui s'envole du compteur), un achat de l'autre (un message)
+function shellNews(l) {
+  if (l.by === S.user.id && l.amount > 0 && SHELL_CAP[l.reason]) shellPop(l.amount, SHELL_WHY[l.reason]);
+  else if (l.by && l.by !== S.user.id && S.partner && l.reason === "buy") {
+    const f = furnOfId(S.house.find((i) => i.id === l.item)?.furniture);
+    toast(`🏠 ${S.partner.mark} ${S.partner.label} bought ${f ? `“${f.name}”` : "something"} for Tino's house`);
+  }
+}
+function shellPop(n, why) {
+  const at = [...document.querySelectorAll(".mp-shells")].find((e) => e.offsetParent);
+  if (!at) { toast(`+${n} 🐚 — ${why}`); return; }
+  const p = document.createElement("span"), r = at.getBoundingClientRect(); // (par-dessus la page : le compteur peut être redessiné)
+  p.className = "mp-shell-pop";
+  p.textContent = `+${n} 🐚`;
+  p.style.left = `${r.left + r.width / 2}px`; p.style.top = `${r.top - 6}px`;
+  document.body.append(p);
+  setTimeout(() => p.remove(), 1600);
+}
+// Tout ce qui montre les coquillages, la maison ou la boutique suit ; l'onglet Tino est refait si la maison apparaît / disparaît
+function houseChanged(appeared = false) {
+  if (appeared && currentTab() === "tino" && showcase && !bathing && !arranging) { renderTinoPane(panes.tino); return; }
+  document.querySelectorAll(".mp-shellbar").forEach(fillShellBar);
+  document.querySelectorAll(".mp-fish-shells").forEach(fillFishShells);
+  paintRoom();
+  const shop = document.querySelector(".mp-shop");
+  if (shop && !shopBusy(shop)) fillShop(shop);
+}
+// Leurs dessins de meubles : gardés sur l'appareil (cache mpmedia, dossier furniture/), ceux qui ne sont plus là retirés
+async function furnUrl(f) {
+  if (!furnUrls.has(f.path)) furnUrls.set(f.path, URL.createObjectURL(await mediaBlob(f.path)));
+  return furnUrls.get(f.path);
+}
+const furnSrc = (f) => (f.builtin ? furnitureUrl(f.builtin) : furnUrls.get(f.path) ?? "");
+async function pruneFurniture() {
+  const keep = new Set(S.furniture.filter((f) => f.path).map((f) => f.path));
+  for (const [path, url] of furnUrls) if (!keep.has(path)) { URL.revokeObjectURL(url); furnUrls.delete(path); }
+  if (!("caches" in window)) return;
+  const cache = await caches.open(MEDIA).catch(() => null);
+  for (const r of (await cache?.keys()) ?? []) { const m = r.url.match(/__media\/(furniture\/.+)$/); if (m && !keep.has(m[1])) await cache.delete(r); }
+}
+// La pièce : les meubles placés (pas ceux du carton) ; un meuble dessiné ici que cette version ne connaît pas : pas montré
+async function paintRoom() {
+  if (!room?.el.isConnected) return;
+  const list = [];
+  for (const it of S.house) {
+    const f = furnOfId(it.furniture);
+    if (it.x == null || !f) continue;
+    const url = f.builtin ? furnitureUrl(f.builtin) : await furnUrl(f).catch(() => null);
+    if (url) list.push({ id: it.id, x: it.x, y: it.y, flip: it.flip, url, size: f.size, flat: !!FURNITURE[f.builtin]?.flat });
+  }
+  room?.set(list);
+}
+
+// La barre sous la pièce : les coquillages, le cadeau du jour, « Arrange », « Shop » — ou, en rangeant : retourner, ranger,
+// le carton, « Done »
+function fillShellBar(bar) {
+  if (S.shellsOk !== true || !S.shells) { bar.innerHTML = ""; return; }
+  const gift = myToday("gift") > 0;
+  if (!arranging) {
+    bar.innerHTML = `<span class="mp-shells" title="Shells — shared by both of you">🐚 <b>${S.shells.balance}</b></span>
+      <button type="button" data-gift ${gift ? "disabled" : ""} title="${gift ? "Today’s gift is opened — come back tomorrow" : "Daily gift: +5 shells"}">${gift ? "🎁 Tomorrow" : "🎁 Gift"}</button>
+      <button type="button" data-arrange>✏️ Arrange</button>
+      <button type="button" data-shop>🛍 Shop</button>`;
+    bar.querySelector("[data-gift]").addEventListener("click", (e) => claimGift(e.currentTarget));
+    bar.querySelector("[data-arrange]").addEventListener("click", () => setArranging(true));
+    bar.querySelector("[data-shop]").addEventListener("click", openShop);
+    return;
+  }
+  const sel = room?.selected(), boxed = S.house.filter((i) => i.x == null && furnOfId(i.furniture));
+  bar.innerHTML = `<div class="mp-arrange">
+    <div class="pl-legend">✏️ Drag the furniture where you like. Tap one to flip it or put it in the box.</div>
+    <span class="mp-row"><button type="button" data-flip ${sel ? "" : "disabled"}>↔ Flip</button><button type="button" data-pack ${sel ? "" : "disabled"}>📦 Put in the box</button><button type="button" class="mp-cta" data-done>✓ Done</button></span>
+    <div class="mp-box"><span class="pl-legend">📦 In the box:</span>${boxed.length ? boxed.map((i) => `<button type="button" data-unpack="${i.id}" title="${esc(furnOfId(i.furniture).name)}"><img alt="" src="${esc(furnSrc(furnOfId(i.furniture)))}" data-path="${esc(furnOfId(i.furniture).path ?? "")}"></button>`).join("") : `<span class="pl-legend">empty</span>`}</div>
+  </div>`;
+  bar.querySelector("[data-flip]").addEventListener("click", () => { const it = S.house.find((i) => i.id === room?.selected()); if (it) moveItem(it.id, { flip: !it.flip }); });
+  bar.querySelector("[data-pack]").addEventListener("click", () => { const id = room?.selected(); if (id) moveItem(id, { x: null, y: null }); });
+  bar.querySelector("[data-done]").addEventListener("click", () => setArranging(false));
+  bar.querySelectorAll("[data-unpack]").forEach((b) => b.addEventListener("click", () => {
+    const it = S.house.find((i) => i.id === b.dataset.unpack), f = it && furnOfId(it.furniture);
+    if (f) moveItem(it.id, { x: 0.5, y: f.wall ? 0.4 : 0.85 });
+  }));
+  bar.querySelectorAll("img[data-path]").forEach((im) => { const f = S.furniture.find((x) => x.path && x.path === im.dataset.path); if (f) furnUrl(f).then((u) => { im.src = u; }).catch(() => {}); });
+}
+function setArranging(on) {
+  if (on && (bathing || !room)) return;
+  arranging = !!on;
+  room?.arrange(arranging);
+  document.querySelectorAll(".mp-shellbar").forEach(fillShellBar);
+}
+// Déplacer / retourner / ranger un meuble : tout de suite à l'écran, puis enregistré (en cas d'échec : on relit tout)
+async function moveItem(id, patch) {
+  const it = S.house.find((i) => i.id === id);
+  if (!it) return;
+  Object.assign(it, patch);
+  paintRoom();
+  document.querySelectorAll(".mp-shellbar").forEach(fillShellBar);
+  if (!(await guard(() => db.moveHouseItem(id, patch), "Couldn't move it"))) loadHouse();
+}
+async function claimGift(btn) {
+  btn.disabled = true;
+  let n = null;
+  try { n = await db.claimShellGift(); }
+  catch (err) { toast(`⚠️ Couldn't open the gift (${err.message})`); btn.disabled = false; return; }
+  if (n > 0) {
+    shellPop(n, SHELL_WHY.gift);
+    toast(`🎁 +${n} shells! Come back tomorrow for another gift.`);
+    showcase?.m.love(); showcase?.m.now([{ type: "wave", dur: 2 }]);
+  } else toast("🎁 You already opened today's gift — come back tomorrow!");
+  loadHouse();
+}
+function openShop() {
+  const f = panes.tino.querySelector('[data-fold="shop"]');
+  if (f && !f.classList.contains("mp-open")) f.querySelector(".mp-fold-btn").click();
+  else f?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+// La boutique (onglet Tino → 🛍 Shop) : les meubles en vente, acheter, régler le prix / le nom / la taille (les deux peuvent),
+// ajouter un de leurs dessins, retirer un de leurs dessins ; l'historique des coquillages
+function shopBusy(box) { return !!shopEdit || buying || !!box.querySelector(".mp-busy") || !!box.querySelector("[name=fname]")?.value || !!box.querySelector("[name=ffile]")?.files?.length; }
+const sizeOptions = (v) => SIZES.map(([s, n]) => `<option value="${s}"${sizeName(v) === n ? " selected" : ""}>${n}</option>`).join("");
+function ware(f) {
+  const bal = S.shells.balance, n = S.house.filter((i) => i.furniture === f.id).length, img = `<span class="mp-ware-img"><img alt="" src="${esc(furnSrc(f))}" data-path="${esc(f.path ?? "")}"></span>`;
+  if (shopEdit === f.id) return `<div class="mp-ware mp-ware-on" data-id="${f.id}">${img}
+    <form class="mp-ware-edit"><input name="ename" maxlength="40" value="${esc(f.name)}" aria-label="Name">
+      <label>🐚 <input name="eprice" type="number" min="1" max="999" value="${f.price}" aria-label="Price"></label>
+      <label>📏 <select name="esize" aria-label="Size">${sizeOptions(f.size)}</select></label>
+      <label class="mp-check"><input type="checkbox" name="ewall"${f.wall ? " checked" : ""}> On the wall</label>
+      <span class="mp-row"><button type="submit" class="mp-cta">✓</button><button type="button" data-ecancel>✕</button>${f.builtin ? "" : `<button type="button" data-eremove class="mp-danger">🗑</button>`}</span></form></div>`;
+  return `<div class="mp-ware" data-id="${f.id}">${img}
+    <span class="mp-ware-name">${esc(f.name)}${f.by ? ` <span class="pl-legend">${whoMark(f.by)}</span>` : ""}</span>
+    <span class="mp-ware-price">🐚 ${f.price}${n ? ` <span class="pl-legend">· 🏠 ×${n}</span>` : ""}</span>
+    <span class="mp-row"><button type="button" data-buy ${bal < f.price ? "disabled" : ""}>${bal < f.price ? `${f.price - bal} 🐚 to go` : "Buy"}</button><button type="button" data-fedit title="Name, price, size">✏️</button></span></div>`;
+}
+function fillShop(box) {
+  if (S.shellsOk === false) { box.innerHTML = `<div class="pl-legend">The shop isn't open yet — Tony needs to run <code>supabase/32_shells_house.sql</code>.</div>`; return; }
+  if (S.shellsOk !== true || !S.shells) { box.innerHTML = ""; return; }
+  const P = S.partner, wares = S.furniture.filter((f) => !f.retired && (f.builtin ? FURNITURE[f.builtin] : true)).sort((a, b) => a.price - b.price || a.name.localeCompare(b.name));
+  box.innerHTML = `<div class="pl-legend">🐚 <b>${S.shells.balance}</b> shells${P ? `, shared with ${esc(P.mark)} ${esc(P.label)}` : ""}. Earn more: 🎣 +1 a catch (a 🐚 shell: +3) · 🍳 +2 for feeding Tino · 🧽 +3 for a bath (when he needs one) · 🎁 +5 daily gift. Today you got 🎣 ${myToday("fish")}/${SHELL_CAP.fish} · 🍳 ${myToday("feed")}/${SHELL_CAP.feed} · 🧽 ${myToday("bath")}/${SHELL_CAP.bath}.</div>
+    <div class="mp-wares">${wares.map(ware).join("")}</div>
+    <div class="pl-sub">🎨 Your own furniture</div>
+    <form class="mp-furn-add">
+      <div class="pl-legend">Draw a piece of furniture on its own transparent layer and export only that layer as PNG (any shape). Then choose its name and price — it's sold in the shop like the others.</div>
+      <input type="file" name="ffile" accept="image/png,image/webp,image/*" aria-label="Drawing">
+      <input name="fname" maxlength="40" placeholder="Name (e.g. Comfy armchair)" aria-label="Name">
+      <span class="mp-row"><label>🐚 Price <input name="fprice" type="number" min="1" max="999" value="10"></label>
+        <label>📏 Size <select name="fsize">${sizeOptions(0.2)}</select></label>
+        <label class="mp-check"><input type="checkbox" name="fwall"> Hangs on the wall</label></span>
+      <button type="submit" class="mp-cta">＋ Add to the shop</button>
+    </form>
+    <div class="pl-sub">🐚 Latest</div>
+    <div class="mp-catches">${S.shells.log.slice(0, 15).map((l) => `<div class="mp-catch">${SHELL_WHY[l.reason] ?? "🐚"} <b>${l.amount > 0 ? "+" : "−"}${Math.abs(l.amount)}</b> ${l.by ? whoMark(l.by) : ""}${l.reason === "buy" ? ` ${esc(furnOfId(S.house.find((i) => i.id === l.item)?.furniture)?.name ?? "")}` : ""} <span class="pl-legend">· ${tinoWhen(l.at)}</span></div>`).join("") || `<div class="pl-empty">Nothing yet.</div>`}</div>`;
+  box.querySelectorAll("img[data-path]").forEach((im) => { const f = S.furniture.find((x) => x.path && x.path === im.dataset.path); if (f) furnUrl(f).then((u) => { im.src = u; }).catch(() => {}); });
+  box.querySelectorAll(".mp-ware").forEach((card) => {
+    const f = furnOfId(card.dataset.id);
+    card.querySelector("[data-buy]")?.addEventListener("click", () => buy(f, box));
+    card.querySelector("[data-fedit]")?.addEventListener("click", () => { shopEdit = f.id; fillShop(box); box.querySelector(".mp-ware-on [name=ename]")?.focus(); });
+    card.querySelector("[data-ecancel]")?.addEventListener("click", () => { shopEdit = null; fillShop(box); });
+    const rm = card.querySelector("[data-eremove]");
+    rm?.addEventListener("click", async () => {
+      if (rm.dataset.sure !== "1") { rm.dataset.sure = "1"; rm.textContent = "Sure? 🗑"; return; }
+      rm.disabled = true;
+      let r = null;
+      if (await guard(async () => { r = await db.removeFurniture(f.id); }, "Couldn't remove it")) toast(r === "retired" ? `🛍 “${f.name}” isn't sold anymore (the ones already bought stay in the house)` : `🗑 “${f.name}” removed from the shop`);
+      shopEdit = null; loadHouse();
+    });
+    card.querySelector(".mp-ware-edit")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fm = e.currentTarget, name = fm.ename.value.trim(), price = Math.round(Number(fm.eprice.value));
+      if (!name || !(price >= 1 && price <= 999)) { toast("Give it a name and a price from 1 to 999 🐚"); return; }
+      fm.querySelector("[type=submit]").disabled = true;
+      if (await guard(() => db.updateFurniture(f.id, { name, price, size: Number(fm.esize.value), wall: fm.ewall.checked }), "Couldn't save it")) toast(`🛍 “${name}” — 🐚 ${price}`);
+      shopEdit = null; loadHouse();
+    });
+  });
+  box.querySelector(".mp-furn-add").addEventListener("submit", (e) => { e.preventDefault(); addFurniture(e.currentTarget); });
+}
+async function buy(f, box) {
+  if (!f || buying) return;
+  if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
+  buying = true;
+  box.querySelectorAll("[data-buy]").forEach((b) => { b.disabled = true; });
+  try {
+    await db.buyFurniture(f.id);
+    toast(`🏠 “${f.name}” is in Tino's house! Tap ✏️ Arrange to move it.`);
+    showcase?.m.love();
+    showcase?.card.scrollIntoView({ block: "start", behavior: "smooth" });
+  } catch (err) {
+    toast(/not enough shells/i.test(err.message) ? "🐚 Not enough shells yet — go fishing, feed or wash Tino!" : /not for sale/i.test(err.message) ? "🛍 This one isn't for sale anymore" : `⚠️ Couldn't buy it (${err.message})`);
+  }
+  buying = false;
+  loadHouse();
+}
+// Un de leurs dessins : avec de la transparence (sinon un rectangle blanc), réduit à 512 px au plus (sans agrandir), en PNG
+async function prepareFurniture(file) {
+  if (!/^image\//.test(file.type)) throw new Error("pick a PNG drawing");
+  const img = new Image(), url = URL.createObjectURL(file);
+  try { await new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; img.src = url; }); } // (onload : decode() ne finit jamais dans une page cachée)
+  catch { throw new Error("this image can't be read — export it as PNG"); } finally { URL.revokeObjectURL(url); }
+  const k = Math.min(1, 512 / Math.max(img.naturalWidth, img.naturalHeight)), w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  g.drawImage(img, 0, 0, w, h);
+  const a = g.getImageData(0, 0, w, h).data;
+  let clear = 0, n = 0;
+  for (let i = 3; i < a.length; i += 4 * 7) { n++; if (a[i] < 200) clear++; }
+  if (clear < n * 0.2) { c.width = 0; throw new Error("no transparent background — export only your drawing layer as PNG (hide the background), and pick it from Files"); }
+  const blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
+  c.width = 0;
+  if (!blob || blob.type !== "image/png") throw new Error("this browser couldn't save the drawing");
+  return blob;
+}
+async function addFurniture(form) {
+  const file = form.ffile.files[0], name = form.fname.value.trim() || (file ? outfitNameOf(file.name) : ""), price = Math.round(Number(form.fprice.value));
+  if (!file) { toast("🎨 Pick your drawing first (a PNG with a transparent background)"); return; }
+  if (!(price >= 1 && price <= 999)) { toast("🐚 The price goes from 1 to 999"); return; }
+  if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
+  const btn = form.querySelector("[type=submit]");
+  btn.disabled = true; btn.classList.add("mp-busy"); btn.textContent = "Checking the drawing…";
+  try {
+    const blob = await prepareFurniture(file);
+    btn.textContent = "Saving…";
+    await db.addFurniture(blob, { name: name.slice(0, 40), price, size: Number(form.fsize.value), wall: form.fwall.checked });
+    toast(`🛍 “${name.slice(0, 40)}” is in the shop — 🐚 ${price}`);
+    form.reset();
+  } catch (err) {
+    toast(/32_shells|tino_furniture|schema cache|does not exist/i.test(err.message) ? "⚠️ Tony needs to run supabase/32_shells_house.sql" : `⚠️ Couldn't add it: ${err.message}`);
+  }
+  btn.disabled = false; btn.classList.remove("mp-busy"); btn.textContent = "＋ Add to the shop";
+  loadHouse();
+}
+// Onglet Fishing : les coquillages, et ce que la pêche m'a rapporté aujourd'hui
+function fillFishShells(el) {
+  el.innerHTML = S.shellsOk === true && S.shells ? `<span class="mp-shells">🐚 <b>${S.shells.balance}</b></span> shells — +1 a catch (a 🐚 shell: +3), today ${myToday("fish")}/${SHELL_CAP.fish}. Spend them in the Tino tab → 🛍 Shop.` : "";
 }
 
 // ---------- Onglet 🎣 Fishing : la pêche (supabase/20_fishing.sql) ----------
@@ -2157,13 +2440,14 @@ function fillFishInfo(pane) {
   if (!info || !list) return;
   const c = colorNow(), pool = S.outfits.filter((o) => !unlocked(o)).length, caught = S.outfits.filter((o) => o.caughtAt && unlocked(o)).length;
   const limited = S.outfits.filter((o) => !unlocked(o) && (o.rarity ?? 1) > 1).length;
-  info.innerHTML = `<h4>🎨 Tino's colour</h4>
+  info.innerHTML = `<div class="mp-fish-line mp-fish-shells"></div><h4>🎨 Tino's colour</h4>
     <div class="mp-fish-line">${c ? `<span class="mp-swatch" style="background:${furOf(c.color).fill}"></span> Caught by ${whoMark(c.by)} — ${timeLeft(c.until)} left (until ${hourOf(new Date(c.until))}). No other colour until then.` : "White, as usual — you might catch a colour! It lasts 30 minutes."}</div>
     <h4>👒 Outfits</h4>
     <div class="mp-fish-line">🎣 ${pool} in the pool · 👒 ${caught} caught — wear them in the Tino tab → Tino's wardrobe</div>
     <h4>🍽 Tino's tummy</h4><div class="mp-tummy"></div>
     <h4>🌊 In the water</h4>
     <div class="mp-fish-line">${S.feedingOk === true ? "🐟 Fish about 1 cast in 2 (🐠 big ones, now and then ✨🐟 a golden one) — food for Tino" : "🐟 Now and then a fish"} · 👒 an outfit from the pool (${pool}${limited ? ` — ✨ ${limited} limited edition${limited > 1 ? "s" : ""}` : ""}) · 🎨 a colour for Tino · 🦀🥾 crabs, boots and other junk</div>`;
+  fillFishShells(info.querySelector(".mp-fish-shells"));
   const tummy = info.querySelector(".mp-tummy");
   tummy._eater = () => fishGame?.m; // (le Tino de la scène mange)
   fillTummy(tummy);
@@ -2284,7 +2568,7 @@ function fishScene(pane) {
     if (c.kind === "outfit") { const o = S.outfits.find((x) => x.id === c.outfit); if (o) { o.caughtAt = c.at; o.caughtBy = c.by; } outfitChangedHere = true; }
     if (c.kind === "color") outfitChangedHere = true; // (images du widget refaites tout de suite)
     fishingChanged(false);
-    loadOutfits(); loadCatches();
+    loadOutfits(); loadCatches(); loadHouse(); // (+1 🐚, voir 32)
     const o = c.kind === "outfit" ? S.outfits.find((x) => x.id === c.outfit) : null, limited = (o?.rarity ?? 1) > 1 ? o.rarity : 0; // (27 : édition limitée)
     const NS = "http://www.w3.org/2000/svg";
     const picture = o && (o.anim ? outfitDataUrl(o) : outfitUrl(o)); // (tenue animée : sa première image, pas la planche)
@@ -2438,6 +2722,7 @@ async function feedTino(kind, box) {
   }
   feedingChanged();
   loadFeeding();
+  if (r) loadHouse(); // (+2 🐚, voir 32)
 }
 // Ce que Tino dit selon sa faim : nos phrases par niveau (liste commune), sinon ses phrases par défaut
 function fillHungerLines(box) {
@@ -2525,6 +2810,7 @@ function startBath(box) {
   const sc = showcase;
   if (!sc?.card.isConnected || bathing) return;
   if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
+  if (arranging) setArranging(false); // (on range la maison ou on lave Tino, pas les deux)
   const stage = sc.card.querySelector(".mp-show-stage"), dirt0 = dirtOpacity(dirtNow()), pearls0 = tapiocaNow();
   let n = 0, done = false;
   sc.card.classList.add("mp-bathing");
@@ -2597,6 +2883,7 @@ function startBath(box) {
       sc.m.love(); sc.m.now([{ type: "wave", dur: 2 }]);
       toast(`🛁 Tino is squeaky clean! ✨${w.washedColour ? " His colour washed off too." : ""}`);
       loadCatches();
+      loadHouse(); // (+3 🐚 s'il en avait besoin)
     }
     fillBath(box);
   }
