@@ -10,6 +10,10 @@ const STYLE = `
 .ms-fur { fill: var(--ms-fur, #ffffff); stroke: var(--ms-fur-line, #c9d0e2); }
 .ms-dirt { opacity: var(--ms-dirt, 0); }
 .ms-peo-shut { display: none; } .ms-sleep .ms-peo-shut { display: inline; } .ms-sleep .ms-peo-eyes { display: none; } /* PeoPeo dort les yeux fermés */ /* saleté (laver Tino) : variable posée par l'app, 0 = propre */ /* couleur pêchée : variables posées par l'app sur la racine (html) ; jamais de chevrons ici : ce style va aussi dans les images SVG du widget */
+.ms-spr { position: absolute; inset: 0; display: none; pointer-events: none; }
+.ms-spr i { position: absolute; left: 0; top: 0; background-repeat: no-repeat; }
+.ms-spr-hat { position: absolute; inset: 0; width: 100%; height: 100%; display: none; overflow: visible; pointer-events: none; }
+.ms-sprited .ms-spr, .ms-sprited .ms-spr-hat { display: block; } .ms-sprited .ms-in > svg:not(.ms-spr-hat) { visibility: hidden; }
 .ms-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .ms { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; will-change: transform;
   -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; }
@@ -142,6 +146,17 @@ const STYLE = `
 .ms-noodle { overflow: visible; }
 .ms-bowl svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 1px 2px rgba(0, 0, 20, 0.45)); }
 .ms-bowl .ms-chop { display: none; }
+.ms-rig .ms-arm-l { transform-origin: 41.5px 59.5px; } .ms-rig .ms-arm-r { transform-origin: 57.5px 59.5px; } /* PeoPeo articulé : épaules, coudes, hanches, genoux, chevilles, queue, mèche */
+.ms-elbow-l { transform-origin: 40.2px 66.5px; } .ms-elbow-r { transform-origin: 58.8px 66.5px; }
+.ms-leg-l { transform-origin: 46px 72.5px; } .ms-leg-r { transform-origin: 53.5px 72.5px; } .ms-knee-l { transform-origin: 44.5px 82px; } .ms-knee-r { transform-origin: 55.5px 82px; }
+.ms-rig .ms-foot-l { transform-origin: 43.5px 91px; } .ms-rig .ms-foot-r { transform-origin: 56.5px 91px; } .ms-tail { transform-origin: 58.5px 66px; } .ms-ahoge { transform-origin: 46.5px 13px; }
+.ms-x, .ms-fore-fist { display: none; }
+.ms-face-blink .ms-x-blink, .ms-face-smile .ms-x-smile, .ms-face-laugh .ms-x-laugh, .ms-face-wide .ms-x-wide, .ms-face-wow .ms-x-wow { display: inline; }
+.ms-face-blink .ms-peo-eyes, .ms-face-smile .ms-peo-eyes, .ms-face-laugh .ms-peo-eyes, .ms-face-wide .ms-peo-eyes, .ms-face-wow .ms-peo-eyes { display: none; }
+.ms-sleep .ms-x { display: none; }
+.ms-tool-staff .ms-fore-fist, .ms-tool-ladle .ms-fore-fist, .ms-tool-fan .ms-fore-fist { display: inline; } .ms-tool-staff .ms-arm-l .ms-fore-open, .ms-tool-ladle .ms-arm-l .ms-fore-open, .ms-tool-fan .ms-arm-l .ms-fore-open { display: none; }
+.ms-tool-staff .ms-arm-r .ms-fore-fist, .ms-tool-ladle .ms-arm-r .ms-fore-fist, .ms-tool-fan .ms-arm-r .ms-fore-fist { display: none; }
+.ms-tucked .ms-leg-l, .ms-tucked .ms-leg-r, .ms-tucked .ms-tail { visibility: hidden; }
 `;
 
 // Petite étoile à 5 branches (le coussin de Tino en est couvert)
@@ -306,7 +321,7 @@ const SANTA = `<path d="M-8.5 -1.5C-8 -10 -3 -17.5 5 -17.5C9.5 -17.5 12.5 -14 12
 const WITCH = `<ellipse cx="0" cy="-1" rx="12.5" ry="3.4" fill="#3b1f6b" stroke="#2b1650" stroke-width="0.7"/>
   <path d="M-6.8 -2C-5.5 -9 -3 -15 1 -19C3 -21 6.5 -21.5 9 -19.5C6 -19 4.2 -17 3.6 -14C3 -10 5 -6 6.8 -2Z" fill="#5f3dc4" stroke="#2b1650" stroke-width="0.7" stroke-linejoin="round"/>
   <path d="M-6.6 -2.4C-6.2 -4 -5.8 -5.2 -5.3 -6.4L6 -6.4C6.2 -5 6.5 -3.8 6.8 -2.4Z" fill="#ff922b"/><rect x="-1.7" y="-6.6" width="3.4" height="4.4" rx="0.6" fill="none" stroke="#ffd43b" stroke-width="1"/>`;
-function peoSvg(gid = "ms-flush-peo") {
+function peoSvg(gid = "ms-flush-peo", heads = false) {
   return `<svg class="ms-peo" viewBox="0 0 100 100" aria-hidden="true">
   <g class="ms-foot-l">${peoImg("shoe-l", 36.6, 90.98, 10.83, 8)}</g>
   <g class="ms-foot-r">${peoImg("shoe-r", 52.82, 91.07, 10.33, 7.67)}</g>
@@ -316,13 +331,61 @@ function peoSvg(gid = "ms-flush-peo") {
   <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(49 71) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(49 70) scale(0.55) translate(-51 -76)">${BEER}</g><g class="ms-it ms-it-matcha" transform="translate(49 70) scale(0.55) translate(-50 -76)">${MATCHA}</g></g>
   <g class="ms-arm-l">${staffSvg(39.2, 66.6, 35.1, 90.3, 34.9, 91.8)}<g class="ms-ladle" display="none"><path d="M37.5 71L35.0 97" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M39.1 71.2L37.7 97" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M38 73L35 80" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="32" cy="85.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M32 85.5L27 82M32 85.5L29 91M32 85.5L36 80M32 85.5L38 88" stroke="#e0956a" stroke-width="0.6"/><circle cx="32" cy="85.5" r="2.2" fill="#e8604c"/></g>${peoImg("arm-l", 34.63, 57.99, 7.33, 16.17)}<circle class="ms-hand" cx="38" cy="73.5" r="0.6" fill="none"/></g>
   <g class="ms-arm-r">${peoImg("arm-r", 56.33, 58.14, 7.33, 16.17)}</g>
-  ${peoHead(gid)}
+  ${heads ? peoRigHead(gid) : peoHead(gid)}
 </svg>`;
 }
 // La tête de PeoPeo seule (dans la marmite), cadrée sur la tête ; gid unique par copie
 export function peoHeadSvg(gid = "ms-flush-peo-head") {
-  return `<svg class="ms-peo" viewBox="24 5.5 50 50" aria-hidden="true">${peoHead(gid)}</svg>`;
+  return `<svg class="ms-peo ms-rig" viewBox="24 5.5 50 50" aria-hidden="true">${KINDS.peo.rig ? peoRigHead(gid) : peoHead(gid)}</svg>`;
 }
+// PeoPeo articulé (2026-10-12, essai : des mouvements plus naturels) : planches faites par
+// une IA d'après son dessin, découpées et assemblées à part
+// (art/peo/rig/*.webp). Bras en deux (épaule → coude ; main ouverte, ou poing quand il tient le bâton, la louche, l'éventail), jambes
+// en deux (hanche → genou → pied), queue d'orque et mèche dressée qui suivent avec du retard, expressions (cligner, sourire, rire,
+// surpris). Même repère et mêmes classes qu'avant (ms-head, ms-arm-*, ms-foot-*, ms-hand…) : les actions ne changent pas, render()
+// déduit coudes et genoux des mêmes signaux (rigPose).
+const PEO_RIG = new URL("art/peo/rig/", import.meta.url).href;
+const rigImg = (f, x, y, w, h) => `<image href="${PEO_RIG}${f}.webp" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+const rigAt = (f, t, w, h) => `<g transform="${t}"><image href="${PEO_RIG}${f}.webp" width="${w}" height="${h}"/></g>`;
+function peoRigHead(gid) {
+  return `<g class="ms-head">
+    <g class="ms-ahoge">${rigImg("ahoge", 44, 5, 11, 9.01)}</g>
+    <g class="ms-peo-eyes">${rigImg("head", 26, 12, 46, 39.41)}</g>
+    <g class="ms-peo-shut">${rigImg("head-sleep", 26.08, 12.1, 46.46, 39.49)}</g>
+    <g class="ms-x ms-x-blink">${rigImg("head-blink", 26, 12, 46, 39.41)}</g>
+    <g class="ms-x ms-x-smile">${rigImg("head-smile", 25.92, 11.9, 45.54, 39.31)}</g>
+    <g class="ms-x ms-x-laugh">${rigImg("head-laugh", 26, 12, 46, 39.41)}</g>
+    <g class="ms-x ms-x-wide">${rigImg("head-wide", 26, 12, 46, 39.25)}</g>
+    <g class="ms-x ms-x-wow">${rigImg("head-wow", 26.08, 12.1, 46.46, 39.49)}</g>
+    <g class="ms-face">
+      <radialGradient id="${gid}"><stop offset="0" stop-color="#ff5468" stop-opacity="0.9"/><stop offset="1" stop-color="#ff5468" stop-opacity="0"/></radialGradient>
+      <ellipse class="ms-flush" cx="48.5" cy="41" rx="14" ry="5.5" fill="url(#${gid})" opacity="0"/>
+      <circle class="ms-mouth" cx="47.6" cy="44" r="0.5" fill="none"/>
+      <g class="ms-cheeks"></g>
+    </g>
+    <g class="ms-flower"></g>
+    <g class="ms-wear-head"></g>
+    <g class="ms-party"></g>
+  </g>`;
+}
+function peoRigSvg(gid = "ms-flush-peo") {
+  const shoeL = peoImg("shoe-l", 38.1, 91, 10.83, 8), shoeR = peoImg("shoe-r", 51.3, 91, 10.33, 7.67);
+  const tools = `<g transform="translate(1.7 -0.7)">${staffSvg(39.2, 66.6, 35.1, 90.3, 34.9, 91.8)}<g class="ms-ladle" display="none"><path d="M37.5 71L35.0 97" stroke="#c99a55" stroke-width="1.3" stroke-linecap="round"/><path d="M39.1 71.2L37.7 97" stroke="#b5864b" stroke-width="1.3" stroke-linecap="round"/></g><g class="ms-fan"><path d="M38 73L35 80" stroke="#8a5a3b" stroke-width="1.8" stroke-linecap="round"/><circle cx="32" cy="85.5" r="6.5" fill="#fbe9c8" stroke="#c4503c" stroke-width="1.3"/><path d="M32 85.5L27 82M32 85.5L29 91M32 85.5L36 80M32 85.5L38 88" stroke="#e0956a" stroke-width="0.6"/><circle cx="32" cy="85.5" r="2.2" fill="#e8604c"/></g></g>`;
+  const fore = (side, open, fist) => `<g class="ms-fore-open">${open}</g><g class="ms-fore-fist">${fist}</g>`;
+  return `<svg class="ms-peo ms-rig" viewBox="0 0 100 100" aria-hidden="true">
+  <g class="ms-tail">${rigImg("tail", 57, 62, 13, 8.39)}</g>
+  <g class="ms-leg-r"><g class="ms-knee-r">${rigAt("shin", "translate(55.5 82) rotate(-5.61) scale(0.08926 0.08926) translate(-41.02 -42.79)", 86, 188)}<g class="ms-foot-r">${shoeR}</g></g>${rigAt("thigh", "translate(53.5 72.5) rotate(-37.80) scale(0.09576 0.09576) translate(-87.71 -46.68)", 132, 183)}</g>
+  <g class="ms-leg-l"><g class="ms-knee-l">${rigAt("shin", "translate(44.5 82) rotate(7.07) scale(0.08926 0.08926) translate(-41.02 -42.79)", 86, 188)}<g class="ms-foot-l">${shoeL}</g></g>${rigAt("thigh", "translate(46 72.5) rotate(-16.94) scale(0.09486 0.09486) translate(-87.71 -46.68)", 132, 183)}</g>
+  ${rigImg("hips", 42.5, 68.5, 15, 11.31)}
+  ${rigImg("torso", 40.5, 48.8, 24.3, 25.78)}
+  <g class="ms-wear-body"></g>
+  <g class="ms-hold" display="none"><g class="ms-it ms-it-controller" transform="translate(49 71) scale(0.5) translate(-50 -75.5)">${CONTROLLER}</g><g class="ms-it ms-it-beer" transform="translate(49 70) scale(0.55) translate(-51 -76)">${BEER}</g><g class="ms-it ms-it-matcha" transform="translate(49 70) scale(0.55) translate(-50 -76)">${MATCHA}</g></g>
+  <g class="ms-arm-r"><g class="ms-elbow-r">${fore("r", rigAt("fore", "translate(58.8 66.5) rotate(-17.35) scale(-0.03779 0.03779) translate(-79.39 -42.69)", 176, 267), rigAt("fist", "translate(58.8 66.5) rotate(-8.50) scale(-0.04031 0.04031) translate(-85.24 -47.38)", 177, 263))}</g>${rigAt("armup", "translate(57.5 59.5) rotate(-20.35) scale(-0.03435 0.03435) translate(-53.20 -19.54)", 176, 267)}</g>
+  <g class="ms-arm-l"><g class="ms-elbow-l">${tools}${fore("l", rigAt("fore", "translate(40.2 66.5) rotate(17.35) scale(0.03779 0.03779) translate(-79.39 -42.69)", 176, 267), rigAt("fist", "translate(40.2 66.5) rotate(8.50) scale(0.04031 0.04031) translate(-85.24 -47.38)", 177, 263))}<circle class="ms-hand" cx="39.7" cy="72.8" r="0.6" fill="none"/></g>${rigAt("armup", "translate(41.5 59.5) rotate(20.35) scale(0.03435 0.03435) translate(-53.20 -19.54)", 176, 267)}</g>
+  ${peoRigHead(gid)}
+</svg>`;
+}
+
 // MeoMeo : comme PeoPeo, les morceaux d'une planche dessinée (découpée par un outil à part, pas publié) :
 // art/meo/*.webp, même repère (pieds sur y = 98, 92 unités de haut). Ailes de fée et rubans
 // dans la tête (ils bougent avec elle) ; bras DERRIÈRE le corps (le haut du bras est sous la manche) ; mêmes classes et
@@ -331,8 +394,8 @@ const MEO_ART = new URL("art/meo/", import.meta.url).href;
 const meoImg = (f, x, y, w, h) => `<image href="${MEO_ART}${f}.webp" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
 function meoHead(gid) {
   return `<g class="ms-head">
-    <g class="ms-peo-eyes">${meoImg("head", 19.18, 6.18, 62.69, 61.95)}</g>
-    <g class="ms-peo-shut">${meoImg("head-sleep", 19.18, 6, 63.38, 62.18)}</g>
+    <g class="ms-peo-eyes">${meoImg("head-cat", 33.8, 9.3, 48.9, 44.4)}</g>
+    <g class="ms-peo-shut">${meoImg("head-sleep-cat", 34.1, 13, 50.5, 41.8)}</g>
     <g class="ms-face">
       <radialGradient id="${gid}"><stop offset="0" stop-color="#ff5468" stop-opacity="0.9"/><stop offset="1" stop-color="#ff5468" stop-opacity="0"/></radialGradient>
       <ellipse class="ms-flush" cx="50" cy="44" rx="15" ry="5.5" fill="url(#${gid})" opacity="0"/>
@@ -352,6 +415,7 @@ const meoSleeve = (x, y, w, h) => `<svg x="${x}" y="${y}" width="${w}" height="$
 const meoSleeves = () => meoSleeve(42.6, 56.5, 2.6, 4.3) + meoSleeve(54.2, 56.3, 3, 5);
 function meoSvg(gid = "ms-flush-meo") {
   return `<svg class="ms-meo" viewBox="0 0 100 100" aria-hidden="true">
+  ${meoImg("tail", 57.9, 60.5, 25.6, 20.4)}
   ${meoImg("body", 39.48, 53.61, 19.6, 39.42)}
   <g class="ms-foot-l">${meoImg("shoe-l", 42.8, 90.34, 7.45, 7.39)}</g>
   <g class="ms-foot-r">${meoImg("shoe-r", 49.08, 90.34, 7.66, 7.66)}</g>
@@ -363,9 +427,9 @@ function meoSvg(gid = "ms-flush-meo") {
   ${meoSleeves()}
 </svg>`;
 }
-// La tête de MeoMeo seule (dans la marmite), cadrée sur le visage et les cheveux (ailes et bouts des rubans coupés)
+// La tête de MeoMeo seule (dans la marmite), cadrée sur le visage, les cheveux et les oreilles de chat
 export function meoHeadSvg(gid = "ms-flush-meo-head") {
-  return `<svg class="ms-meo" viewBox="25 4 50 50" aria-hidden="true">${meoHead(gid)}</svg>`;
+  return `<svg class="ms-meo" viewBox="33 7 50 50" aria-hidden="true">${meoHead(gid)}</svg>`;
 }
 
 // ---------- Tenues dessinées (garde-robe) ----------
@@ -526,19 +590,70 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 // head : centre de la tête (pour placer les « z », le cœur et la bulle)
 // only : les seules actions qu'il peut faire (les autres — objets, lit, nage, roulade, nourriture… — sont dessinées pour
 // Tino) ; calm : un appui le fait seulement sauter (les phrases râleuses sont celles de Tino)
+// Animations image par image (2026-10-18) : bandes tirées de vidéos, une image
+// par case, de gauche à droite, dessinées tournées vers la DROITE. Repère du cadre de la vidéo (en pixels de la vidéo) :
+// cw × ch = la case ; foot = la ligne des pieds ; fig = sa hauteur debout ; ax = le milieu de son corps ; n = nombre d'images ;
+// stride = ce qu'un cycle de marche fait avancer (les pas suivent la distance : pas de glissade). Jouées à 24 images / s.
+const SPRITE_FPS = 24, SPRITE_FIG = 92; // (hauteur de PeoPeo / MeoMeo dans leur dessin, en unités du repère 100)
+const spriteSet = (dir, list) => Object.fromEntries(Object.entries(list).map(([k, v]) => [k, { ...v, src: new URL(`art/${dir}/moves/${k}.webp`, import.meta.url).href }]));
+const PEO_SPRITES = spriteSet("peo", {
+  walk: { n: 29, cw: 366, ch: 600, foot: 573, fig: 540, ax: 173, stride: 329 },
+  run: { n: 12, cw: 540, ch: 714, foot: 603, fig: 533, ax: 214 },
+  idle: { n: 1, cw: 540, ch: 714, foot: 671, fig: 557, ax: 253, top: 114 },
+  wave: { n: 18, cw: 540, ch: 714, foot: 671, fig: 557, ax: 253 },
+  sit: { n: 30, cw: 540, ch: 714, foot: 671, fig: 557, ax: 253, top: 271 },
+  stand: { n: 27, cw: 540, ch: 714, foot: 671, fig: 557, ax: 253 },
+});
+const MEO_SPRITES = spriteSet("meo", {
+  walk: { n: 29, cw: 390, ch: 610, foot: 586, fig: 552, ax: 203, stride: 311 },
+  run: { n: 21, cw: 552, ch: 648, foot: 612, fig: 560, ax: 201 },
+  idle: { n: 1, cw: 552, ch: 648, foot: 612, fig: 576, ax: 245, top: 36 },
+  wave: { n: 22, cw: 552, ch: 648, foot: 612, fig: 576, ax: 245 },
+  sit: { n: 30, cw: 552, ch: 648, foot: 612, fig: 576, ax: 245, top: 198 },
+  stand: { n: 27, cw: 552, ch: 648, foot: 612, fig: 576, ax: 245 },
+});
+// Activités (2026-10-19) : même chose, dans art/<qui>/acts/ ; fps = images / s de la bande (12 : une image sur deux de la vidéo)
+const actSet = (dir, list) => Object.fromEntries(Object.entries(list).map(([k, v]) => [k, { ...v, act: true, src: new URL(`art/${dir}/acts/${k}.webp`, import.meta.url).href }]));
+const MEO_ACTS = actSet("meo", {
+  stir: { n: 30, fps: 12, cw: 1148, ch: 1271, foot: 1228, fig: 1168, ax: 447 },
+  fan: { n: 19, fps: 12, cw: 934, ch: 1260, foot: 1218, fig: 1169, ax: 397 },
+  gameSit: { n: 16, fps: 24, cw: 956, ch: 1306, foot: 1208, fig: 1169, ax: 481 },
+  game: { n: 14, fps: 24, cw: 956, ch: 1306, foot: 1208, fig: 1169, ax: 481 },
+  cheer: { n: 22, fps: 24, cw: 956, ch: 1306, foot: 1208, fig: 1169, ax: 481 },
+  pat: { n: 24, fps: 24, cw: 776, ch: 1271, foot: 1230, fig: 1170, ax: 380 },
+  scoot: { n: 17, fps: 12, cw: 450, ch: 672, foot: 651, fig: 625, ax: 226 },
+  pho: { n: 10, fps: 24, cw: 606, ch: 744, foot: 699, fig: 631, ax: 350 },
+  beer: { n: 34, fps: 12, cw: 594, ch: 744, foot: 698, fig: 624, ax: 352 },
+  cast: { n: 22, fps: 12, cw: 768, ch: 768, foot: 698, fig: 624, ax: 353 },
+  toss: { n: 32, fps: 12, cw: 1260, ch: 1373, foot: 1308, fig: 1168, ax: 488, rel: 19 }, // (rel : l'image où Tino part de ses mains)
+  matcha: { n: 15, fps: 12, cw: 821, ch: 1260, foot: 1218, fig: 1168, ax: 409 },
+  blow: { n: 25, fps: 24, cw: 1204, ch: 1261, foot: 1218, fig: 1168, ax: 432 },
+  laugh: { n: 16, fps: 12, cw: 844, ch: 1271, foot: 1229, fig: 1168, ax: 443 },
+  cart: { n: 24, fps: 12, cw: 945, ch: 1238, foot: 1195, fig: 1168, ax: 533 },
+  kiss: { n: 25, fps: 12, cw: 878, ch: 1260, foot: 1218, fig: 1168, ax: 454 },
+  knock: { n: 50, fps: 12, cw: 1429, ch: 1328, foot: 1218, fig: 1168, ax: 702, lie: 30 }, // (lie : à terre jusqu'à cette image, puis elle se relève)
+  roll: { n: 26, fps: 24, cw: 1350, ch: 1384, foot: 1218, fig: 1168, ax: 702 },
+  panic: { n: 31, fps: 24, cw: 731, ch: 1294, foot: 1252, fig: 1168, ax: 409 },
+  dismay: { n: 18, fps: 12, cw: 900, ch: 1271, foot: 1229, fig: 1168, ax: 409 },
+  win: { n: 39, fps: 24, cw: 866, ch: 1328, foot: 1285, fig: 1168, ax: 432 },
+});
+Object.assign(MEO_SPRITES, MEO_ACTS);
+// Actions jouées avec les bandes (les autres — objets en main, cuisine, scooter, combats, marmite… — gardent le dessin)
+const SPRITE_ACTS = new Set(["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "travel", "potOut", "potIn", "goto", "chase", "flee", "pant", "caught", "toss", "kiss"]); // (toss, kiss : le trajet ; une fois sur place, actSprite)
 const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo", "fight"];
 export const KINDS = {
   peo: {
-    name: "PeoPeo", cutout: true, hatAt: [57.5, 17.5, 20], santaAt: [53, 25, 6], svg: () => peoSvg(), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
+    name: "PeoPeo", cutout: true, rig: false, // (essais en cours — rig : "full" = marionnette articulée, "bounce" = la même, marche en sautillant, "heads" = l'ancien corps avec les nouvelles têtes)
+    hatAt: [57.5, 17.5, 20], santaAt: [53, 25, 6], svg: () => (KINDS.peo.rig === "heads" ? peoSvg(undefined, true) : KINDS.peo.rig ? peoRigSvg() : peoSvg()), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
     // size 60 : 1,5 fois la hauteur de Tino (mesurée sur les pixels : 92,8 unités de haut, Tino 92 → 55,7 px contre 36,8) ; wide : un peu élargi
-    only: PEO_ACTIONS, calm: true, home: true, // home : il vit dans la marmite (voir mountMascots, homeTick)
+    only: PEO_ACTIONS, calm: true, home: true, sprites: PEO_SPRITES, // home : il vit dans la marmite (voir mountMascots, homeTick) ; sprites : image par image
     body: { cy: 56, support: Array(24).fill(42) },
   },
   // MeoMeo : les mêmes actions que PeoPeo ; size 56 : 1,4 × la hauteur de Tino (92 unités de haut, comme PeoPeo — réglable) ;
   // snatch : quand Tino boit une bière, elle la lui prend, s'énerve et la boit (duo « beer »)
   meo: {
     name: "MeoMeo", cutout: true, hatAt: [50.5, 13.5, 3], armMax: 135, svg: () => meoSvg(), size: 56, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
-    only: PEO_ACTIONS, calm: true, home: true,
+    only: PEO_ACTIONS, calm: true, home: true, sprites: MEO_SPRITES,
     body: { cy: 56, support: Array(24).fill(42) },
   },
   tino: {
@@ -808,14 +923,19 @@ const ACTIONS = {
     step(m, a, dt, me) {
       const d = clamp(a.x, me.x0, me.x1) - m.x, s = 26 * (m.size / 40) * dt;
       if (d) m.dir = d < 0 ? -1 : 1;
+      a.dist = (a.dist ?? 0) + Math.min(Math.abs(d), s); // (les pas suivent la distance : marionnette articulée)
       if (Math.abs(d) <= s) { m.x += d; return true; }
       m.x += Math.sign(d) * s;
     },
     look: facing,
     pose(m, a, p) {
-      const ph = m.clock * 11;
+      const ph = m.def.rig && a.dist !== undefined ? a.dist / (m.size * 0.06) : m.clock * 11;
       p.rot = 5 * Math.sin(ph); p.bob = -Math.abs(Math.sin(ph)) * m.size * 0.06; p.armL = p.armR = 16 * Math.sin(ph); p.sx = p.sy = 1;
       if (m.def.cutout) { p.armL = 12 * Math.sin(ph); p.armR = -p.armL; } // (PeoPeo / MeoMeo : un bras vers l'avant, l'autre vers l'arrière)
+      if (m.def.rig === "bounce") { // (marche « chibi » : il sautille, se tasse à chaque pas, penche un peu ; bras et jambes bougent à peine)
+        const up = Math.abs(Math.sin(ph)), hit = 1 - up;
+        p.bob = -up * m.size * 0.1; p.sy = 1 - 0.07 * hit * hit; p.sx = 1 + 0.05 * hit * hit; p.rot = 4 * Math.sin(ph); p.armL = 6 * Math.sin(ph); p.armR = -p.armL;
+      }
       p.footL = -Math.max(0, Math.sin(ph)) * 3; p.footR = -Math.max(0, -Math.sin(ph)) * 3; // un pied puis l'autre
     },
   },
@@ -1387,17 +1507,21 @@ ACTIONS.toss = {
     if (a.skip) return true;
     const t = a.tino;
     if (t.inPot) return true;
+    const S = m.def.sprites?.toss;
     if (!a.here) {
       const x = t.x - (Math.sign(t.x - m.x) || 1) * (t.size * 0.38 + m.size * 0.2);
-      if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; m.dir = Math.sign(t.x - m.x) || 1; }
+      if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; m.dir = Math.sign(t.x - m.x) || 1; a.grab = !!S && canFlee(t); }
       return a.t > 7;
     }
     const u = a.t - a.hereT;
-    if (!a.thrown && u > 0.5) {
-      if (canFlee(t)) { a.thrown = true; t.now([{ type: "potIn", toss: true }]); }
-      else if (u > 3) return true; // (Tino n'est pas libre : tant pis)
+    if (!a.thrown && u > (S ? S.rel / S.fps : 0.5)) {
+      if (canFlee(t)) {
+        a.thrown = true;
+        if (a.grab) { t.x = m.x + m.dir * m.size * 0.1; t.y = m.y - m.size * 0.95; } // (image par image : il part de ses mains levées)
+        t.now([{ type: "potIn", toss: true }]);
+      } else { a.grab = false; if (u > 3) return true; } // (Tino n'est pas libre : tant pis)
     }
-    return a.thrown && u > 1.2;
+    return a.thrown && u > (S ? S.n / S.fps : 1.2);
   },
   look: facing,
   pose(m, a, p) {
@@ -1740,6 +1864,7 @@ ACTIONS.duo = {
         if (out(a.bs)) { if (first) { a.bs = first.act.bs; a.far = 1; } else a.bs = -a.bs; } // (… ou, sans la place, à côté du 1er)
       }
       a.dir = -a.bs; x = t.x + a.bs * (gap + a.far * m.size * 0.6);
+      if (a.kind === "squish" && m.def.sprites?.pat && !a.far) x = markAt(t, ".ms-head")[0] + a.bs * m.size * 0.26; // (tapoter en image par image : sa main, 0,26 × sa taille devant elle, sur le milieu de la tête de Tino — assis ou couché)
       if (a.kind === "beer" && !a.snatch) r.with = a.bs;
     }
     if (!a.here) { if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; a.snatch = a.kind === "beer" && !!m.def.snatch && r.snatched == null && (a.snatchRoll ?? Math.random()) < SNATCH_P; if (a.kind === "beer" && !a.snatch) beerHello(r, a); } return false; }
@@ -2271,9 +2396,13 @@ class Mascot {
     this.el.title = `${def.name} · tap to pet, rub to squish his head, hold to make ${def.name} sit or stand`;
     this.el.setAttribute("aria-label", def.name);
     this.el.mascot = this; // (pour les essais depuis la console : document.querySelector(".ms").mascot)
-    this.el.innerHTML = `<div class="ms-in">${def.svg()}</div>${FX}`;
+    this.el.innerHTML = `<div class="ms-in">${def.svg()}${def.sprites ? '<div class="ms-spr"><i></i></div><svg class="ms-spr-hat" viewBox="0 0 100 100" aria-hidden="true"><g></g></svg>' : ""}</div>${FX}`;
     this.inner = this.el.firstChild;
-    for (const k of ["head", "face", "cheeks", "flush", "dizzy-at", "dust-at", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "bub-at", "wear-head", "wear-body"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
+    if (def.sprites) { // (images par image : préchargées, sinon la première fois il disparaît un instant)
+      this.sprEl = this.inner.querySelector(".ms-spr"); this.sprImg = this.sprEl.firstChild; this.sprHat = this.inner.querySelector(".ms-spr-hat g"); this.sprKey = null; this.walked = 0; this.movingT = 0; this.sitT = 0; this.standT = 0;
+      for (const m of Object.values(def.sprites)) { const im = new Image(); im.src = m.src; }
+    }
+    for (const k of ["head", "face", "cheeks", "flush", "dizzy-at", "dust-at", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "bub-at", "wear-head", "wear-body", "elbow-l", "elbow-r", "leg-l", "leg-r", "knee-l", "knee-r", "tail", "ahoge"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
     this.holdG = this.el.querySelector(".ms-hold"); this.inHands = null; // ce qu'il tient devant lui (classe ms-hold-<nom>) — (this.hold : minuterie de l'appui long)
     this.taps = [];
     if (eng.outfit) this.wear(eng.outfit);
@@ -2534,6 +2663,53 @@ class Mascot {
     if (!g) return;
     const show = kind && !(this.def.key === "tino" && this.eng.outfit?.head);
     g.innerHTML = show ? `<g transform="translate(${x} ${y}) rotate(${r})">${kind === "crown" ? CROWN : kind === "santa" ? SANTA : kind === "witch" ? WITCH : PARTY_HAT}</g>` : "";
+    if (this.sprHat) this.sprHat.innerHTML = g.innerHTML; // (aussi sur la bande des images par image)
+  }
+  // PeoPeo articulé : coudes, genoux, queue, mèche et visage, déduits des mêmes signaux que pour les autres (p.armL / armR,
+  // p.footL / footR, p.rot, p.head…) — les actions ne savent rien des articulations. Ressorts amortis (retard, petit rebond) ;
+  // « réduire les animations » / pose figée : pas de ressort (dt = 0 → la cible directement).
+  rigPose(p, A, a) {
+    const c = this.clock, dt = clamp(c - (this.rigT ?? c), 0, 0.05), lie = this.lie;
+    this.rigT = c;
+    const spring = (k, target, K, D) => {
+      if (!dt || this[k] === undefined) { this[k] = target; this[k + "V"] = 0; return target; }
+      const v = this[k + "V"] + (K * (target - this[k]) - D * this[k + "V"]) * dt;
+      this[k + "V"] = v; this[k] += v * dt;
+      return this[k];
+    };
+    // jambes : un pied levé (foot < 0) avance la cuisse et plie le genou ; en marchant, celle qui se lève part en avant
+    const soft = this.def.rig === "bounce", leg = (f, o) => { const up = Math.max(0, -f); return soft ? [clamp((o - f) * 1.2, -6, 6), -clamp(up * 3, 0, 12)] : [clamp(up * 6 + (o - f) * 2.5, -20, 34), -clamp(up * 13, 0, 75)]; };
+    let [tL, kL] = leg(p.footL, p.footR), [tR, kR] = leg(p.footR, p.footL);
+    if (lie > 0.01) { tL = lerp(tL, 0, lie); kL = lerp(kL, 0, lie); tR = lerp(tR, 0, lie); kR = lerp(kR, 0, lie); }
+    // coudes : un peu pliés vers l'avant, et ils suivent le bras (un bras levé plie le coude du même côté) — avec un peu de retard
+    const eL = spring("rigEL", clamp(6 + 0.35 * p.armL, -30, 80), 140, 13), eR = spring("rigER", clamp(6 + 0.35 * p.armR, -80, 30), 140, 13);
+    if (this.leg_l) {
+    this.leg_l.style.transform = `rotate(${tL.toFixed(1)}deg)`; this.knee_l.style.transform = `rotate(${kL.toFixed(1)}deg)`;
+    this.leg_r.style.transform = `rotate(${tR.toFixed(1)}deg)`; this.knee_r.style.transform = `rotate(${kR.toFixed(1)}deg)`;
+    this.foot_l.style.transform = `rotate(${(-(tL + kL) * 0.7).toFixed(1)}deg)`; this.foot_r.style.transform = `rotate(${(-(tR + kR) * 0.7).toFixed(1)}deg)`; // (le pied reste à plat)
+    this.elbow_l.style.transform = `rotate(${eL.toFixed(1)}deg)`; this.elbow_r.style.transform = `rotate(${eR.toFixed(1)}deg)`;
+    }
+    // la queue se balance doucement, et traîne derrière quand il court / se penche ; la mèche suit la tête avec du retard
+    const moving = a.type === "walk" || a.type === "chase" || !!p.run;
+    const tail = spring("rigTail", -p.rot * 1.4 + 7 * Math.sin(c * 2.1) + (moving ? 9 * Math.sin(c * 11) - 10 : 0), 45, 6);
+    const hv = dt ? (p.head - (this.rigHead ?? p.head)) / dt : 0; this.rigHead = p.head;
+    const bv = dt ? (p.bob - (this.rigBob ?? p.bob)) / dt : 0; this.rigBob = p.bob;
+    const ahoge = spring("rigAhoge", clamp(5 * Math.sin(c * 1.6) - hv * 0.08 - bv * 0.9, -28, 28), 70, 5);
+    if (this.tail) this.tail.style.transform = `rotate(${clamp(tail, -35, 35).toFixed(1)}deg)`;
+    if (this.ahoge) this.ahoge.style.transform = `rotate(${clamp(ahoge, -30, 30).toFixed(1)}deg)`;
+    // le visage : sourire (coucou, saut, on lui frotte la tête), rire (il a gagné), surpris (on le surprend, il est touché) ; sinon il
+    // cligne des yeux toutes les 2 à 5 s
+    let face = "";
+    if (!A.zzz) {
+      const fs = a.type === "fight" && a.t !== undefined ? fightState(this, a).mode : "";
+      face = ["wave", "hop", "pet"].includes(a.type) ? "smile" : a.type === "react" || fs === "knock" ? "wow" : fs === "cheer" ? "laugh" : fs === "panic" || fs === "dismay" ? "wide" : "";
+      if (!face) {
+        this.blinkAt ??= c + 2 + Math.random() * 3;
+        if (c > this.blinkAt + 0.14 || c < this.blinkAt - 6) this.blinkAt = c + 2 + Math.random() * 3;
+        else if (c > this.blinkAt) face = "blink";
+      }
+    }
+    if (face !== this.faceNow) { if (this.faceNow) this.el.classList.remove("ms-face-" + this.faceNow); if (face) this.el.classList.add("ms-face-" + face); this.faceNow = face; }
   }
   // Tenue animée : la case de la planche qui correspond au moment (en boucle, à anim.fps images par seconde)
   wearFrames() {
@@ -2685,6 +2861,91 @@ class Mascot {
       if ((A.step ?? timed)(this, a, dt, me)) this.act = null;
     }
     this.ease(dt);
+    if (this.def.sprites) this.spriteTrack(dt, a, A, me);
+  }
+  // Images par image : distance parcourue (les pas de la marche la suivent), en mouvement, en l'air ; assis depuis combien de
+  // temps (il s'assoit une fois, puis garde la dernière image) ; en train de se relever (la bande « stand », une fois)
+  spriteTrack(dt, a, A, me) {
+    const dx = Math.abs(this.x - (this.lastX ?? this.x)); this.lastX = this.x;
+    this.walked += dx; this.movingT = dx > 0.04 ? 0.15 : Math.max(0, this.movingT - dt);
+    this.airborne = !!me && this.y < me.y - 1.5;
+    const sits = (typeof A?.sit === "function" ? A.sit(this, a) : A?.sit) && SPRITE_ACTS.has(a.type);
+    if (sits) { this.sitT += dt; this.standT = 0; }
+    else if (this.sitT > 0) { this.sitT = 0; this.standT = this.def.sprites.stand.n / SPRITE_FPS; }
+    else this.standT = Math.max(0, this.standT - dt);
+  }
+  // Activités : la bande de l'activité (en boucle, une fois, ou aller-retour) ; null : l'ancien dessin ; undefined : pas une
+  // activité (marche, repos… : voir spriteFor)
+  actSprite(a) {
+    const S = this.def.sprites, t = a.type;
+    const fps = (m) => m.fps ?? SPRITE_FPS;
+    const loop = (m, sec) => ({ m, i: Math.floor(Math.max(0, sec) * fps(m)) % m.n });
+    const once = (m, sec) => ({ m, i: Math.min(m.n - 1, Math.floor(Math.max(0, sec) * fps(m))) });
+    const ping = (m, sec) => { const L = Math.max(1, 2 * m.n - 2), k = Math.floor(Math.max(0, sec) * fps(m)) % L; return { m, i: k < m.n ? k : L - k }; };
+    if (t === "stir" || t === "fanpot") { // (la marmite : touiller / attiser ; « walk » : il y va → la marche)
+      if (a.mode === "stir") return S.stir ? loop(S.stir, a.t) : null;
+      if (a.mode === "fan") return S.fan ? loop(S.fan, a.t) : null;
+      return a.mode === "walk" ? undefined : null;
+    }
+    if (t === "duo") {
+      if (!a.here) return undefined;
+      const u = a.t - (a.hereT ?? 0), r = a.ref;
+      if (a.kind === "game") {
+        if (!S.game) return null;
+        if (r?.ended && r.win && S.cheer) { a.cheerT ??= u; return once(S.cheer, u - a.cheerT); }
+        return S.gameSit && u < S.gameSit.n / fps(S.gameSit) ? once(S.gameSit, u) : loop(S.game, u);
+      }
+      if (a.kind === "cook" || a.kind === "bbq" || a.kind === "rice") return S.stir ? loop(S.stir, u) : null;
+      if (a.kind === "beer") return S.beer && !a.snatch ? ping(S.beer, u) : null;
+      if (a.kind === "squish") return S.pat ? loop(S.pat, u) : null;
+      if (a.kind === "scooter") return S.scoot && a.riding && a.crashT == null ? loop(S.scoot, u) : null;
+      if (a.kind === "pho") return S.pho ? loop(S.pho, u) : null;
+      if (a.kind === "matcha" && S.matcha) { // siroter ; bataille : souffler sa perle, puis rire
+        const W = r?.war, e = W ? r.t - W.t0 : 0, i = Math.floor(e / WAR.EACH), v = e - i * WAR.EACH;
+        if (W && i >= W.shots.length) return ping(S.laugh, e - W.shots.length * WAR.EACH);
+        if (W && W.shots[i][0] === this && v < WAR.WIND + 0.45) return once(S.blow, v);
+        return loop(S.matcha, u);
+      }
+      if (a.kind === "shop") return r?.rider === this && a.riding ? (S.cart ? loop(S.cart, u) : null) : undefined; // (à pied : la marche)
+      return null;
+    }
+    if (t === "fight") {
+      const st = fightState(this, a);
+      if (st.mode === "cast") return S.cast ? once(S.cast, (st.u / (BOSS.WIND + 0.25)) * (S.cast.n / fps(S.cast))) : null;
+      if (st.mode === "walk") return undefined;
+      if (st.mode === "roll" && S.roll) return { ...once(S.roll, (st.u / BOSS.ROLL) * (S.roll.n / fps(S.roll))), flat: true };
+      if (st.mode === "knock" && S.knock) { const K = S.knock, up = clamp((st.u - (BOSS.END - 0.7)) / 0.6, 0, 1); return { m: K, i: up > 0 ? Math.min(K.n - 1, K.lie + 1 + Math.floor(up * (K.n - K.lie - 1))) : Math.min(K.lie, Math.floor(st.u * fps(K))), flat: true }; }
+      if (st.mode === "panic" && S.panic) return once(S.panic, st.u - (BOSS.AWIND - 0.2));
+      if (st.mode === "dismay" && S.dismay) return once(S.dismay, st.u - 0.3);
+      if (st.mode === "cheer" && S.win) return loop(S.win, st.u);
+      return st.mode === "stance" && S.cast ? { m: S.idle, i: 0 } : null;
+    }
+    if (t === "toss") return !a.here ? undefined : a.grab ? once(S.toss, a.t - a.hereT) : null;
+    if (t === "kiss" && S.kiss) return a.here ? once(S.kiss, a.t - a.hereT) : undefined;
+    if (t === "pho" && S.pho) return loop(S.pho, a.t);
+    if (t === "beer" && S.beer) return ping(S.beer, a.t);
+    return undefined;
+  }
+  // Quelle image de quelle bande montrer (null : l'ancien dessin)
+  spriteFor(a, p) {
+    const S = this.def.sprites, t = a.type;
+    if (this.lie > 0.3 || this.bedK > 0.05) return null;
+    const act = this.actSprite(a);
+    if (act?.flat) { p.spin = 0; p.sx = p.sy = 1; p.bob = 0; }
+    if (act !== undefined) return act;
+    if (p.spin) return null; // (une activité : sa bande, ou null = l'ancien dessin s'il n'y a pas de bande pour elle)
+    if (this.inHands) return null;
+    if (!(SPRITE_ACTS.has(t) || t === "fight" || (t === "duo" && (!a.here || a.kind === "shop")))) return null; // (combat : ici seulement quand il / elle se replace)
+    const at = (m, sec) => ({ m, i: Math.min(m.n - 1, Math.floor(sec * SPRITE_FPS)) });
+    if (this.sitT > 0) return at(S.sit, this.sitT);
+    if (this.airborne) return { m: S.idle, i: 0 };
+    if ((t === "chase" || t === "flee") && a.mode === "pant") return { m: S.idle, i: 0 }; // (essoufflé : arrêté)
+    if ((t === "chase" || t === "flee") && a.mode === "sneak") { const W = S.walk, k = (SPRITE_FIG * this.size) / 100 / W.fig; return { m: W, i: Math.floor((this.walked / (W.stride * k)) * W.n) % W.n }; } // (à pas de loup)
+    if (t === "chase" || t === "flee" || p.run) return { m: S.run, i: Math.floor(this.clock * SPRITE_FPS) % S.run.n };
+    if (this.movingT > 0) { const W = S.walk, k = (SPRITE_FIG * this.size) / 100 / W.fig; return { m: W, i: Math.floor((this.walked / (W.stride * k)) * W.n) % W.n }; }
+    if (this.standT > 0) return at(S.stand, S.stand.n / SPRITE_FPS - this.standT);
+    if (t === "wave") { const d = a.dur ?? 2, u = Math.min(a.t, Math.max(0, d - a.t)); return at(S.wave, u); } // (le bras monte, puis redescend)
+    return { m: S.idle, i: 0 };
   }
 
   // Le visage tourne doucement vers où il va ; assis, il descend sur la ligne ; il se couche et se relève en douceur
@@ -2753,6 +3014,24 @@ class Mascot {
     const bw = this.bedK > 0.001 ? this.bedWidth() : 0, onMattress = this.bedK * bw * (BED_H - MATTRESS) / BED_W; // dans son lit : posé sur le matelas
     const lift = (sup[0] - lerp(sup[i % 24], sup[(i + 1) % 24], k - i)) * u, pivot = (B.cy - 100) * u, down = p.bob + this.sink * (this.def.sink ?? SINK) * u + lift - onMattress;
     const mir = this.def.facesLeft && this.dir > 0 ? -1 : 1, look = this.look * mir; // (PeoPeo regarde vers la gauche : retourné en entier quand il va à droite)
+    // Image par image (PeoPeo / MeoMeo) : la bande remplace le dessin ; pas d'enfoncement « assis sur le bord » (assis par terre
+    // dans la vidéo), pas de dandinement ni de rebond ajoutés (ils sont dans la vidéo)
+    const spr = this.def.sprites ? this.spriteFor(a, p) : null;
+    this.el.classList.toggle("ms-sprited", !!spr);
+    let downNow = down;
+    if (spr) {
+      const m = spr.m, k = (SPRITE_FIG * W) / 100 / m.fig, w = m.cw * k, h = m.ch * k;
+      if (this.sprKey !== m.src) { this.sprKey = m.src; Object.assign(this.sprImg.style, { backgroundImage: `url("${m.src}")`, width: w + "px", height: h + "px", backgroundSize: `${m.n * w}px ${h}px`, left: (W / 2 - m.ax * k) + "px", top: (W * 0.98 - m.foot * k) + "px" }); }
+      this.sprImg.style.backgroundPosition = `${(-spr.i * w).toFixed(2)}px 0`;
+      // (les dessins regardent à droite ; .ms-in est déjà retourné quand il va à droite : la bande l'est toujours, et sans l'élargissement)
+      this.sprEl.style.transform = `scaleX(${(-1 / (this.def.wide ?? 1)).toFixed(4)})`;
+      downNow = spr.flat ? 0 : down - this.sink * (this.def.sink ?? SINK) * u - (this.airborne || m.act ? 0 : p.bob); // (activité : sa pose la place — tabouret, selle ; roulade / renversée : sur la ligne)
+      p.rot = this.airborne ? p.rot : 0;
+      const S = this.def.sprites, low = ((S.sit.top - S.idle.top) / S.idle.fig) * SPRITE_FIG; // (combien sa tête descend assis, en unités)
+      const sat = m === S.sit ? (spr.i + 1) / m.n : m === S.stand ? 1 - (spr.i + 1) / m.n : 0;
+      this.sprDrop = low * sat;
+      this.sprHat.setAttribute("transform", `translate(0 ${this.sprDrop.toFixed(2)})`);
+    } else this.sprDrop = 0;
     this.el.classList.toggle("ms-sleep", !!A.zzz);
     this.el.classList.toggle("ms-mad", a.type === "angry" || (a.t !== undefined && (gameMad(a) || !!A.mad?.(this, a))));
     this.el.classList.toggle("ms-swim", a.type === "swim" && !!a.wet);
@@ -2780,7 +3059,8 @@ class Mascot {
       this.el.style.setProperty("--sip", p.sip.toFixed(3));
     }
     this.el.style.transform = `translate3d(${(this.x - W / 2).toFixed(1)}px, ${(this.y - W * 0.98).toFixed(1)}px, 0)`;
-    this.inner.style.transform = `translateY(${down.toFixed(2)}px)` + (p.spin ? ` translateY(${pivot.toFixed(2)}px) rotate(${p.spin.toFixed(1)}deg) translateY(${(-pivot).toFixed(2)}px)` : "")
+    if (this.def.key === "tino") this.el.style.visibility = this.eng.all?.().some((o) => o.act?.type === "toss" && o.act.tino === this && o.act.grab && !o.act.thrown) ? "hidden" : ""; // (dans les mains de MeoMeo : c'est la bande qui le montre)
+    this.inner.style.transform = `translateY(${downNow.toFixed(2)}px)` + (p.spin ? ` translateY(${pivot.toFixed(2)}px) rotate(${p.spin.toFixed(1)}deg) translateY(${(-pivot).toFixed(2)}px)` : "")
       + ` rotate(${p.rot.toFixed(2)}deg) scale(${(p.sx * mir * (this.def.wide ?? 1)).toFixed(3)}, ${p.sy.toFixed(3)})`;
     this.head.style.transform = `rotate(${(p.head + look * 0.4).toFixed(2)}deg)` + (f ? ` scale(${(1 + 0.24 * f).toFixed(3)}, ${(1 - 0.42 * f).toFixed(3)})` : "");
     // Rouge : quand il boit une bière, et encore 2 min après (s'efface dans les 20 dernières secondes) ; joues aussi quand on le frotte
@@ -2803,9 +3083,10 @@ class Mascot {
     this.arm_r.style.transform = `translateX(${sa.toFixed(2)}px) rotate(${p.armR.toFixed(1)}deg)`;
     this.foot_l.style.transform = `translate(${sf.toFixed(2)}px, ${foot(p.footL).toFixed(2)}px)`;
     this.foot_r.style.transform = `translate(${sf.toFixed(2)}px, ${foot(p.footR).toFixed(2)}px)`;
+    if (this.def.rig && (this.leg_l || this.ahoge)) this.rigPose(p, A, a);
     // « z », cœur et bulle suivent la tête (même couché, même aplatie), sans tourner
     const [hx, hy] = this.def.head, rx = hx - 50, ry = hy - B.cy, drop = 23 * f; // tête aplatie : son sommet descend
-    const nx = 50 + rx * Math.cos(th) - (ry + drop) * Math.sin(th), ny = B.cy + rx * Math.sin(th) + (ry + drop) * Math.cos(th) + down / u;
+    const nx = 50 + rx * Math.cos(th) - (ry + drop) * Math.sin(th), ny = B.cy + rx * Math.sin(th) + (ry + drop) * Math.cos(th) + downNow / u + (this.sprDrop ?? 0);
     this.bub_at.style.transform = `translate(${(nx + 8 * this.dir).toFixed(1)}px, ${(ny - 18).toFixed(1)}px)`; // bulles d'eau
     const zx = nx + lerp(28, 12, this.lie) - 78, zy = ny + lerp(-22, -40, this.lie) - 14;
     this.zzz_at.style.transform = `translate(${zx.toFixed(1)}px, ${zy.toFixed(1)}px)`;
