@@ -334,9 +334,9 @@ function peoSvg(gid = "ms-flush-peo", heads = false) {
   ${heads ? peoRigHead(gid) : peoHead(gid)}
 </svg>`;
 }
-// La tête de PeoPeo seule (dans la marmite), cadrée sur la tête ; gid unique par copie
-export function peoHeadSvg(gid = "ms-flush-peo-head") {
-  return `<svg class="ms-peo ms-rig" viewBox="24 5.5 50 50" aria-hidden="true">${KINDS.peo.rig ? peoRigHead(gid) : peoHead(gid)}</svg>`;
+// La tête de PeoPeo seule (dans la marmite) : sa nouvelle tête, découpée dans sa vidéo calme (yeux ouverts / fermés), comme MeoMeo
+export function peoHeadSvg() {
+  return `<svg class="ms-peo" viewBox="0 0 100 100" aria-hidden="true"><g class="ms-head"><g class="ms-peo-eyes">${peoImg("head-new", 0, 2, 100, 95.4)}</g><g class="ms-peo-shut">${peoImg("head-sleep-new", 0, 4, 100, 91.6)}</g></g></svg>`;
 }
 // PeoPeo articulé (2026-10-12, essai : des mouvements plus naturels) : planches faites par
 // une IA d'après son dessin, découpées et assemblées à part
@@ -669,7 +669,7 @@ const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "re
 export const KINDS = {
   peo: {
     name: "PeoPeo", cutout: true, rig: false, // (essais en cours — rig : "full" = marionnette articulée, "bounce" = la même, marche en sautillant, "heads" = l'ancien corps avec les nouvelles têtes)
-    hatAt: [57.5, 17.5, 20], santaAt: [53, 25, 6], svg: () => (KINDS.peo.rig === "heads" ? peoSvg(undefined, true) : KINDS.peo.rig ? peoRigSvg() : peoSvg()), size: 60, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
+    hatAt: [57.5, 17.5, 20], santaAt: [53, 25, 6], svg: () => (KINDS.peo.rig === "heads" ? peoSvg(undefined, true) : KINDS.peo.rig ? peoRigSvg() : peoSvg()), size: 75, wide: 1.12, reach: 0.32, stand: 0.22, head: [49, 31], sink: 22, facesLeft: true, // (assis : ses grandes jambes pendent devant la case ; dessin de trois quarts, tourné vers la gauche)
     // size 60 : 1,5 fois la hauteur de Tino (mesurée sur les pixels : 92,8 unités de haut, Tino 92 → 55,7 px contre 36,8) ; wide : un peu élargi
     only: PEO_ACTIONS, calm: true, home: true, sprites: PEO_SPRITES, // home : il vit dans la marmite (voir mountMascots, homeTick) ; sprites : image par image
     body: { cy: 56, support: Array(24).fill(42) },
@@ -677,7 +677,7 @@ export const KINDS = {
   // MeoMeo : les mêmes actions que PeoPeo ; size 56 : 1,4 × la hauteur de Tino (92 unités de haut, comme PeoPeo — réglable) ;
   // snatch : quand Tino boit une bière, elle la lui prend, s'énerve et la boit (duo « beer »)
   meo: {
-    name: "MeoMeo", cutout: true, hatAt: [50.5, 13.5, 3], armMax: 135, svg: () => meoSvg(), size: 56, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
+    name: "MeoMeo", cutout: true, hatAt: [50.5, 13.5, 3], armMax: 135, svg: () => meoSvg(), size: 70, head: [50, 30], sink: 20, facesLeft: true, snatch: true, reach: 0.32, stand: 0.22,
     only: PEO_ACTIONS, calm: true, home: true, sprites: MEO_SPRITES,
     body: { cy: 56, support: Array(24).fill(42) },
   },
