@@ -620,7 +620,7 @@ const MEO_ACTS = actSet("meo", {
   gameSit: { n: 16, fps: 24, cw: 956, ch: 1306, foot: 1208, fig: 1169, ax: 481 },
   game: { n: 14, fps: 24, cw: 956, ch: 1306, foot: 1208, fig: 1169, ax: 481 },
   cheer: { n: 22, fps: 24, cw: 956, ch: 1306, foot: 1208, fig: 1169, ax: 481 },
-  pat: { n: 24, fps: 24, cw: 776, ch: 1271, foot: 1230, fig: 1170, ax: 380 },
+  pat: { n: 24, fps: 24, cw: 776, ch: 1271, foot: 1230, fig: 1170, ax: 380, hand: 0.26 }, // (hand : sa main, × sa taille devant elle)
   scoot: { n: 17, fps: 12, cw: 450, ch: 672, foot: 651, fig: 625, ax: 226 },
   pho: { n: 10, fps: 24, cw: 606, ch: 744, foot: 699, fig: 631, ax: 350 },
   beer: { n: 34, fps: 12, cw: 594, ch: 744, foot: 698, fig: 624, ax: 352 },
@@ -638,6 +638,31 @@ const MEO_ACTS = actSet("meo", {
   win: { n: 39, fps: 24, cw: 866, ch: 1328, foot: 1285, fig: 1168, ax: 432 },
 });
 Object.assign(MEO_SPRITES, MEO_ACTS);
+// (ping : joué en aller-retour — la vidéo ne boucle pas proprement)
+const PEO_ACTS = actSet("peo", {
+  stir: { n: 24, fps: 24, cw: 788, ch: 1114, foot: 1062, fig: 994, ax: 434 },
+  fan: { n: 17, fps: 24, cw: 799, ch: 1091, foot: 1039, fig: 994, ax: 434 },
+  pat: { n: 30, fps: 12, cw: 720, ch: 1114, foot: 1062, fig: 994, ax: 412, ping: true, hand: 0.14 }, // (sa main reste devant sa poitrine)
+  gameSit: { n: 18, fps: 24, cw: 844, ch: 1103, foot: 1028, fig: 994, ax: 491 },
+  game: { n: 27, fps: 24, cw: 833, ch: 1103, foot: 1028, fig: 994, ax: 491 },
+  cheer: { n: 20, fps: 12, cw: 866, ch: 1159, foot: 1095, fig: 994, ax: 479 },
+  pho: { n: 21, fps: 24, cw: 833, ch: 1102, foot: 1028, fig: 994, ax: 491 },
+  scoot: { n: 16, fps: 24, cw: 923, ch: 1102, foot: 1028, fig: 994, ax: 581 },
+  beer: { n: 41, fps: 12, cw: 698, ch: 1114, foot: 1073, fig: 994, ax: 378 },
+  matcha: { n: 34, fps: 12, cw: 686, ch: 1091, foot: 1050, fig: 994, ax: 378, ping: true },
+  blow: { n: 25, fps: 24, cw: 979, ch: 1103, foot: 1062, fig: 994, ax: 378 },
+  laugh: { n: 27, fps: 24, cw: 709, ch: 1114, foot: 1073, fig: 994, ax: 378 },
+  cast: { n: 29, fps: 12, cw: 1170, ch: 1316, foot: 1208, fig: 994, ax: 423 },
+  roll: { n: 21, fps: 24, cw: 1271, ch: 1170, foot: 1073, fig: 994, ax: 558 },
+  win: { n: 46, fps: 24, cw: 754, ch: 1249, foot: 1152, fig: 994, ax: 401 },
+  panic: { n: 25, fps: 12, cw: 698, ch: 1148, foot: 1084, fig: 994, ax: 389 },
+  knock: { n: 55, fps: 12, cw: 1260, ch: 1181, foot: 1050, fig: 994, ax: 716, lie: 33 },
+  dismay: { n: 31, fps: 12, cw: 788, ch: 1103, foot: 1050, fig: 994, ax: 412 },
+  toss: { n: 29, fps: 12, cw: 1260, ch: 1316, foot: 1242, fig: 994, ax: 513, rel: 19 },
+  cart: { n: 51, fps: 24, cw: 833, ch: 1103, foot: 1039, fig: 994, ax: 491 },
+  kiss: { n: 30, fps: 12, cw: 844, ch: 1091, foot: 1039, fig: 994, ax: 412 },
+});
+Object.assign(PEO_SPRITES, PEO_ACTS);
 // Actions jouées avec les bandes (les autres — objets en main, cuisine, scooter, combats, marmite… — gardent le dessin)
 const SPRITE_ACTS = new Set(["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "travel", "potOut", "potIn", "goto", "chase", "flee", "pant", "caught", "toss", "kiss"]); // (toss, kiss : le trajet ; une fois sur place, actSprite)
 const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo", "fight"];
@@ -1864,7 +1889,7 @@ ACTIONS.duo = {
         if (out(a.bs)) { if (first) { a.bs = first.act.bs; a.far = 1; } else a.bs = -a.bs; } // (… ou, sans la place, à côté du 1er)
       }
       a.dir = -a.bs; x = t.x + a.bs * (gap + a.far * m.size * 0.6);
-      if (a.kind === "squish" && m.def.sprites?.pat && !a.far) x = markAt(t, ".ms-head")[0] + a.bs * m.size * 0.26; // (tapoter en image par image : sa main, 0,26 × sa taille devant elle, sur le milieu de la tête de Tino — assis ou couché)
+      if (a.kind === "squish" && m.def.sprites?.pat && !a.far) x = markAt(t, ".ms-head")[0] + a.bs * m.size * m.def.sprites.pat.hand; // (tapoter en image par image : sa main sur le milieu de la tête de Tino — assis ou couché)
       if (a.kind === "beer" && !a.snatch) r.with = a.bs;
     }
     if (!a.here) { if (duoWalk(m, a, x, dt, me)) { a.here = true; a.hereT = a.t; a.snatch = a.kind === "beer" && !!m.def.snatch && r.snatched == null && (a.snatchRoll ?? Math.random()) < SNATCH_P; if (a.kind === "beer" && !a.snatch) beerHello(r, a); } return false; }
@@ -2882,6 +2907,7 @@ class Mascot {
     const loop = (m, sec) => ({ m, i: Math.floor(Math.max(0, sec) * fps(m)) % m.n });
     const once = (m, sec) => ({ m, i: Math.min(m.n - 1, Math.floor(Math.max(0, sec) * fps(m))) });
     const ping = (m, sec) => { const L = Math.max(1, 2 * m.n - 2), k = Math.floor(Math.max(0, sec) * fps(m)) % L; return { m, i: k < m.n ? k : L - k }; };
+    const cyc = (m, sec) => (m.ping ? ping(m, sec) : loop(m, sec));
     if (t === "stir" || t === "fanpot") { // (la marmite : touiller / attiser ; « walk » : il y va → la marche)
       if (a.mode === "stir") return S.stir ? loop(S.stir, a.t) : null;
       if (a.mode === "fan") return S.fan ? loop(S.fan, a.t) : null;
@@ -2897,14 +2923,14 @@ class Mascot {
       }
       if (a.kind === "cook" || a.kind === "bbq" || a.kind === "rice") return S.stir ? loop(S.stir, u) : null;
       if (a.kind === "beer") return S.beer && !a.snatch ? ping(S.beer, u) : null;
-      if (a.kind === "squish") return S.pat ? loop(S.pat, u) : null;
+      if (a.kind === "squish") return S.pat ? cyc(S.pat, u) : null;
       if (a.kind === "scooter") return S.scoot && a.riding && a.crashT == null ? loop(S.scoot, u) : null;
       if (a.kind === "pho") return S.pho ? loop(S.pho, u) : null;
       if (a.kind === "matcha" && S.matcha) { // siroter ; bataille : souffler sa perle, puis rire
         const W = r?.war, e = W ? r.t - W.t0 : 0, i = Math.floor(e / WAR.EACH), v = e - i * WAR.EACH;
         if (W && i >= W.shots.length) return ping(S.laugh, e - W.shots.length * WAR.EACH);
         if (W && W.shots[i][0] === this && v < WAR.WIND + 0.45) return once(S.blow, v);
-        return loop(S.matcha, u);
+        return cyc(S.matcha, u);
       }
       if (a.kind === "shop") return r?.rider === this && a.riding ? (S.cart ? loop(S.cart, u) : null) : undefined; // (à pied : la marche)
       return null;
