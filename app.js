@@ -3492,10 +3492,10 @@ const isHere = (id) => !!id && (id === S.user?.id ? !document.hidden : S.online.
 // « ensemble ») et Tino reste éveillé, même la nuit
 const bothHere = () => isHere(personId("PeoPeo")) && isHere(personId("MeoMeo"));
 // Les deux têtes dans la marmite (PeoPeo à gauche, MeoMeo à droite) : x = centre de la tête dans le repère de la marmite
-const POT_HEADS = { peo: { label: "PeoPeo", x: 18, box: 'x="2" y="-6" width="32" height="32"', svg: () => peoHeadSvg("ms-flush-peo-pot") },
-  meo: { label: "MeoMeo", x: 46, box: 'x="30" y="-8" width="32" height="32"', svg: () => meoHeadSvg("ms-flush-meo-pot") },
+const POT_HEADS = { peo: { label: "PeoPeo", x: 20, box: 'x="7" y="0.9" width="26" height="26"', svg: () => peoHeadSvg("ms-flush-peo-pot") },
+  meo: { label: "MeoMeo", x: 44, box: 'x="31" y="1" width="26" height="26"', svg: () => meoHeadSvg("ms-flush-meo-pot") },
   // Tino, au milieu, quand PeoPeo et MeoMeo l'ont jeté dans la marmite (ensemble) : pas de présence à lui
-  tino: { label: null, x: 32, box: 'x="14" y="-6" width="36" height="32.4"', svg: () => tinoHeadSvg() } };
+  tino: { label: null, x: 32, box: 'x="19" y="4" width="26" height="23.4"', svg: () => tinoHeadSvg() } };
 // Absent (pas l'app ouverte) : il / elle reste dans la marmite, endormi(e) ; là : sa tête sort quand il / elle est dans la marmite
 const potAway = (kind) => !!POT_HEADS[kind].label && !isHere(personId(POT_HEADS[kind].label));
 const potUp = (kind) => (kind === "tino" ? !!mascots?.inPot("tino") : mascots ? mascots.inPot(kind) : true); // (absent mais sorti dire un message : pas de tête dans la marmite)
@@ -3574,7 +3574,7 @@ function potFx(st) {
 // droite : face à face ; Tino devant) ; le bouillon accélère quand on touille et ralentit pendant qu'on attise le feu
 // (swirl.w), puis les têtes reviennent à leur place quand c'est fini (swirl.k) ; celle de devant est dessinée par-dessus.
 // Pendant ce temps, pas de « guet » (.mp-swirl) : les déplacer dans la page relancerait leur animation.
-const SWIRL_R = 14, SWIRL_W = 2.2, SWIRL_BASE = { peo: Math.PI, meo: 0, tino: Math.PI / 2 };
+const SWIRL_R = 12, SWIRL_W = 2.2, SWIRL_BASE = { peo: Math.PI, meo: 0, tino: Math.PI / 2 };
 let swirl = { ang: 0, w: 0, k: 0, at: 0 }, swirlRaf = 0;
 function potSwirl(stirring, cooking, phase = 0) {
   cancelAnimationFrame(swirlRaf);
