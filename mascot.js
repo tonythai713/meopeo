@@ -674,6 +674,11 @@ const PEO_ACTS = actSet("peo", {
   kiss: { n: 30, fps: 12, cw: 844, ch: 1091, foot: 1039, fig: 994, ax: 412 },
 });
 Object.assign(PEO_SPRITES, PEO_ACTS);
+// Entrées / sorties d'activité : le début de la vidéo (debout au repos → l'activité) et sa fin (→ debout), en bandes
+// <nom>-in / <nom>-out (même cadre que l'activité, 24 images / s, accélérées si longues) ; [images de l'entrée, de la sortie]
+const withTrans = (dir, S, list) => { for (const [k, [ni, no]] of Object.entries(list)) { const m = S[k], t = (n, w) => ({ ...m, n, fps: 24, ping: false, src: new URL(`art/${dir}/acts/${k}-${w}.webp`, import.meta.url).href }); if (ni) m.intro = t(ni, "in"); if (no) m.outro = t(no, "out"); } };
+withTrans("meo", MEO_SPRITES, { beer: [15, 0], cart: [24, 0], fan: [18, 5], matcha: [18, 0], pat: [24, 17], scoot: [22, 0], stir: [16, 0] });
+withTrans("peo", PEO_SPRITES, { beer: [17, 17], cart: [14, 24], fan: [17, 23], matcha: [18, 0], pat: [5, 15], stir: [13, 23], pho: [0, 17], scoot: [0, 22] });
 // Actions jouées avec les bandes (les autres — objets en main, cuisine, scooter, combats, marmite… — gardent le dessin)
 const SPRITE_ACTS = new Set(["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "travel", "potOut", "potIn", "goto", "chase", "flee", "pant", "caught", "toss", "kiss"]); // (toss, kiss : le trajet ; une fois sur place, actSprite)
 const PEO_ACTIONS = ["idle", "walk", "hop", "sit", "wave", "today", "sleep", "react", "pet", "drop", "fly", "chase", "duo", "fight"];
@@ -2894,7 +2899,7 @@ class Mascot {
     const me = this.plat();
     if (me) {
       this.y = me.y; // (les sauts et l'envol le placent eux-mêmes)
-      if ((A.step ?? timed)(this, a, dt, me)) this.act = null;
+      if ((A.step ?? timed)(this, a, dt, me)) { this.act = null; const o = this.sprMain?.outro; if (o && this.plan[0]?.type !== "idle") this.plan.unshift({ type: "idle", dur: o.n / 24 }); } // (le temps de sa sortie d'activité, sur place, avant de repartir)
     }
     this.ease(dt);
     if (this.def.sprites) this.spriteTrack(dt, a, A, me);
@@ -2923,7 +2928,7 @@ class Mascot {
     if (t === "stir" || t === "fanpot") { // (la marmite : touiller / attiser ; « walk » : il y va → la marche)
       if (a.mode === "stir") return S.stir ? loop(S.stir, a.t) : null;
       if (a.mode === "fan") return S.fan ? loop(S.fan, a.t) : null;
-      return a.mode === "walk" ? undefined : null;
+      return a.mode === "walk" ? undefined : { m: S.idle, i: 0 };
     }
     if (t === "duo") {
       if (!a.here) return undefined;
@@ -2967,15 +2972,30 @@ class Mascot {
     if (t === "beer" && S.beer) return ping(S.beer, a.t);
     return undefined;
   }
-  // Quelle image de quelle bande montrer (null : l'ancien dessin)
+  // Entrée / sortie d'activité : une activité qui commence passe d'abord par son entrée ; quand elle s'arrête et qu'il / elle
+  // reste sur place, sa sortie est jouée (le fondu de render() fait le reste)
   spriteFor(a, p) {
+    const s = this.spriteRaw(a, p), T = this.trans, now = this.clock;
+    if (T && !sprReady(T.m.src)) T.t0 = now; // (elle attend que son image soit prête : pas d'images sautées)
+    if (T) {
+      const i = Math.floor((now - T.t0) * 24), here = s?.m === T.main;
+      if (i < T.m.n && s && (T.kind === "in" ? here : !here && !s.m.act && (this.act?.type === "idle" || !this.movingT) && !this.airborne)) return { m: T.m, i };
+      this.trans = null;
+    }
+    const prev = this.sprMain; this.sprMain = s?.m.act ? s.m : null;
+    if (s?.m.act) { sprReady(s.m.src); if (s.m.outro) sprReady(s.m.outro.src); } // (l'activité et sa sortie se préparent pendant l'entrée)
+    if (s?.m.intro && !prev) { this.trans = { kind: "in", m: s.m.intro, main: s.m, t0: now }; return { m: s.m.intro, i: 0 }; }
+    if (prev?.outro && s && !s.m.act && (this.act?.type === "idle" || !this.movingT) && !this.airborne) { this.trans = { kind: "out", m: prev.outro, main: prev, t0: now }; return { m: prev.outro, i: 0 }; }
+    return s;
+  }
+  // Quelle image de quelle bande montrer (null : l'ancien dessin)
+  spriteRaw(a, p) {
     const S = this.def.sprites, t = a.type;
     if (this.lie > 0.3 || this.bedK > 0.05) return null;
     const act = this.actSprite(a);
     if (act?.flat) { p.spin = 0; p.sx = p.sy = 1; p.bob = 0; }
     if (act !== undefined) return act;
     if (p.spin) return null; // (une activité : sa bande, ou null = l'ancien dessin s'il n'y a pas de bande pour elle)
-    if (this.inHands) return null;
     if (!(SPRITE_ACTS.has(t) || t === "fight" || (t === "duo" && (!a.here || a.kind === "shop")))) return null; // (combat : ici seulement quand il / elle se replace)
     const at = (m, sec) => ({ m, i: Math.min(m.n - 1, Math.floor(sec * SPRITE_FPS)) });
     if (this.sitT > 0) return at(S.sit, this.sitT);
