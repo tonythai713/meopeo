@@ -3509,12 +3509,13 @@ function potButton() {
     <svg class="mp-pot-art" viewBox="0 -8 64 60" aria-hidden="true">
       <defs>
         <linearGradient id="mp-pot-gold" x1="0" x2="1"><stop offset="0" stop-color="#b9821c"/><stop offset="0.3" stop-color="#f7d675"/><stop offset="0.55" stop-color="#e5ae3e"/><stop offset="1" stop-color="#a86f14"/></linearGradient>
+        <radialGradient id="mp-pot-soup" cx="0.5" cy="0.3" r="0.75"><stop offset="0" stop-color="#f08a3e"/><stop offset="1" stop-color="#b8381c"/></radialGradient>
         <clipPath id="mp-pot-clip"><path d="M-20 -30H84V24H58Q32 34 6 24H-20Z"/></clipPath>
       </defs>
       <ellipse cx="32" cy="49" rx="23" ry="2.4" fill="#000" opacity="0.18"/>
       <g class="mp-pot-fire"><g class="mp-flame"><path d="M6 53Q-1 44 4 33Q6.5 41 8.5 42Q8 35 11.5 30Q16 41 15 53Z" fill="#ff7a1a"/><path d="M7 53Q3.5 47 6.5 41Q8 46 10 47Q11 51 10.5 53Z" fill="#ffd34a"/></g><g class="mp-flame"><path d="M22 53Q18 44 24 35Q25 43 28 44Q28 37 32 32Q37 42 35 47Q38 44 39 40Q44 47 40 53Z" fill="#ff6a14"/><path d="M25 53Q23 47 27 42Q28 47 31 47Q31 43 33 40Q36 47 34 53Z" fill="#ffc93a"/></g><g class="mp-flame"><path d="M58 53Q65 44 60 33Q57.5 41 55.5 42Q56 35 52.5 30Q48 41 49 53Z" fill="#ff7a1a"/><path d="M57 53Q60.5 47 57.5 41Q56 46 54 47Q53 51 53.5 53Z" fill="#ffd34a"/></g><g class="mp-pot-sparks" fill="#ffd96a"><circle cx="16" cy="44" r="0.9"/><circle cx="33" cy="40" r="1"/><circle cx="47" cy="43" r="0.8"/></g></g>
       <ellipse cx="32" cy="24" rx="26" ry="5" fill="#6e4a10"/>
-      <ellipse class="mp-pot-broth" cx="32" cy="24.6" rx="24.5" ry="4.2" fill="#d4502a"/>
+      <ellipse class="mp-pot-broth" cx="32" cy="24.6" rx="24.5" ry="4.2" fill="url(#mp-pot-soup)"/>
       <path d="M6 24Q32 14 58 24" fill="none" stroke="#c99230" stroke-width="2.4"/>
       <g clip-path="url(#mp-pot-clip)">${potHead("peo")}${potHead("meo")}${potHead("tino")}
         <g class="mp-pot-spoon" style="display: none"><path class="mp-chop" d="" fill="none" stroke="#b9894a" stroke-width="1.5" stroke-linecap="round"/><path class="mp-chop" d="" fill="none" stroke="#d4a463" stroke-width="1.5" stroke-linecap="round"/></g></g>

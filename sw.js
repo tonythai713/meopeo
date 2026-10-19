@@ -1,13 +1,13 @@
 // Service worker de MeoPeo : l'app s'ouvre même sans réseau (ses fichiers sont gardés sur le téléphone).
 // ⚠️ À CHAQUE publication d'une nouvelle version : changer VERSION, sinon les téléphones gardent l'ancienne.
 // Les données (Supabase : tâches, connexion, temps réel) ne passent JAMAIS par ce cache.
-const VERSION = "2026-10-19.4";
+const VERSION = "2026-10-19.5";
 const CACHE = "meopeo-" + VERSION;
 const SHELL = [
   "./", "index.html", "app.js", "mascot.js", "house.js", "swim.js", "bigtino.js", "data.js", "config.js", "style.css", "manifest.webmanifest",
   "background.jpg", "art/big-tino.jpg",
   "art/peo/head.webp", "art/peo/head-sleep.webp", "art/peo/body.webp", "art/peo/arm-l.webp", "art/peo/arm-r.webp", "art/peo/shoe-l.webp", "art/peo/shoe-r.webp",
-  "art/meo/head.webp", "art/meo/head-sleep.webp", "art/meo/body.webp", "art/meo/arm-l.webp", "art/meo/arm-r.webp", "art/meo/shoe-l.webp", "art/meo/shoe-r.webp", "art/meo/head-cat.webp", "art/peo/head-new.webp", "art/peo/head-sleep-new.webp", "art/meo/head-sleep-cat.webp", "art/meo/tail.webp",
+  "art/meo/head.webp", "art/meo/head-sleep.webp", "art/meo/body.webp", "art/meo/arm-l.webp", "art/meo/arm-r.webp", "art/meo/shoe-l.webp", "art/meo/shoe-r.webp", "art/meo/head-cat.webp", "art/peo/head-new.webp", "art/meo/head-pot.webp", "art/meo/head-sleep-pot.webp", "art/peo/head-sleep-new.webp", "art/meo/head-sleep-cat.webp", "art/meo/tail.webp",
   "art/peo/moves/walk.webp", "art/peo/moves/run.webp", "art/peo/moves/idle.webp", "art/peo/moves/wave.webp", "art/peo/moves/sit.webp", "art/peo/moves/stand.webp",
   "art/meo/moves/walk.webp", "art/meo/moves/run.webp", "art/meo/moves/idle.webp", "art/meo/moves/wave.webp", "art/meo/moves/sit.webp", "art/meo/moves/stand.webp",
   "art/meo/acts/stir.webp", "art/meo/acts/fan.webp", "art/meo/acts/gameSit.webp", "art/meo/acts/game.webp", "art/meo/acts/cheer.webp", "art/meo/acts/pat.webp", "art/meo/acts/scoot.webp", "art/meo/acts/pho.webp", "art/meo/acts/beer.webp", "art/meo/acts/cast.webp", "art/meo/acts/toss.webp", "art/meo/acts/matcha.webp", "art/meo/acts/blow.webp", "art/meo/acts/laugh.webp", "art/meo/acts/cart.webp", "art/meo/acts/kiss.webp", "art/meo/acts/knock.webp", "art/meo/acts/roll.webp", "art/meo/acts/panic.webp", "art/meo/acts/dismay.webp", "art/meo/acts/win.webp", "art/peo/acts/stir.webp", "art/peo/acts/fan.webp", "art/peo/acts/pat.webp", "art/peo/acts/gameSit.webp", "art/peo/acts/game.webp", "art/peo/acts/cheer.webp", "art/peo/acts/pho.webp", "art/peo/acts/scoot.webp", "art/peo/acts/beer.webp", "art/peo/acts/matcha.webp", "art/peo/acts/blow.webp", "art/peo/acts/laugh.webp", "art/peo/acts/cast.webp", "art/peo/acts/roll.webp", "art/peo/acts/win.webp", "art/peo/acts/panic.webp", "art/peo/acts/knock.webp", "art/peo/acts/dismay.webp", "art/peo/acts/toss.webp", "art/peo/acts/cart.webp", "art/peo/acts/kiss.webp", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png",

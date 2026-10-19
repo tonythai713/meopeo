@@ -427,9 +427,9 @@ function meoSvg(gid = "ms-flush-meo") {
   ${meoSleeves()}
 </svg>`;
 }
-// La tête de MeoMeo seule (dans la marmite), cadrée sur le visage, les cheveux et les oreilles de chat
-export function meoHeadSvg(gid = "ms-flush-meo-head") {
-  return `<svg class="ms-meo" viewBox="33 7 50 50" aria-hidden="true">${meoHead(gid)}</svg>`;
+// La tête de MeoMeo seule (dans la marmite) : découpée dans sa vidéo calme (images 40 et 104), menton compris, comme PeoPeo
+export function meoHeadSvg() {
+  return `<svg class="ms-meo" viewBox="0 0 100 100" aria-hidden="true"><g class="ms-head"><g class="ms-peo-eyes">${meoImg("head-pot", 0, 0, 100, 100)}</g><g class="ms-peo-shut">${meoImg("head-sleep-pot", 0, 7.6, 100, 90.3)}</g></g></svg>`;
 }
 
 // ---------- Tenues dessinées (garde-robe) ----------
