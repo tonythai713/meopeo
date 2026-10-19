@@ -12,6 +12,8 @@ const STYLE = `
 .ms-peo-shut { display: none; } .ms-sleep .ms-peo-shut { display: inline; } .ms-sleep .ms-peo-eyes { display: none; } /* PeoPeo dort les yeux fermés */ /* saleté (laver Tino) : variable posée par l'app, 0 = propre */ /* couleur pêchée : variables posées par l'app sur la racine (html) ; jamais de chevrons ici : ce style va aussi dans les images SVG du widget */
 .ms-spr { position: absolute; inset: 0; display: none; pointer-events: none; }
 .ms-spr i { position: absolute; left: 0; top: 0; background-repeat: no-repeat; }
+.ms-spr-old { opacity: 0; } .ms-spr-old.ms-fade { animation: ms-sprfade 0.16s linear forwards; }
+@keyframes ms-sprfade { from { opacity: 1; } to { opacity: 0; } }
 .ms-spr-hat { position: absolute; inset: 0; width: 100%; height: 100%; display: none; overflow: visible; pointer-events: none; }
 .ms-sprited .ms-spr, .ms-sprited .ms-spr-hat { display: block; } .ms-sprited .ms-in > svg:not(.ms-spr-hat) { visibility: hidden; }
 .ms-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
@@ -594,6 +596,15 @@ const FX = `<svg class="ms-fx" viewBox="0 0 100 100" aria-hidden="true">
 // par case, de gauche à droite, dessinées tournées vers la DROITE. Repère du cadre de la vidéo (en pixels de la vidéo) :
 // cw × ch = la case ; foot = la ligne des pieds ; fig = sa hauteur debout ; ax = le milieu de son corps ; n = nombre d'images ;
 // stride = ce qu'un cycle de marche fait avancer (les pas suivent la distance : pas de glissade). Jouées à 24 images / s.
+// Bandes décodées avant d'être montrées (sinon il disparaît le temps que le téléphone prépare l'image) : les mouvements dès le
+// départ, les activités quand elles servent (toutes décodées d'un coup : trop de mémoire sur un téléphone)
+const SPR_IMG = new Map();
+function sprReady(src, decode = true) {
+  let e = SPR_IMG.get(src);
+  if (!e) { const im = new Image(); im.src = src; e = { im, ready: false }; SPR_IMG.set(src, e); }
+  if (decode && !e.p) e.p = e.im.decode().catch(() => {}).then(() => { e.ready = true; });
+  return e.ready;
+}
 const SPRITE_FPS = 24, SPRITE_FIG = 92; // (hauteur de PeoPeo / MeoMeo dans leur dessin, en unités du repère 100)
 const spriteSet = (dir, list) => Object.fromEntries(Object.entries(list).map(([k, v]) => [k, { ...v, src: new URL(`art/${dir}/moves/${k}.webp`, import.meta.url).href }]));
 const PEO_SPRITES = spriteSet("peo", {
@@ -2421,11 +2432,11 @@ class Mascot {
     this.el.title = `${def.name} · tap to pet, rub to squish his head, hold to make ${def.name} sit or stand`;
     this.el.setAttribute("aria-label", def.name);
     this.el.mascot = this; // (pour les essais depuis la console : document.querySelector(".ms").mascot)
-    this.el.innerHTML = `<div class="ms-in">${def.svg()}${def.sprites ? '<div class="ms-spr"><i></i></div><svg class="ms-spr-hat" viewBox="0 0 100 100" aria-hidden="true"><g></g></svg>' : ""}</div>${FX}`;
+    this.el.innerHTML = `<div class="ms-in">${def.svg()}${def.sprites ? '<div class="ms-spr"><i></i><i class="ms-spr-old"></i></div><svg class="ms-spr-hat" viewBox="0 0 100 100" aria-hidden="true"><g></g></svg>' : ""}</div>${FX}`;
     this.inner = this.el.firstChild;
     if (def.sprites) { // (images par image : préchargées, sinon la première fois il disparaît un instant)
-      this.sprEl = this.inner.querySelector(".ms-spr"); this.sprImg = this.sprEl.firstChild; this.sprHat = this.inner.querySelector(".ms-spr-hat g"); this.sprKey = null; this.walked = 0; this.movingT = 0; this.sitT = 0; this.standT = 0;
-      for (const m of Object.values(def.sprites)) { const im = new Image(); im.src = m.src; }
+      this.sprEl = this.inner.querySelector(".ms-spr"); this.sprImg = this.sprEl.firstChild; this.sprOld = this.sprImg.nextSibling; this.sprHat = this.inner.querySelector(".ms-spr-hat g"); this.sprKey = null; this.walked = 0; this.movingT = 0; this.sitT = 0; this.standT = 0;
+      for (const m of Object.values(def.sprites)) sprReady(m.src, !m.act);
     }
     for (const k of ["head", "face", "cheeks", "flush", "dizzy-at", "dust-at", "flower", "arm-l", "arm-r", "foot-l", "foot-r", "zzz-at", "heart-at", "anger-at", "bub-at", "wear-head", "wear-body", "elbow-l", "elbow-r", "leg-l", "leg-r", "knee-l", "knee-r", "tail", "ahoge"]) this[k.replace("-", "_")] = this.el.querySelector(".ms-" + k);
     this.holdG = this.el.querySelector(".ms-hold"); this.inHands = null; // ce qu'il tient devant lui (classe ms-hold-<nom>) — (this.hold : minuterie de l'appui long)
@@ -2908,6 +2919,7 @@ class Mascot {
     const once = (m, sec) => ({ m, i: Math.min(m.n - 1, Math.floor(Math.max(0, sec) * fps(m))) });
     const ping = (m, sec) => { const L = Math.max(1, 2 * m.n - 2), k = Math.floor(Math.max(0, sec) * fps(m)) % L; return { m, i: k < m.n ? k : L - k }; };
     const cyc = (m, sec) => (m.ping ? ping(m, sec) : loop(m, sec));
+    const knock = (K, u, upAt) => { const up = clamp((u - upAt) / 0.6, 0, 1); return { m: K, i: up > 0 ? Math.min(K.n - 1, K.lie + 1 + Math.floor(up * (K.n - K.lie - 1))) : Math.min(K.lie, Math.floor(u * fps(K))), flat: true }; }; // (il tombe, reste à terre, se relève à upAt)
     if (t === "stir" || t === "fanpot") { // (la marmite : touiller / attiser ; « walk » : il y va → la marche)
       if (a.mode === "stir") return S.stir ? loop(S.stir, a.t) : null;
       if (a.mode === "fan") return S.fan ? loop(S.fan, a.t) : null;
@@ -2924,7 +2936,10 @@ class Mascot {
       if (a.kind === "cook" || a.kind === "bbq" || a.kind === "rice") return S.stir ? loop(S.stir, u) : null;
       if (a.kind === "beer") return S.beer && !a.snatch ? ping(S.beer, u) : null;
       if (a.kind === "squish") return S.pat ? cyc(S.pat, u) : null;
-      if (a.kind === "scooter") return S.scoot && a.riding && a.crashT == null ? loop(S.scoot, u) : null;
+      if (a.kind === "scooter") { // (accident : la chute sur le dos, puis il / elle se relève ; en montant : debout)
+        if (a.crashT != null) return S.knock ? knock(S.knock, a.t - a.crashT, CRASH.BRAKE + CRASH.FLIP + CRASH.FLAT + CRASH.GETUP + CRASH.DIZZY - 0.9) : null;
+        return a.riding && S.scoot ? loop(S.scoot, u) : { m: S.idle, i: 0 };
+      }
       if (a.kind === "pho") return S.pho ? loop(S.pho, u) : null;
       if (a.kind === "matcha" && S.matcha) { // siroter ; bataille : souffler sa perle, puis rire
         const W = r?.war, e = W ? r.t - W.t0 : 0, i = Math.floor(e / WAR.EACH), v = e - i * WAR.EACH;
@@ -2940,7 +2955,7 @@ class Mascot {
       if (st.mode === "cast") return S.cast ? once(S.cast, (st.u / (BOSS.WIND + 0.25)) * (S.cast.n / fps(S.cast))) : null;
       if (st.mode === "walk") return undefined;
       if (st.mode === "roll" && S.roll) return { ...once(S.roll, (st.u / BOSS.ROLL) * (S.roll.n / fps(S.roll))), flat: true };
-      if (st.mode === "knock" && S.knock) { const K = S.knock, up = clamp((st.u - (BOSS.END - 0.7)) / 0.6, 0, 1); return { m: K, i: up > 0 ? Math.min(K.n - 1, K.lie + 1 + Math.floor(up * (K.n - K.lie - 1))) : Math.min(K.lie, Math.floor(st.u * fps(K))), flat: true }; }
+      if (st.mode === "knock" && S.knock) return knock(S.knock, st.u, BOSS.END - 0.7);
       if (st.mode === "panic" && S.panic) return once(S.panic, st.u - (BOSS.AWIND - 0.2));
       if (st.mode === "dismay" && S.dismay) return once(S.dismay, st.u - 0.3);
       if (st.mode === "cheer" && S.win) return loop(S.win, st.u);
@@ -3047,8 +3062,13 @@ class Mascot {
     let downNow = down;
     if (spr) {
       const m = spr.m, k = (SPRITE_FIG * W) / 100 / m.fig, w = m.cw * k, h = m.ch * k;
-      if (this.sprKey !== m.src) { this.sprKey = m.src; Object.assign(this.sprImg.style, { backgroundImage: `url("${m.src}")`, width: w + "px", height: h + "px", backgroundSize: `${m.n * w}px ${h}px`, left: (W / 2 - m.ax * k) + "px", top: (W * 0.98 - m.foot * k) + "px" }); }
-      this.sprImg.style.backgroundPosition = `${(-spr.i * w).toFixed(2)}px 0`;
+      if (this.sprKey === m.src || sprReady(m.src) || !this.sprKey) { // (pas encore prête : on garde l'image d'avant)
+        if (this.sprKey !== m.src) {
+          if (this.sprOn) { this.sprOld.style.cssText = this.sprImg.style.cssText; this.sprOld.classList.remove("ms-fade"); void this.sprOld.offsetWidth; this.sprOld.classList.add("ms-fade"); } // (fondu de l'ancienne par-dessus)
+          this.sprKey = m.src; Object.assign(this.sprImg.style, { backgroundImage: `url("${m.src}")`, width: w + "px", height: h + "px", backgroundSize: `${m.n * w}px ${h}px`, left: (W / 2 - m.ax * k) + "px", top: (W * 0.98 - m.foot * k) + "px" });
+        }
+        this.sprImg.style.backgroundPosition = `${(-spr.i * w).toFixed(2)}px 0`;
+      }
       // (les dessins regardent à droite ; .ms-in est déjà retourné quand il va à droite : la bande l'est toujours, et sans l'élargissement)
       this.sprEl.style.transform = `scaleX(${(-1 / (this.def.wide ?? 1)).toFixed(4)})`;
       downNow = spr.flat ? 0 : down - this.sink * (this.def.sink ?? SINK) * u - (this.airborne || m.act ? 0 : p.bob); // (activité : sa pose la place — tabouret, selle ; roulade / renversée : sur la ligne)
@@ -3058,6 +3078,7 @@ class Mascot {
       this.sprDrop = low * sat;
       this.sprHat.setAttribute("transform", `translate(0 ${this.sprDrop.toFixed(2)})`);
     } else this.sprDrop = 0;
+    this.sprOn = !!spr;
     this.el.classList.toggle("ms-sleep", !!A.zzz);
     this.el.classList.toggle("ms-mad", a.type === "angry" || (a.t !== undefined && (gameMad(a) || !!A.mad?.(this, a))));
     this.el.classList.toggle("ms-swim", a.type === "swim" && !!a.wet);
