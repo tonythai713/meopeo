@@ -34,6 +34,8 @@
 //     — la personne fêtée ne la reçoit qu'à partir de openAt (la base la cache avant) ; pas de temps réel
 //   listDecor(), setDecor(blob, { season, layout, light }), deleteDecor({ season, layout, light }),
 //   subscribeDecor(onChange) → décor dessiné, fond d'écran par saison / jour-nuit / format (supabase/16_decor.sql)
+//   listSkins() → [{ slot, path, by, at }], setSkin(blob, slot), deleteSkin(slot), subscribeSkins(onChange) → cadre du
+//     calendrier, marmite et fond des tâches dessinés, slot = "frame" | "pot" | "task" (34_skins.sql)
 //   listGrumbles(), addGrumble(body), deleteGrumble(id), subscribeGrumbles(onChange) → phrases râleuses (13_tino_grumbles.sql)
 //   listSeries(), createSeries(task, rule, today), topUpSeries(today), splitSeries(id, task, shift), endSeries(id),
 //   subscribeSeries(onChange) → tâches récurrentes (15_recurring.sql) ; une tâche a aussi « series » (id de sa série ou null)
@@ -521,6 +523,31 @@ export function createBackend() {
     subscribeDecor(onChange) {
       const ch = sb.channel("decor-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "*", schema: "public", table: "decor" }, () => onChange())
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+    // Cadre du calendrier, marmite, fond des tâches (supabase/34_skins.sql) : un PNG transparent par emplacement, commun
+    async listSkins() {
+      const rows = must(await sb.from("skins").select("slot, path, author, updated_at"));
+      return rows.map((r) => ({ slot: r.slot, path: r.path, by: r.author, at: r.updated_at }));
+    },
+    // Comme setDecor : nouveau fichier, puis l'emplacement pointe dessus (set_skin renvoie l'ancien), puis l'ancien est effacé
+    async setSkin(blob, slot) {
+      if (blob.type !== "image/png") throw new Error("unsupported file type");
+      const path = `skins/${crypto.randomUUID()}.png`;
+      must(await sb.storage.from("tino").upload(path, blob, { contentType: "image/png", upsert: false }));
+      let old;
+      try { old = must(await sb.rpc("set_skin", { p_slot: slot, p_path: path })); }
+      catch (err) { await sb.storage.from("tino").remove([path]); throw err; }
+      if (old) await sb.storage.from("tino").remove([old]);
+    },
+    async deleteSkin(slot) {
+      const rows = must(await sb.from("skins").delete().eq("slot", slot).select("path"));
+      if (rows[0]?.path) await sb.storage.from("tino").remove([rows[0].path]);
+    },
+    subscribeSkins(onChange) {
+      const ch = sb.channel("skins-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "skins" }, () => onChange())
         .subscribe();
       return () => sb.removeChannel(ch);
     },

@@ -821,3 +821,46 @@ a { color: var(--text-accent); }
 .mp-ware-season { font-size: 0.78em; font-weight: 700; color: #ff922b; }
 .mp-light .mp-ware-season { color: #c2410c; }
 @media (prefers-reduced-motion: reduce) { .mp-bat, .mp-bat svg, .hs-bat, .mp-jack-eyes { animation: none; } }
+
+/* Cadre du calendrier, marmite, fond des tâches dessinés par eux (34_skins.sql ; app.js, section « skins »).
+   Sans dessin, rien de tout ça ne s'applique (classes mp-frame-on / mp-task-on / mp-ink-* sur body). */
+:root { --mp-fb: 15px; } /* la bande du cadre à l'écran (64 px du modèle) ; les coins : 240 px du modèle */
+@media (min-width: 761px) { :root { --mp-fb: 20px; } }
+body.mp-frame-on .pl-cal { position: relative; padding: var(--mp-fb); border-radius: 0; border-color: transparent; }
+.mp-frame { position: absolute; inset: 0; z-index: 3; pointer-events: none; border: calc(var(--mp-fb) * 3.75) solid transparent; border-image: var(--mp-frame) 240 stretch; }
+body.mp-task-on .pl-item { position: relative; isolation: isolate; background: none; }
+body.mp-task-on .pl-item::before { content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none; border: solid transparent; border-width: 14px 22px; border-image: var(--mp-task) 50 80 fill stretch; }
+body.mp-task-on .pl-item.late::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: 8px; background: rgba(255, 99, 132, 0.22); }
+body.mp-ink-dark .pl-item { color: #1c2046; --text-muted: #4b5382; }
+body.mp-ink-dark .pl-item .pl-what b { color: color-mix(in srgb, var(--c) 62%, #000000); }
+body.mp-ink-dark .pl-item.late .pl-when { color: #b01f3d; }
+body.mp-ink-light .pl-item { color: #f4f3ff; --text-muted: #c9cdf2; }
+body.mp-ink-light .pl-item .pl-what b { color: color-mix(in srgb, var(--c) 55%, #ffffff); }
+body.mp-ink-light .pl-item.late .pl-when { color: #ff8fa3; }
+.mp-skin { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: center; padding: 8px; margin-top: 8px; border: 1px dashed var(--pl-line); border-radius: 12px; }
+.mp-skin.on { border-style: solid; }
+.mp-skin-thumb { display: grid; place-items: center; height: 84px; border-radius: 8px; overflow: hidden; background: rgba(0, 0, 20, 0.35); color: var(--text-muted); font-size: 0.8em; }
+.mp-skin-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.mp-light .mp-skin-thumb { background: rgba(40, 50, 110, 0.08); }
+
+/* Opacité des fonds (⚙ Settings → Appearance, cet appareil ; app.js, applySeeThrough) : seulement sous 100 % (classes sur
+   <html>) ; --mp-cal-a / --mp-task-a de 0 (transparent : le décor se voit) à 1. Ombres et voile suivent ; texte ombré. */
+.mp-cal-see .pl-cal, .mp-task-see :is(.pl-todo, .pl-detail, .pl-partner) {
+  --mp-a: var(--mp-cal-a); background: color-mix(in srgb, var(--pl-card) calc(var(--mp-a) * 100%), transparent);
+  -webkit-backdrop-filter: blur(calc(12px * var(--mp-a))) saturate(calc(100% + 30% * var(--mp-a))); backdrop-filter: blur(calc(12px * var(--mp-a))) saturate(calc(100% + 30% * var(--mp-a)));
+  box-shadow: 0 10px 30px color-mix(in srgb, rgba(0, 0, 20, 0.45) calc(var(--mp-a) * 100%), transparent);
+}
+.mp-task-see :is(.pl-todo, .pl-detail, .pl-partner) { --mp-a: var(--mp-task-a); border-color: color-mix(in srgb, var(--pl-line) calc(var(--mp-a) * 100%), transparent); }
+.mp-cal-see .pl-cal { border-color: color-mix(in srgb, var(--pl-line) calc(var(--mp-a) * 100%), transparent); }
+.mp-light.mp-cal-see .pl-cal, .mp-light.mp-task-see :is(.pl-todo, .pl-detail, .pl-partner) { box-shadow: 0 10px 30px color-mix(in srgb, rgba(20, 30, 80, 0.18) calc(var(--mp-a) * 100%), transparent); }
+.mp-cal-see .pl-day.we { background: color-mix(in srgb, rgba(0, 0, 20, 0.18) calc(var(--mp-cal-a) * 100%), transparent); }
+.mp-cal-see .pl-dow { background: color-mix(in srgb, rgba(255, 255, 255, 0.04) calc(var(--mp-cal-a) * 100%), transparent); }
+.mp-light.mp-cal-see .pl-day.we { background: color-mix(in srgb, rgba(40, 50, 110, 0.06) calc(var(--mp-cal-a) * 100%), transparent); }
+.mp-light.mp-cal-see .pl-dow { background: color-mix(in srgb, rgba(40, 50, 110, 0.05) calc(var(--mp-cal-a) * 100%), transparent); }
+.mp-cal-see .pl-cal :is(.pl-num, .pl-dow), .mp-task-see body:not(.mp-task-on) :is(.pl-todo, .pl-detail, .pl-partner) { text-shadow: 0 1px 3px rgba(0, 0, 20, 0.9), 0 0 8px rgba(0, 0, 20, 0.5); }
+.mp-light.mp-cal-see .pl-cal :is(.pl-num, .pl-dow), .mp-light.mp-task-see body:not(.mp-task-on) :is(.pl-todo, .pl-detail, .pl-partner) { text-shadow: 0 0 3px rgba(255, 255, 255, 0.95), 0 0 8px rgba(255, 255, 255, 0.7); }
+.mp-task-see .pl-item::before, .mp-task-see .pl-item::after { opacity: var(--mp-task-a); } /* (leur fond dessiné, 34) */
+.mp-opa { display: flex; align-items: center; gap: 8px; margin: 4px 0; width: 100%; box-sizing: border-box; }
+.mp-opa b { flex: 0 0 6.6em; font-weight: 500; }
+.mp-opa input { flex: 1; min-width: 0; }
+.mp-opa span { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }

@@ -79,7 +79,7 @@ const bindRepeat = (form) => { const sel = form.querySelector("[name=repeat]"); 
 
 // ---------- État ----------
 let db, root, toastBox, unsubscribe = null, reloadTimer = null;
-const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, bdays: [], bdayOk: null, letters: [], occOk: null, shells: null, shellsOk: null, furniture: [], house: [], swims: null, swimOk: null, online: new Set() };
+const S = { user: null, me: null, partner: null, cats: [], mine: [], theirs: [], tino: [], tinoOk: null, lines: [], big: null, extrasOk: null, outfits: [], worn: { head: null, body: null }, outfitsOk: null, grumbles: [], grumblesOk: null, notes: [], notesOk: null, doodles: [], doodlesOk: null, series: [], seriesOk: null, decor: [], decorOk: null, decorNow: null, skins: [], skinsOk: null, skinOn: { frame: null, pot: null, task: null }, catches: [], color: null, fishingOk: null, feeding: null, hungerLines: [], feedingOk: null, bath: null, bathOk: null, bdays: [], bdayOk: null, letters: [], occOk: null, shells: null, shellsOk: null, furniture: [], house: [], swims: null, swimOk: null, online: new Set() };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("meopeo." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("meopeo." + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
@@ -108,7 +108,7 @@ export async function start(backend) {
   else if (!u && !S.user) showLogin();
   // Retour sur l'app : sur téléphone, la connexion temps réel a pu être coupée → on relit tout et on se réabonne
   document.addEventListener("visibilitychange", () => { if (document.hidden) presenceCh?.set(false); presenceChanged(); }); // (en arrière-plan : il n'est plus « là »)
-  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); loadHouse(); loadSwims(); resubscribe(); };
+  const wake = () => { if (!S.user || document.hidden) return; tick(); reload(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadSkins(); loadBirthdays(); loadHouse(); loadSwims(); resubscribe(); };
   document.addEventListener("visibilitychange", wake);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { applyTheme(); runClocks(); } }); // (minuteries endormies en arrière-plan)
   runClocks();
@@ -170,6 +170,7 @@ async function boot(user) {
   loadDoodles();
   loadSeries();
   loadDecor();
+  loadSkins();
   loadBirthdays();
   loadHouse();
   loadSwims();
@@ -192,6 +193,7 @@ function resubscribe() {
   unsubDoodles?.(); unsubDoodles = S.user ? db.subscribeDoodles(() => loadDoodles()) : null; // idem (19)
   unsubSeries?.(); unsubSeries = S.user ? db.subscribeSeries(() => loadSeries()) : null; // idem (15)
   unsubDecor?.(); unsubDecor = S.user ? db.subscribeDecor(() => loadDecor()) : null; // idem (16)
+  unsubSkins?.(); unsubSkins = S.user ? db.subscribeSkins(() => loadSkins()) : null; // cadre, marmite, tâches (34) : idem
 }
 function reload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 250); } // plusieurs événements d'affilée = un seul rechargement
 
@@ -273,6 +275,7 @@ function showLogin() {
   unsubDoodles?.(); unsubDoodles = null; S.doodles = []; S.doodlesOk = null; doodleUi?.el.remove(); doodleUi = null; doodlePng.clear(); doodleSeen = null;
   unsubSeries?.(); unsubSeries = null; S.series = []; S.seriesOk = null; toppedUp = 0;
   unsubDecor?.(); unsubDecor = null; S.decor = []; S.decorOk = null; applyDecor(); // fond d'origine sur l'écran de connexion
+  unsubSkins?.(); unsubSkins = null; S.skins = []; S.skinsOk = null; applySkins(); // (cadre, marmite et tâches d'origine)
   showTab(); // plus de barre d'onglets sur l'écran de connexion
   root.innerHTML = `<div class="mp-login pl-card"><h1>MeoPeo</h1><p class="mp-sub">💗 MeoMeo · 💜 PeoPeo</p>
     <form><input type="email" name="email" placeholder="E-mail" autocomplete="username" required>
@@ -340,7 +343,7 @@ function render() {
   renderCalendar(root.querySelector(".pl-right"));
   renderPartner(root.querySelector(".mp-partner"), P);
   bindParty(root);
-  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadBirthdays(); loadHouse(); loadSwims(); resubscribe(); });
+  root.querySelector("[data-act=refresh]").addEventListener("click", () => { tick(); load(); loadTino(); loadExtras(); loadOutfits(); loadCatches(); loadFeeding(); loadBath(); loadGrumbles(); loadNotes(); loadDoodles(); loadSeries(); loadDecor(); loadSkins(); loadBirthdays(); loadHouse(); loadSwims(); resubscribe(); });
   root.style.minHeight = "";
   placeBigTino();
   renderTino();
@@ -485,7 +488,7 @@ function renderCalendar(el) {
         style="--c:${e.color};--lane:${g.lane};grid-row:${w + 2};grid-column:${g.c0 + 1} / ${g.c1 + 2}" title="${chipTitle(e)} (${dm(e.date)} → ${dm(e.end)})">${e.course ? `<b>${esc(e.course)}</b> ` : ""}${g.head ? hourPill(e) : "↪ "}${esc(e.label)}${e.series ? " 🔁" : ""}${bellMark(e)}</div>`;
     }).join("");
   }
-  html += `</div><div class="pl-legend"><span class="pl-dot" style="--c:${S.me.color}"></span> ${esc(S.me.label)}${S.partner ? ` · <span class="pl-dot" style="--c:${S.partner.color}"></span> ${esc(S.partner.label)}` : ""} · categories in their own colours · tap a day for details · struck through = done</div>
+  html += `${S.skinOn.frame ? `<div class="mp-frame" aria-hidden="true"></div>` : ""}</div><div class="pl-legend"><span class="pl-dot" style="--c:${S.me.color}"></span> ${esc(S.me.label)}${S.partner ? ` · <span class="pl-dot" style="--c:${S.partner.color}"></span> ${esc(S.partner.label)}` : ""} · categories in their own colours · tap a day for details · struck through = done</div>
     <div class="pl-card pl-detail"></div>`;
   el.innerHTML = html;
   const detail = el.querySelector(".pl-detail");
@@ -572,7 +575,7 @@ function mascotPlatforms() {
       const c = cal.getBoundingClientRect(), ys = [c.top];
       for (let i = 7; i < days.length; i += 7) ys.push(days[i].getBoundingClientRect().top);
       ys.push(c.bottom);
-      ys.forEach((y, n) => out.push({ key: "cal:" + n, cal: n, y: y + scrollY, x0: c.left + scrollX + 18, x1: c.right + scrollX - 18, cell: c.width / 7 }));
+      ys.forEach((y, n) => out.push({ key: "cal:" + n, cal: n, y: y + scrollY, x0: c.left + scrollX + 18, x1: c.right + scrollX - 18, cell: S.skinOn.frame ? days[0].getBoundingClientRect().width : c.width / 7 })); // (cadre : la marge autour des cases)
     }
     cards(root, ".pl-card", ".pl-item", (it) => it.dataset.id);
     cards(tinoHost, ".pl-card", ".pl-item", () => null);
@@ -1278,6 +1281,21 @@ function applyTheme() {
   document.documentElement.classList.toggle("mp-light", light);
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#e6ebf7" : "#0e1230");
   if (pref === "auto") themeTimer = setTimeout(applyTheme, Math.max(1000, Math.min(30 * 60000, dl.next - Date.now() + 1000)));
+  applySeeThrough();
+  applyTaskInk(); // (fond des tâches dessiné : texte clair ou foncé selon le thème)
+}
+// Opacité des fonds du calendrier et des tâches, pour voir plus ou moins le décor à travers : réglage de cet appareil, 0–100 %, 100 = comme avant. Calendrier = sa carte vitrée ; tâches = les cartes
+// de tâches (To do, jour choisi, tâches de l'autre) et leur fond dessiné (34). Sous 100 % seulement : classes mp-cal-see /
+// mp-task-see et variables --mp-cal-a / --mp-task-a sur <html> (style.css) ; à 100 %, rien ne change.
+const SEE = [["calAlpha", "cal", "📅 Calendar"], ["taskAlpha", "task", "📋 Tasks"]];
+const seeAlpha = (key) => { const v = Number(store.get(key, 100)); return Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : 100; };
+function applySeeThrough() {
+  const html = document.documentElement;
+  for (const [key, k] of SEE) {
+    const v = seeAlpha(key);
+    html.classList.toggle(`mp-${k}-see`, v < 100);
+    if (v < 100) html.style.setProperty(`--mp-${k}-a`, String(v / 100)); else html.style.removeProperty(`--mp-${k}-a`);
+  }
 }
 // Carte « 🎨 Appearance » de l'onglet Settings
 function fillLook(box) {
@@ -1294,8 +1312,14 @@ function fillLook(box) {
             `<option value="${k}"${!dl.place.auto && dl.place.key === k ? " selected" : ""}>${esc(n)}</option>`).join("")}</optgroup>`).join("")}
         </select></label>
         <div class="pl-legend">${dl.place.auto ? "Auto = from this device's time zone. " : ""}Today in ${esc(dl.place.name)}: sunrise ${hhmm(dl.sun.rise)}, sunset ${hhmm(dl.sun.set)}.</div>`}
+    <div class="pl-sub">Background opacity <span class="pl-legend">— lower it to see more of the decor behind</span></div>
+    ${SEE.map(([key, , label]) => `<label class="mp-opa"><b>${label}</b><input type="range" name="${key}" min="0" max="100" step="5" value="${seeAlpha(key)}"><span>${seeAlpha(key)}%</span></label>`).join("")}
     <div class="pl-legend mp-lookstate">Now: ${light ? "☀️ light" : "🌙 dark"}${pref === "auto" ? ` — ${dl.day ? "🌙 dark" : "☀️ light"} from ${hhmm(dl.next)}${dl.next.getDate() !== new Date().getDate() ? " tomorrow" : ""}` : ""}.</div>`;
   const redo = () => { applyTheme(); applyDecor(); fillLook(box); };
+  for (const [key] of SEE) box.querySelector(`[name=${key}]`).addEventListener("input", (ev) => { // (en direct, pendant qu'on glisse)
+    store.set(key, +ev.target.value); applySeeThrough(); applyTaskInk();
+    ev.target.nextElementSibling.textContent = `${ev.target.value}%`;
+  });
   box.querySelectorAll("[data-theme]").forEach((b) => b.addEventListener("click", () => { store.set("theme", b.dataset.theme); redo(); }));
   box.querySelectorAll("[data-daymode]").forEach((b) => b.addEventListener("click", () => { store.set("dayMode", b.dataset.daymode); redo(); }));
   box.querySelector("[name=sunplace]")?.addEventListener("change", (ev) => { store.set("sunPlace", ev.target.value); redo(); });
@@ -1505,6 +1529,7 @@ function fillDecor(box) {
       <label>Season <select name="dseason"><option value="auto">Auto (now: ${decorLabel(SEASONS, seasonOf(new Date()))})</option>${SEASONS.map(([k, l]) => `<option value="${k}">Always ${l}</option>`).join("")}</select></label>
       <label>Day / night <select name="dlight"><option value="auto">Auto (${dayHours(w.dl)})</option><option value="day">Always ☀️ day</option><option value="night">Always 🌙 night</option></select></label>
       <div class="pl-legend">Auto uses the same day hours as the light / dark theme: <a href="#settings">⚙ Settings → Appearance</a>.</div>
+      <div class="pl-legend">To see more of it through the calendar and the tasks: Background opacity, in <a href="#settings">⚙ Settings → Appearance</a>.</div>
       <div class="pl-legend">${now ? `On screen: ${decorLabel(SEASONS, now.season)} · ${decorLabel(LIGHTS, now.light)} · ${decorLabel(LAYOUTS, now.layout)}${why ? ` (${why})` : ""}` : "On screen: the original background (no drawing yet)"}</div></div>`;
   box.querySelector("[name=dseason]").value = store.get("decorSeason", "auto");
   box.querySelector("[name=dlight]").value = store.get("decorLight", "auto");
@@ -1539,6 +1564,285 @@ function fillDecor(box) {
         : /exceeded the maximum allowed size/i.test(err.message) ? "too big for the storage" : err.message;
       toast(`⚠️ Couldn't add the picture (${why})`);
       fillDecor(box);
+    }
+  }));
+}
+
+// ---------- Cadre du calendrier, marmite, fond des tâches : dessinés par eux (supabase/34_skins.sql) ----------
+// Ils les dessinent eux-mêmes (modèles faits par l'app) : le cadre du calendrier, la marmite et un fond derrière chaque ligne
+// de tâche, communs aux deux.
+// Un dessin = un PNG transparent, remis à la taille exacte de son modèle (SKIN[…].size) avant l'envoi. Affichage :
+// • frame : neuf morceaux natifs (border-image) ; coins de SKIN.frame.corner px gardés tels quels, côtés étirés en longueur ;
+//   la bande du cadre (SKIN.frame.band px) tient dans la marge ajoutée autour du calendrier, le reste des côtés peut déborder
+//   un peu sur les cases (il doit rester surtout transparent : vérifié à l'envoi) ; le milieu n'est pas utilisé.
+// • pot : remplace la marmite dorée de potButton(), dans son repère (64 × 60 unités) ; coupé le long du bord avant : le haut
+//   derrière les têtes, le bas devant (comme la marmite dorée) ; feu, bouillon, vapeur, baguettes restent ceux de l'app.
+// • task : derrière chaque ligne de tâche (.pl-item::before), neuf morceaux avec le milieu ; texte clair ou foncé selon le
+//   dessin (taskInk) ; la bande de couleur de la catégorie reste à gauche.
+// Sans dessin (ou sans 34), rien ne change : tout dépend des classes mp-frame-on / mp-task-on et de S.skinOn.
+const SKINS = [["frame", "🖼 Calendar frame"], ["pot", "🍲 Pot"], ["task", "📋 Task background"]];
+const SKIN = {
+  frame: { size: [1500, 2000], corner: 240, band: 64 }, // (style.css : .mp-frame, bordure = 240 / 64 × --mp-fb ; border-image 240)
+  pot: { size: [1280, 1200] }, // (le repère de la marmite : 20 px par unité, y de −8 à 52)
+  task: { size: [1200, 180], top: 50, side: 80 }, // (style.css : border-image 50 80, bordures 14 px / 22 px)
+};
+const SKIN_HELP = {
+  frame: "Around the calendar. The corners stay as you drew them, the sides are stretched along.",
+  pot: "Replaces the golden pot. Follow the rim on the template: the heads go inside, the app adds the soup, the fire and the steam.",
+  task: "Behind every task line. Keep the middle quite plain: the text turns dark or light to match your drawing.",
+};
+let unsubSkins = null, taskInk = null;
+const skinShown = { frame: null, pot: null, task: null }, skinUrls = new Map(), skinTpl = {};
+async function loadSkins() {
+  if (!S.user) return;
+  let fresh = false;
+  try { S.skins = await db.listSkins(); S.skinsOk = true; fresh = true; store.set("skins." + S.user.id, S.skins); }
+  catch (err) {
+    if (/does not exist|schema cache/i.test(err.message) && /skins/.test(err.message)) { S.skinsOk = false; S.skins = []; }
+    else S.skins = store.get("skins." + S.user.id, S.skins); // hors ligne : la dernière liste connue
+  }
+  await applySkins();
+  if (fresh) pruneSkins(); // (jamais depuis la copie hors ligne)
+  const box = document.querySelector(".mp-skins");
+  if (box && !box.querySelector(".mp-busy")) fillSkins(box);
+}
+async function skinUrl(path) {
+  if (!skinUrls.has(path)) skinUrls.set(path, URL.createObjectURL(await mediaBlob(path)));
+  return skinUrls.get(path);
+}
+// Montre les dessins choisis (image prête avant d'être posée) ; hors ligne sans copie : on garde ce qui est affiché
+async function applySkins() {
+  await Promise.all(SKINS.map(async ([slot]) => {
+    const path = (S.user && S.skins.find((x) => x.slot === slot)?.path) || null;
+    if (path === skinShown[slot]) return;
+    skinShown[slot] = path;
+    let url = null, img = null;
+    if (path) {
+      try { url = await skinUrl(path); img = await loadImg(url); }
+      catch (err) { console.warn("Skin", slot, err); skinShown[slot] = null; return; }
+    }
+    if (skinShown[slot] !== path) return; // un autre dessin entre-temps
+    showSkin(slot, url, img);
+  }));
+}
+function showSkin(slot, url, img) {
+  S.skinOn[slot] = url;
+  const body = document.body;
+  if (url) body.style.setProperty("--mp-" + slot, `url("${url}")`); else body.style.removeProperty("--mp-" + slot);
+  body.classList.toggle(`mp-${slot}-on`, !!url);
+  if (slot === "task") { taskInk = img ? inkOf(img) : null; applyTaskInk(); }
+  const right = root?.querySelector(".pl-right");
+  if (slot !== "task" && right?.querySelector(".pl-cal")) { renderCalendar(right); align(); } // (cadre : la marge ; marmite : son dessin)
+}
+// Couleur moyenne du milieu du fond des tâches (là où est le texte), pour choisir un texte clair ou foncé
+function inkOf(img) {
+  const { size: [W, H], top: T, side: L } = SKIN.task, c = document.createElement("canvas");
+  c.width = 48; c.height = 8;
+  const g = c.getContext("2d", { willReadFrequently: true }), kx = img.naturalWidth / W, ky = img.naturalHeight / H;
+  g.drawImage(img, L * kx, T * ky, (W - 2 * L) * kx, (H - 2 * T) * ky, 0, 0, 48, 8);
+  const d = g.getImageData(0, 0, 48, 8).data;
+  c.width = 0;
+  let a = 0, r = 0, gr = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { const al = d[i + 3] / 255; a += al; r += d[i] * al; gr += d[i + 1] * al; b += d[i + 2] * al; }
+  return { a: a / (d.length / 4), r: a ? r / a : 0, g: a ? gr / a : 0, b: a ? b / a : 0 };
+}
+// Le dessin posé sur le fond de la carte (sombre ou clair selon le thème) : clair → texte foncé, sombre → texte clair
+function applyTaskInk() {
+  const t = taskInk, light = document.documentElement.classList.contains("mp-light");
+  let dark = null;
+  if (t) {
+    const a = t.a * seeAlpha("taskAlpha") / 100, base = light ? [236, 239, 252] : [26, 30, 64], mix = (v, i) => a * v + (1 - a) * base[i];
+    dark = (0.2126 * mix(t.r, 0) + 0.7152 * mix(t.g, 1) + 0.0722 * mix(t.b, 2)) / 255 > 0.55;
+  }
+  document.body.classList.toggle("mp-ink-dark", dark === true);
+  document.body.classList.toggle("mp-ink-light", dark === false);
+}
+// Dessins qui n'existent plus : retirés de l'appareil (seulement après une liste fraîche ; les autres dossiers n'y passent pas)
+async function pruneSkins() {
+  const keep = new Set(S.skins.map((x) => x.path));
+  for (const [p, u] of skinUrls) if (!keep.has(p) && !Object.values(S.skinOn).includes(u)) { URL.revokeObjectURL(u); skinUrls.delete(p); }
+  if (!("caches" in window)) return;
+  const cache = await caches.open(MEDIA).catch(() => null);
+  for (const r of (await cache?.keys()) ?? []) { const m = r.url.match(/__media\/(skins\/.+)$/); if (m && !keep.has(m[1])) await cache.delete(r); }
+}
+// Dessin choisi : la forme du modèle (à 3 % près), remis à sa taille exacte, et vérifié : assez de transparent (pas le
+// modèle exporté avec), et pour le cadre, la partie qui déborde sur les cases presque vide (sinon il cacherait le calendrier)
+async function prepareSkin(file, slot) {
+  if (file.type && !/^image\//.test(file.type)) throw new Error("pick a picture (a PNG with a transparent background)");
+  const url = URL.createObjectURL(file);
+  let img;
+  try { img = await loadImg(url); } catch { throw new Error("this picture can't be read — export it as PNG"); } finally { URL.revokeObjectURL(url); }
+  const [W, H] = SKIN[slot].size, w = img.naturalWidth, h = img.naturalHeight;
+  if (Math.abs(w / h - W / H) > 0.03 * (W / H)) throw new Error(`this picture is ${w} × ${h} — it must have the shape of its template (${W} × ${H}): export the whole canvas`);
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.drawImage(img, 0, 0, W, H);
+  const d = g.getImageData(0, 0, W, H).data;
+  const clear = (x0, y0, x1, y1) => { // part de pixels transparents dans ce rectangle (un sur deux suffit)
+    let n = 0, t = 0;
+    for (let y = y0; y < y1; y += 2) for (let x = x0; x < x1; x += 2) { t++; if (d[(y * W + x) * 4 + 3] < 24) n++; }
+    return t ? n / t : 1;
+  };
+  try {
+    if (slot !== "task" && clear(0, 0, W, H) < 0.3) throw new Error("almost nothing is see-through — hide the template and export only your drawing layer, as a transparent PNG");
+    if (slot === "frame") {
+      const { corner: C, band: B } = SKIN.frame;
+      const inner = [clear(C, B, W - C, C), clear(C, H - C, W - C, H - B), clear(B, C, C, H - C), clear(W - C, C, W - B, H - C)];
+      if (Math.min(...inner) < 0.6) throw new Error("the frame would hide the calendar — keep the striped zone of the template mostly empty");
+    }
+    const blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
+    if (!blob) throw new Error("this phone couldn't process the picture — try a smaller export");
+    if (blob.size > 9.5 * 1024 * 1024) throw new Error("the picture is too big, even at the template's size");
+    return blob;
+  } finally { c.width = 0; }
+}
+
+// Modèles, faits par l'app (toujours à jour avec ce qu'elle dessine) : ils servent de calque de fond pour dessiner.
+// Pas d'émoji dans leurs textes (rendus en noir et blanc, méconnaissables).
+function tplCanvas(W, H) {
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  g.fillStyle = "#fbfaff"; g.fillRect(0, 0, W, H);
+  g.textAlign = "center"; g.textBaseline = "middle";
+  return [c, g];
+}
+const pngOf = (c) => new Promise((ok, fail) => c.toBlob((b) => { c.width = 0; b ? ok(b) : fail(new Error("couldn't make the template")); }, "image/png"));
+function hatch(g, x, y, w, h, color) {
+  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+  g.strokeStyle = color; g.lineWidth = 3;
+  for (let k = -h; k < w; k += 26) { g.beginPath(); g.moveTo(x + k, y + h); g.lineTo(x + k + h, y); g.stroke(); }
+  g.restore();
+}
+function tplText(g, lines, x, y, size, color = "#3b2f6b", step = 1.35) {
+  g.fillStyle = color;
+  lines.forEach((t, i) => { g.font = `${i === 0 ? "bold " : ""}${size}px system-ui, sans-serif`; g.fillText(t, x, y + i * size * step); });
+}
+function frameTemplate() {
+  const { size: [W, H], corner: C, band: B } = SKIN.frame, [c, g] = tplCanvas(W, H);
+  // le calendrier, en pâle, là où il sera
+  const top = 80, cw = (W - 2 * B) / 7, rh = (H - 2 * B - top) / 6;
+  g.fillStyle = "#eef0fb"; g.fillRect(B, B, W - 2 * B, H - 2 * B);
+  g.strokeStyle = "#cfd3ea"; g.lineWidth = 3;
+  const ln = (x0, y0, x1, y1) => { g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); };
+  for (let i = 1; i < 7; i++) ln(B + i * cw, B, B + i * cw, H - B);
+  for (let r = 0; r < 6; r++) ln(B, B + top + r * rh, W - B, B + top + r * rh);
+  g.fillStyle = "#b9bedc"; g.font = "bold 34px system-ui, sans-serif";
+  ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach((t, i) => g.fillText(t, B + (i + 0.5) * cw, B + top / 2));
+  g.font = "30px system-ui, sans-serif";
+  for (let n = 0; n < 42; n++) g.fillText(String((n % 31) + 1), B + (n % 7) * cw + 30, B + top + Math.floor(n / 7) * rh + 30);
+  // la bande du cadre (violet), la partie qui peut déborder sur les cases (rayée), les coins (pointillés)
+  g.fillStyle = "rgba(150, 110, 230, 0.5)";
+  g.fillRect(0, 0, W, B); g.fillRect(0, H - B, W, B); g.fillRect(0, B, B, H - 2 * B); g.fillRect(W - B, B, B, H - 2 * B);
+  for (const [x, y, w, h] of [[C, B, W - 2 * C, C - B], [C, H - C, W - 2 * C, C - B], [B, C, C - B, H - 2 * C], [W - C, C, C - B, H - 2 * C]]) hatch(g, x, y, w, h, "rgba(150, 110, 230, 0.35)");
+  g.strokeStyle = "#6c45c9"; g.lineWidth = 4; g.setLineDash([18, 12]);
+  for (const [x, y] of [[0, 0], [W - C, 0], [0, H - C], [W - C, H - C]]) g.strokeRect(x + 2, y + 2, C - 4, C - 4);
+  g.setLineDash([]);
+  g.fillStyle = "#4b2f9a"; g.font = "bold 26px system-ui, sans-serif";
+  for (const [x, y] of [[C / 2, B / 2], [W - C / 2, B / 2], [C / 2, H - B / 2], [W - C / 2, H - B / 2]]) g.fillText("CORNER", x, y);
+  g.fillText("FRAME BAND", W / 2, B / 2); g.fillText("FRAME BAND", W / 2, H - B / 2);
+  g.font = "24px system-ui, sans-serif";
+  g.fillText("striped: may cover the edge of the calendar - keep it mostly empty", W / 2, B + (C - B) / 2);
+  g.fillStyle = "rgba(251, 250, 255, 0.92)"; g.fillRect(C + 20, H / 2 - 300, W - 2 * C - 40, 560);
+  tplText(g, ["MeoPeo - calendar frame template (1500 x 2000)", "1. Make a NEW LAYER and draw your frame in the purple band.",
+    "   Bigger decorations can fill the corners.", "2. The striped zone covers the edge of the calendar:", "   keep it mostly empty.",
+    "3. The middle isn't used.", "4. Hide this template and export ONLY your layer,", "   as a transparent PNG (whole canvas).",
+    "The corners stay as drawn, the sides are stretched along."], W / 2, H / 2 - 250, 32);
+  return pngOf(c);
+}
+function potTemplate() {
+  const [W, H] = SKIN.pot.size, k = W / 64, [c, g] = tplCanvas(W, H);
+  g.save(); g.setTransform(k, 0, 0, k, 0, 8 * k); // (le repère de la marmite)
+  g.fillStyle = "rgba(255, 140, 60, 0.28)"; g.fillRect(3, 47, 58, 5); // feu et bûches (dessinés par l'app)
+  g.globalAlpha = 0.4; // la marmite dorée, en pâle : un exemple à suivre
+  g.fillStyle = "#6e4a10"; g.beginPath(); g.ellipse(32, 24, 26, 5, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "#e5ae3e"; g.fill(new Path2D("M2 25.5H7.5V29.5H2Q0 29.5 0 27.5Q0 25.5 2 25.5ZM62 25.5H56.5V29.5H62Q64 29.5 64 27.5Q64 25.5 62 25.5Z"));
+  g.fill(new Path2D("M6 24L7.6 43Q8 47 12.5 47H51.5Q56 47 56.4 43L58 24Q32 34 6 24Z"));
+  g.globalAlpha = 1;
+  g.fillStyle = "rgba(110, 130, 220, 0.22)"; // les têtes (derrière le bord avant)
+  for (const [x, y] of [[20, 14], [44, 14]]) { g.beginPath(); g.arc(x, y, 12, 0, Math.PI * 2); g.fill(); }
+  g.lineWidth = 0.35; g.strokeStyle = "#e03131"; g.setLineDash([1.2, 0.8]); // l'ouverture
+  g.beginPath(); g.ellipse(32, 24, 26, 5, 0, 0, Math.PI * 2); g.stroke();
+  g.setLineDash([]); g.lineWidth = 0.5; g.strokeStyle = "#1c7ed6"; g.stroke(new Path2D("M6 24Q32 34 58 24")); // le bord avant
+  g.restore();
+  g.fillStyle = "rgba(251, 250, 255, 0.85)"; g.fillRect(0, 0, W, 170);
+  tplText(g, ["MeoPeo - pot template (1280 x 1200)", "Make a NEW LAYER and draw your pot over the pale golden one.",
+    "Hide this template, then export ONLY your layer as a transparent PNG."], W / 2, 26, 26);
+  tplText(g, ["RED = the opening: leave the inside see-through (the soup and the heads go there)",
+    "BLUE = the front rim: below it is in FRONT of the heads, above it BEHIND them"], W / 2, 128, 21, "#7a1f1f", 1.25);
+  tplText(g, ["ORANGE = fire and logs, added by the app: the bottom of the pot sits just above"], W / 2, 60 * k - 26, 24, "#8a3b00");
+  g.fillStyle = "#3b4f9a"; g.font = "22px system-ui, sans-serif";
+  g.fillText("heads", 20 * k, 14 * k); g.fillText("heads", 44 * k, 14 * k);
+  return pngOf(c);
+}
+function taskTemplate() {
+  const { size: [W, H], top: T, side: L } = SKIN.task, [c, g] = tplCanvas(W, H);
+  g.fillStyle = "#efeafd"; g.beginPath(); g.roundRect(4, 4, W - 8, H - 8, 34); g.fill(); // une étiquette d'exemple
+  g.strokeStyle = "#8c6be0"; g.lineWidth = 3; g.setLineDash([14, 10]);
+  for (const [x0, y0, x1, y1] of [[L, 0, L, H], [W - L, 0, W - L, H], [0, T, W, T], [0, H - T, W, H - T]]) { g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+  g.setLineDash([]);
+  g.strokeStyle = "#b3b8d6"; g.lineWidth = 4; g.strokeRect(L + 14, H / 2 - 22, 44, 44); // une tâche, en pâle
+  g.textAlign = "left"; g.fillStyle = "#b3b8d6";
+  g.font = "bold 40px system-ui, sans-serif"; g.fillText("Mon 26.10", L + 84, H / 2);
+  g.font = "40px system-ui, sans-serif"; g.fillText("Buy the birthday cake", L + 330, H / 2);
+  g.textAlign = "center"; g.fillStyle = "#4b2f9a"; g.font = "18px system-ui, sans-serif";
+  for (const [x, y] of [[L / 2, T / 2], [W - L / 2, T / 2], [L / 2, H - T / 2], [W - L / 2, H - T / 2]]) g.fillText("corner", x, y);
+  g.fillText("MeoPeo - task background (1200 x 180): edges kept, middle stretched - new layer, export only it as PNG", W / 2, T / 2);
+  g.fillText("keep the middle quite plain: the text of the task goes there", W / 2, H - T / 2);
+  return pngOf(c);
+}
+const SKIN_TPL = { frame: frameTemplate, pot: potTemplate, task: taskTemplate };
+function buildSkinTemplate(slot) {
+  skinTpl[slot] ??= SKIN_TPL[slot]().then((b) => (skinTpl[slot] = b)).catch((err) => { delete skinTpl[slot]; throw err; });
+  return Promise.resolve(skinTpl[slot]); // (déjà là : le fichier ; sinon : en cours)
+}
+async function shareSkinTemplate(slot) {
+  const blob = skinTpl[slot] instanceof Blob ? skinTpl[slot] : await buildSkinTemplate(slot);
+  await shareFile(blob, `meopeo-${slot}-template.png`, "MeoPeo template");
+}
+// Section « 🖌 Frame, pot & tasks » de l'onglet Tino
+function fillSkins(box) {
+  if (S.skinsOk === false) { box.innerHTML = `<div class="pl-legend">Not available yet — Tony needs to run <code>supabase/34_skins.sql</code>.</div>`; return; }
+  const P = S.partner;
+  const row = ([slot, label]) => {
+    const x = S.skins.find((y) => y.slot === slot), who = x && (x.by === S.user.id ? S.me : P);
+    return `<div class="mp-skin mp-skin-${slot}${x ? " on" : ""}">
+      <div class="mp-skin-thumb">${x ? `<img alt="" data-skin="${x.path}">` : `<span>original</span>`}</div>
+      <div><b>${label}</b> <span class="pl-legend">${x ? `— by ${esc(who?.mark ?? "")} ${esc(who?.label ?? "")}` : "— the original"}</span>
+        <div class="pl-legend">${SKIN_HELP[slot]}</div>
+        <span class="mp-row"><button type="button" data-skintpl="${slot}">⬇ Template</button><label class="mp-filebtn"><input type="file" accept="image/png" hidden data-skinup="${slot}"> ${x ? "Replace" : "＋ Add"}</label>${x ? `<button type="button" data-unskin="${slot}" title="Back to the original">✕</button>` : ""}</span></div></div>`;
+  };
+  box.innerHTML = `<div class="pl-legend">Draw them yourselves on a tablet, like the decor: download a template, draw on a <b>new layer</b>, hide the template, then export <b>only your drawing</b> as a transparent PNG. Shared: ${esc(P?.mark ?? "")} ${esc(P?.label ?? "the other")} sees the same.</div>
+    ${SKINS.map(row).join("")}<div class="pl-legend">More or less see-through (calendar, tasks): Background opacity, in <a href="#settings">⚙ Settings → Appearance</a> — on each device.</div><div class="pl-legend mp-skstatus"></div>`;
+  box.querySelectorAll("[data-skin]").forEach(async (im) => { try { im.src = await skinUrl(im.dataset.skin); } catch { im.alt = "?"; } });
+  for (const [slot] of SKINS) buildSkinTemplate(slot).catch(() => {}); // (prêts avant l'appui : la feuille de partage de l'iPhone)
+  box.querySelectorAll("[data-skintpl]").forEach((b) => b.addEventListener("click", () => shareSkinTemplate(b.dataset.skintpl).catch((err) => toast(`⚠️ Couldn't make the template (${err.message})`))));
+  box.querySelectorAll("[data-unskin]").forEach((b) => b.addEventListener("click", async () => {
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Back to the original? ✕"; return; } // 2e appui pour confirmer
+    if (await guard(() => db.deleteSkin(b.dataset.unskin), "Couldn't remove the drawing")) loadSkins();
+  }));
+  const status = (t) => { box.querySelector(".mp-skstatus").textContent = t; };
+  box.querySelectorAll("input[data-skinup]").forEach((input) => input.addEventListener("change", async () => {
+    const file = input.files[0], slot = input.dataset.skinup;
+    input.value = "";
+    if (!file) return;
+    if (!navigator.onLine) { toast("📴 You're offline — try again once you're back online."); return; }
+    input.closest(".mp-filebtn").classList.add("mp-busy");
+    try {
+      status("Checking the drawing…");
+      const blob = await prepareSkin(file, slot);
+      status(`Sending (${Math.max(0.1, blob.size / 1048576).toFixed(1)} MB)…`);
+      await db.setSkin(blob, slot);
+      toast(`🖌 New ${SKINS.find((x) => x[0] === slot)[1].replace(/^\S+\s+/, "").toLowerCase()}!`);
+      input.closest(".mp-filebtn").classList.remove("mp-busy");
+      await loadSkins();
+    } catch (err) {
+      const why = /bucket not found/i.test(err.message) ? "the file storage isn't set up yet — Tony needs to run supabase/08_tino_extras.sql"
+        : /exceeded the maximum allowed size/i.test(err.message) ? "too big for the storage"
+        : /schema cache|does not exist/i.test(err.message) ? "Tony needs to run supabase/34_skins.sql" : err.message;
+      toast(`⚠️ Couldn't add the drawing (${why})`);
+      fillSkins(box);
     }
   }));
 }
@@ -2032,7 +2336,8 @@ function renderTinoPane(pane) {
     + fold("hunger", "🍽 Hunger lines", `<div class="mp-hunger"></div>`)
     + fold("grumbles", "💢 Grumpy lines", `<div class="mp-grumbles"></div>`)
     + fold("wardrobe", "👒 Tino's wardrobe", `<div class="mp-wardrobe"></div>`)
-    + fold("decor", "🏖 Decor", `<div class="mp-decor"></div>`);
+    + fold("decor", "🏖 Decor", `<div class="mp-decor"></div>`)
+    + fold("skins", "🖌 Frame, pot & tasks", `<div class="mp-skins"></div>`);
   fillShowcase(pane.querySelector(".mp-showcase"));
   fillShellBar(pane.querySelector(".mp-shellbar"));
   const shop = pane.querySelector(".mp-shop");
@@ -2046,6 +2351,7 @@ function renderTinoPane(pane) {
   fillGrumbles(pane.querySelector(".mp-grumbles"));
   fillWardrobe(pane.querySelector(".mp-wardrobe"));
   fillDecor(pane.querySelector(".mp-decor"));
+  fillSkins(pane.querySelector(".mp-skins"));
   setupFolds(pane, "tino");
 }
 
@@ -3502,7 +3808,7 @@ const potUp = (kind) => (kind === "tino" ? !!mascots?.inPot("tino") : mascots ? 
 const potAsleep = (kind) => kind !== "tino" && (potAway(kind) || (!bothHere() && (tinoNight() || tinoNap())));
 const potHead = (kind) => `<g class="mp-pot-head mp-pot-${kind}${potUp(kind) ? " mp-up" : ""}${potAway(kind) ? " mp-dream" : ""}${potAsleep(kind) ? " ms-sleep" : ""}" data-kind="${kind}"><g class="mp-pot-bob"><svg ${POT_HEADS[kind].box}>${POT_HEADS[kind].svg()}</svg></g></g>`;
 function potButton() {
-  const P = S.partner;
+  const P = S.partner, skin = S.skinOn.pot; // (skin : leur dessin de la marmite, 34_skins.sql — voir la section « skins »)
   // repère 64 × 60 (y de −8 à 52) ; bord de la marmite : ellipse de centre (32, 24), 26 × 5 ; l'arrière du bord est dessiné
   // derrière la tête, l'avant devant ; la tête est coupée sous le bord avant (clipPath) : elle est DANS la marmite
   return `<button type="button" class="pl-toggle mp-pot${potState ? " mp-pot-hot" : ""}${potFanned ? " mp-pot-fan" : ""}${swirl.k > 0.01 ? " mp-swirl" : ""}" aria-pressed="${UI.showPartner}" title="${UI.showPartner ? "Hide" : "Show"} ${esc(P.label)}'s tasks on the calendar">
@@ -3510,22 +3816,22 @@ function potButton() {
       <defs>
         <linearGradient id="mp-pot-gold" x1="0" x2="1"><stop offset="0" stop-color="#b9821c"/><stop offset="0.3" stop-color="#f7d675"/><stop offset="0.55" stop-color="#e5ae3e"/><stop offset="1" stop-color="#a86f14"/></linearGradient>
         <radialGradient id="mp-pot-soup" cx="0.5" cy="0.3" r="0.75"><stop offset="0" stop-color="#f08a3e"/><stop offset="1" stop-color="#b8381c"/></radialGradient>
-        <clipPath id="mp-pot-clip"><path d="M-20 -30H84V24H58Q32 34 6 24H-20Z"/></clipPath>
+        <clipPath id="mp-pot-clip"><path d="M-20 -30H84V24H58Q32 34 6 24H-20Z"/></clipPath>${skin ? `<clipPath id="mp-pot-front"><path d="M-20 22.8H6Q32 32.8 58 22.8H84V60H-20Z"/></clipPath>` : ""}
       </defs>
       <ellipse cx="32" cy="49" rx="23" ry="2.4" fill="#000" opacity="0.18"/>
       <g class="mp-pot-fire"><g class="mp-flame"><path d="M6 53Q-1 44 4 33Q6.5 41 8.5 42Q8 35 11.5 30Q16 41 15 53Z" fill="#ff7a1a"/><path d="M7 53Q3.5 47 6.5 41Q8 46 10 47Q11 51 10.5 53Z" fill="#ffd34a"/></g><g class="mp-flame"><path d="M22 53Q18 44 24 35Q25 43 28 44Q28 37 32 32Q37 42 35 47Q38 44 39 40Q44 47 40 53Z" fill="#ff6a14"/><path d="M25 53Q23 47 27 42Q28 47 31 47Q31 43 33 40Q36 47 34 53Z" fill="#ffc93a"/></g><g class="mp-flame"><path d="M58 53Q65 44 60 33Q57.5 41 55.5 42Q56 35 52.5 30Q48 41 49 53Z" fill="#ff7a1a"/><path d="M57 53Q60.5 47 57.5 41Q56 46 54 47Q53 51 53.5 53Z" fill="#ffd34a"/></g><g class="mp-pot-sparks" fill="#ffd96a"><circle cx="16" cy="44" r="0.9"/><circle cx="33" cy="40" r="1"/><circle cx="47" cy="43" r="0.8"/></g></g>
-      <ellipse cx="32" cy="24" rx="26" ry="5" fill="#6e4a10"/>
+      <ellipse cx="32" cy="24" rx="26" ry="5" fill="#6e4a10"/>${skin ? `<image class="mp-pot-skin" href="${skin}" x="0" y="-8" width="64" height="60" preserveAspectRatio="none" clip-path="url(#mp-pot-clip)"/>` : ""}
       <ellipse class="mp-pot-broth" cx="32" cy="24.6" rx="24.5" ry="4.2" fill="url(#mp-pot-soup)"/>
-      <path d="M6 24Q32 14 58 24" fill="none" stroke="#c99230" stroke-width="2.4"/>
+      ${skin ? "" : `<path d="M6 24Q32 14 58 24" fill="none" stroke="#c99230" stroke-width="2.4"/>`}
       <g clip-path="url(#mp-pot-clip)">${potHead("peo")}${potHead("meo")}${potHead("tino")}
         <g class="mp-pot-spoon" style="display: none"><path class="mp-chop" d="" fill="none" stroke="#b9894a" stroke-width="1.5" stroke-linecap="round"/><path class="mp-chop" d="" fill="none" stroke="#d4a463" stroke-width="1.5" stroke-linecap="round"/></g></g>
       <g class="mp-pot-bubbles" fill="#ff8a5c"><circle cx="14" cy="24" r="1.3"/><circle cx="48" cy="23.5" r="1.1"/><circle cx="22" cy="26" r="0.9"/></g>
-      <path d="M2 25.5H7.5V29.5H2Q0 29.5 0 27.5Q0 25.5 2 25.5ZM62 25.5H56.5V29.5H62Q64 29.5 64 27.5Q64 25.5 62 25.5Z" fill="#c48a24" stroke="#8a5a10" stroke-width="1"/>
+      ${skin ? `<image class="mp-pot-skin" href="${skin}" x="0" y="-8" width="64" height="60" preserveAspectRatio="none" clip-path="url(#mp-pot-front)"/>` : `<path d="M2 25.5H7.5V29.5H2Q0 29.5 0 27.5Q0 25.5 2 25.5ZM62 25.5H56.5V29.5H62Q64 29.5 64 27.5Q64 25.5 62 25.5Z" fill="#c48a24" stroke="#8a5a10" stroke-width="1"/>
       <path d="M6 24L7.6 43Q8 47 12.5 47H51.5Q56 47 56.4 43L58 24Q32 34 6 24Z" fill="url(#mp-pot-gold)" stroke="#8a5a10" stroke-width="1.2" stroke-linejoin="round"/>
       <path d="M7 31Q32 40 57 31" fill="none" stroke="#a8721a" stroke-width="1.1"/>
       <g fill="#fff3c4" opacity="0.55"><ellipse cx="17" cy="37" rx="1.6" ry="1.1"/><ellipse cx="24" cy="42" rx="1.4" ry="1"/><ellipse cx="21" cy="34.5" rx="1.2" ry="0.8"/></g>
       <g fill="#8a5a10" opacity="0.25"><ellipse cx="44" cy="38" rx="1.6" ry="1.1"/><ellipse cx="50" cy="42" rx="1.3" ry="0.9"/><ellipse cx="38" cy="43" rx="1.2" ry="0.8"/></g>
-      <path d="M6 24Q32 34 58 24" fill="none" stroke="#fbe08a" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M6 24Q32 34 58 24" fill="none" stroke="#fbe08a" stroke-width="2.4" stroke-linecap="round"/>`}
       <g class="mp-pot-logs"><rect x="14" y="48.6" width="36" height="3.6" rx="1.8" fill="#7a4a26" stroke="#4f2d14" stroke-width="0.8" transform="rotate(-4 32 50)"/><rect x="15" y="49" width="34" height="3.4" rx="1.7" fill="#8e5a30" stroke="#4f2d14" stroke-width="0.8" transform="rotate(5 32 50)"/><ellipse cx="32" cy="50.5" rx="9" ry="1.4" fill="#ff9a3c" opacity="0.85"/></g>
       <g class="mp-pot-steam" fill="none" stroke="#f3f5ff" stroke-width="1.5" stroke-linecap="round"><path d="M18 18Q15 13 18 9Q21 5 18 1"/><path d="M45 17Q48 12 45 8Q42 4 45 0"/></g>
     </svg><span class="mp-pot-label">${esc(P.mark)} ${esc(P.label)}</span></button>`;
