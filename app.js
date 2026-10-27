@@ -2369,7 +2369,7 @@ function fillShowcase(card) {
     stage.append(w);
     room = mountRoom(stage, { onMove: moveItem, onSelect: () => document.querySelectorAll(".mp-shellbar").forEach(fillShellBar) });
   } else stage.append(box);
-  const m = demoPose(box, "tino", "idle", house ? (wide ? 170 : 128) : wide ? 180 : 150);
+  const m = demoPose(box, "tino", "idle", house ? (wide ? 128 : 96) : wide ? 135 : 112); // (25 % plus petit qu'avant : 170 / 128, 180 / 150)
   m.think = () => {
     const b = bellyInfo(); // (de temps en temps il dit sa faim : plus souvent quand il a très faim)
     if (b && !m.bubble && Math.random() < ({ hungry: 0.35, peckish: 0.15, full: 0.1 }[b.level] ?? 0)) return { type: "belly", dur: 4.2 };
