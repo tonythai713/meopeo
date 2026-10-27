@@ -2492,7 +2492,7 @@ function fillShellBar(bar) {
   }
   const sel = room?.selected(), boxed = S.house.filter((i) => i.x == null && furnOfId(i.furniture));
   bar.innerHTML = `<div class="mp-arrange">
-    <div class="pl-legend">✏️ Drag the furniture where you like. Tap one to flip it or put it in the box.</div>
+    <div class="pl-legend">✏️ Drag the furniture where you like. Tap one to flip it or put it in the box. Tino steps out while you arrange — the dashed circle is his spot.</div>
     <span class="mp-row"><button type="button" data-flip ${sel ? "" : "disabled"}>↔ Flip</button><button type="button" data-pack ${sel ? "" : "disabled"}>📦 Put in the box</button><button type="button" class="mp-cta" data-done>✓ Done</button></span>
     <div class="mp-box"><span class="pl-legend">📦 In the box:</span>${boxed.length ? boxed.map((i) => `<button type="button" data-unpack="${i.id}" title="${esc(furnOfId(i.furniture).name)}"><img alt="" src="${esc(furnSrc(furnOfId(i.furniture)))}" data-path="${esc(furnOfId(i.furniture).path ?? "")}"></button>`).join("") : `<span class="pl-legend">empty</span>`}</div>
   </div>`;

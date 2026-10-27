@@ -736,7 +736,11 @@ a { color: var(--text-accent); }
 .hs-tino::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: -5px; height: 10px; border-radius: 50%; background: rgba(40, 20, 50, 0.22); z-index: -1; }
 .hs-arranging .hs-item { pointer-events: auto; cursor: grab; touch-action: none; }
 .hs-arranging .hs-item.hs-sel { outline: 2px dashed #fff; outline-offset: 2px; filter: drop-shadow(0 0 6px rgba(255, 232, 163, 0.95)); }
-.hs-arranging .hs-tino { opacity: 0.3; pointer-events: none; }
+/* En rangeant : Tino disparaît (un meuble derrière lui doit pouvoir se toucher ; son .ms est en pointer-events: auto, d'où
+   les !important, plus forts que ses styles en ligne) ; son ombre au sol, en pointillés, montre sa place */
+.hs-arranging .hs-tino { pointer-events: none; }
+.hs-arranging .hs-tino * { visibility: hidden !important; pointer-events: none !important; }
+.hs-arranging .hs-tino::after { background: rgba(40, 20, 50, 0.18); border: 2px dashed rgba(255, 255, 255, 0.85); height: 12px; bottom: -6px; }
 .mp-house .mp-foam, .mp-house .mp-soap, .mp-house .mp-drop, .mp-house .mp-tapi-fall { z-index: 3000; }
 .mp-shellbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; width: 100%; margin-top: 6px; }
 .mp-shellbar:empty { display: none; }
